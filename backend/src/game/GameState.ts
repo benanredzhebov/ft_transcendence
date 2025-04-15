@@ -6,7 +6,7 @@
 /*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/12 15:41:55 by benanredzhe       #+#    #+#             */
-/*   Updated: 2025/04/14 18:56:31 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/04/15 14:18:15 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -92,9 +92,9 @@ type Paddle = {
   
 	  const moveBy = this.paddleSpeed; // Determine movement distance
 	  if (direction === "up") {
-		paddle.y = Math.max(0, paddle.y - moveBy);
+		paddle.y = Math.max(0, paddle.y - moveBy); // if up, the paddle's vertical position (y) is decreased by moveBY
 	  } else {
-		paddle.y = Math.min(this.height - paddle.height, paddle.y + moveBy);
+		paddle.y = Math.min(this.height - paddle.height, paddle.y + moveBy); // if down, the paddle's vertical position(y) is increased by moveBY 
 	  }
 	}
 	

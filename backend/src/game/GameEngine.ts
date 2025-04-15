@@ -6,13 +6,13 @@
 /*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/12 15:39:45 by benanredzhe       #+#    #+#             */
-/*   Updated: 2025/04/14 16:37:57 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/04/15 14:47:11 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 /*Core game logic (positions, collisions, scoring)*/
 
-import { GameState } from './GameState'
+import { GameState } from './GameState';
 
 export class GameEngine {
 	private	state: GameState;
