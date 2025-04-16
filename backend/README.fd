@@ -1,0 +1,13 @@
+
+1.first to get the node_modules folder
+    npm install
+2. type
+    npm run dev
+3. click the link where is written server running
+
+4. if you add /data to url you will se what s in the data base
+
+5. /signUp
+    -you can add another user in data base
+    - you can check data it s ok if you go back to /data
+    - passwords not hashed yet
