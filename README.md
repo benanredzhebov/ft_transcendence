@@ -1,6 +1,6 @@
 # ft_transcendence
 
-## how to run
+## Run both in 2 terminals
 
 ```
 cd ./frontend
