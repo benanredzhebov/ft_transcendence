@@ -6,6 +6,7 @@
 cd ./frontend
 npm install
 npm run dev
+npm install socket.io
 ```
 
 ## Guides
