@@ -1,20 +1,71 @@
 
 
-function Game() {
+// function Game() {
+
+//   return (
+//     <div style={{ textAlign: "center" }}>
+//       <h2>🎮 Pong Game</h2>
+//       <canvas
+//         width={900}
+//         height={600}
+//         style={{
+//           border: "2px solid white",
+//           background: "#000",
+//         }}
+//       />
+//     </div>
+//   );
+// };
+
+// export default Game;
+
+import React, { useEffect, useRef } from 'react';
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:3000'); // Adjust port if needed
+
+export const GameCanvas: React.FC = () => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
+
+    socket.on('state_update', (state) => {
+      ctx.clearRect(0, 0, 900, 600);
+
+      // Draw paddles
+      ctx.fillStyle = 'black';
+      ctx.fillRect(0, state.paddles.player1.y, 10, state.paddles.player1.height);
+      ctx.fillRect(790, state.paddles.player2.y, 10, state.paddles.player2.height);
+
+      // Draw ball
+      ctx.beginPath();
+      ctx.arc(state.ball.x, state.ball.y, state.ball.radius, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    return () => {
+      socket.off('state_update');
+    };
+  }, []);
+
+  // Handle keyboard input
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowUp') socket.emit('player_move', { playerId: 'player2', direction: 'up' });
+      if (e.key === 'ArrowDown') socket.emit('player_move', { playerId: 'player2', direction: 'down' });
+      if (e.key === 'w') socket.emit('player_move', { playerId: 'player1', direction: 'up' });
+      if (e.key === 's') socket.emit('player_move', { playerId: 'player1', direction: 'down' });
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
-    <div style={{ textAlign: "center" }}>
-      <h2>🎮 Pong Game</h2>
-      <canvas
-        width={900}
-        height={600}
-        style={{
-          border: "2px solid white",
-          background: "#000",
-        }}
-      />
+    <div className="flex justify-center">
+      <canvas ref={canvasRef} width={900} height={600} className="border border-black" />
     </div>
   );
 };
-
-export default Game;

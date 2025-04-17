@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   GameState.ts                                       :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
+/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/12 15:41:55 by benanredzhe       #+#    #+#             */
-/*   Updated: 2025/04/15 14:18:15 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/04/17 09:33:59 by beredzhe         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -33,7 +33,7 @@ type Paddle = {
 
   /* GameState class manages the entire game state, including paddles, ball, and score */
   export class GameState {
-	width: number = 800; // Game width
+	width: number = 900; // Game width
 	height: number = 600; // Game height
 	paddleSpeed: number = 10;
 	
