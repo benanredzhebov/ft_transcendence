@@ -1,0 +1,14 @@
+{
+    "compilerOptions": {
+      "target": "ES2016",
+      "module": "CommonJS", // Important for require/node compatibility
+      "outDir": "./dist",
+      "rootDir": "./src",
+      "strict": true,
+      "esModuleInterop": true,
+      "skipLibCheck": true,
+      "forceConsistentCasingInFileNames": true
+    },
+    "include": ["src/**/*"],
+    "exclude": ["node_modules"]
+  }

@@ -7,16 +7,15 @@ cd ./frontend
 npm install
 npm run dev
 
-npm install react react-dom
-npm install --save-dev @types/react @types/react-dom
-
-npm install socket.io-client
-npm install --save-dev @types/socket.io-client
-
 
 cd./backend
-npm install socket.io
+npm install
+npx tsc
+node dist/socket/server.js.
 ```
 
 ## Guides
 [Canvas Tutorial](#https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial)
+
+
+Need to run both the HTTP API (Fastify) and the WebSocket (Socket.IO) logic within the same Node.js server process, listening on a single port.

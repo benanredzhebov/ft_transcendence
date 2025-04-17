@@ -12,12 +12,12 @@
 
 /* WebSocket server logic (room management, events) */
 
-import fs from 'fs';
-import https from 'https';
-import { Server } from 'socket.io';
-import { GameEngine } from '../game/GameEngine';
+const fs = require('fs');
+const https = require('https');
+const { Server, Socket } = require('socket.io'); // Use require and destructure Socket here
+const { GameEngine } = require('../game/GameEngine');
 
-// Load SSL certificate
+//SSL certificate
 const key = fs.readFileSync('./ssl/key.pem');
 const cert = fs.readFileSync('./ssl/cert.pem');
 
@@ -28,10 +28,15 @@ const io = new Server(httpsServer, {
 
 const game = new GameEngine();
 
-io.on('connection', (socket) => {
+interface PlayerMovePayload {
+  playerId: string;
+  direction: 'up' | 'down';
+}
+
+io.on('connection', (socket: typeof Socket) => {
   console.log('Secure player connected:', socket.id);
 
-  socket.on('player_move', ({ playerId, direction }) => {
+  socket.on('player_move', ({ playerId, direction }: PlayerMovePayload) => { 
     game.handlePlayerInput(playerId, direction);
   });
 });
