@@ -6,6 +6,12 @@
 cd ./frontend
 npm install
 npm run dev
+
+npm install react react-dom
+npm install --save-dev @types/react @types/react-dom
+
+
+cd./backend
 npm install socket.io
 ```
 
