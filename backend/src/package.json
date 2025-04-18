@@ -1,8 +1,0 @@
-{
-  "devDependencies": {
-    "@types/node": "^22.14.1"
-  },
-  "dependencies": {
-    "socket.io": "^4.8.1"
-  }
-}

@@ -3,16 +3,16 @@
 /*                                                        :::      ::::::::   */
 /*   GameEngine.ts                                      :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
+/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/12 15:39:45 by benanredzhe       #+#    #+#             */
-/*   Updated: 2025/04/15 14:47:11 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/04/18 10:04:32 by beredzhe         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 /*Core game logic (positions, collisions, scoring)*/
 
-import { GameState } from './GameState';
+import { GameState } from './GameState.ts';
 
 export class GameEngine {
 	private	state: GameState;

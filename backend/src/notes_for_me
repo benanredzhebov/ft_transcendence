@@ -1,8 +1,0 @@
-1. needs Update the WebSocket connection in your frontend :
-
-const socket = io('wss://localhost:3000', {
-  transports: ['websocket'],
-  secure: true
-});
-
-2. Read Can
