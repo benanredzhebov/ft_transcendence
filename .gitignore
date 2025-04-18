@@ -1,1 +1,1 @@
-./backend/ssl/*.pem
+./backend/src/ssl/*.pem

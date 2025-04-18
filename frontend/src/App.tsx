@@ -1,5 +1,5 @@
 import { Routes, Route, Link } from 'react-router-dom';
-import Game from './Game';
+import { GameCanvas } from './Game';
 import Login from './Login';
 
 function App() {
@@ -13,7 +13,7 @@ function App() {
 
       <Routes>
 	  	<Route path="/" element={<Login />} />
-        <Route path="/game" element={<Game />} />
+        <Route path="/game" element={<GameCanvas />} />
       </Routes>
     </div>
   );
