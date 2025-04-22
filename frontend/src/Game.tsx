@@ -22,16 +22,20 @@
 import React, { useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 
-const socket = io('http://localhost:3000'); // Adjust port if needed
+const socket = io('https://localhost:3000'); // Adjust port if needed
 
 export const GameCanvas: React.FC = () => {
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
 	useEffect(() => {
+		console.log('Canvas Ref:', canvasRef.current);
 		const ctx = canvasRef.current?.getContext('2d');
 
-		if (!ctx) return;
-
+		if (!ctx) {
+			console.error('Failed to get canvas context');
+			return;
+		}
+		// Listen for state updates from the server
 		socket.on('state_update', (state) => {
 			console.log('Received state update:', state); //delete it later
 			ctx.clearRect(0, 0, 900, 600);
@@ -46,7 +50,7 @@ export const GameCanvas: React.FC = () => {
 			ctx.arc(state.ball.x, state.ball.y, state.ball.radius, 0, Math.PI * 2);
 			ctx.fill();
 		});
-
+		// Cleanup the WebSocket listener when the component unmounts
 		return () => {
 			socket.off('state_update');
 		};
@@ -67,7 +71,6 @@ export const GameCanvas: React.FC = () => {
 
 	return (
 		<div className="flex justify-center">
-			<h1>Benan</h1>
 			<canvas ref={canvasRef} width={900} height={600} className="border border-black" />
 		</div>
 	);
