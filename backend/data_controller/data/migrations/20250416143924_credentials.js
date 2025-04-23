@@ -14,8 +14,6 @@ exports.up = async (knex) => {
 		table.text("email",256).notNullable();
 		table.text("password",256).notNullable();
 
-
-
 	})
 };
 
