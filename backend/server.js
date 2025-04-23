@@ -46,7 +46,6 @@ fastify.register(require('@fastify/static'), {
 //------------ routes --------------
 
 
-
 fastify.get('/data', async (req, reply) => {
 	try {
 		const tables = await DB('credentialsTable'); // gets everything from the table testTable
@@ -83,6 +82,9 @@ fastify.post('/signUp', async (req, reply) => {
 	}
 
 	try {
+		// make a check to see if the email already exists
+		// const user = await DB('credentialsTable').where({ email }).first();
+
 		// hash the password
 		password = hasPassword(password);
 		// Insert the data into the database
