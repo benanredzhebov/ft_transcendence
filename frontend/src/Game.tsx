@@ -40,12 +40,17 @@ export const GameCanvas: React.FC = () => {
 			console.log('Received state update:', state); //delete it later
 			ctx.clearRect(0, 0, 900, 600);
 
-			// Draw paddles
 			ctx.fillStyle = 'black';
+			ctx.fillRect(0, 0, 900, 600);
+
+
+			// Draw paddles
+			ctx.fillStyle = 'white';
 			ctx.fillRect(0, state.paddles.player1.y, 10, state.paddles.player1.height);
-			ctx.fillRect(790, state.paddles.player2.y, 10, state.paddles.player2.height);
+			ctx.fillRect(890, state.paddles.player2.y, 10, state.paddles.player2.height);
 
 			// Draw ball
+			ctx.fillStyle = 'white'
 			ctx.beginPath();
 			ctx.arc(state.ball.x, state.ball.y, state.ball.radius, 0, Math.PI * 2);
 			ctx.fill();

@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   GameState.ts                                       :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
+/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/12 15:41:55 by benanredzhe       #+#    #+#             */
-/*   Updated: 2025/04/17 09:33:59 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/04/24 18:13:35 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -35,7 +35,7 @@ type Paddle = {
   export class GameState {
 	width: number = 900; // Game width
 	height: number = 600; // Game height
-	paddleSpeed: number = 10;
+	paddleSpeed: number = 30;
 	
 	/* Stores the positions and dimensions of the two paddles */
 	paddles: Record<string, Paddle> = {
