@@ -1,21 +1,19 @@
 
+const fs = require('fs');
 const repl = require("node:repl");
-const fastify = require("fastify")({logger: false});
-
 const DB = require('./data_controller/dbConfig.js');
 const PORT = process.env.PORT || 3000;
+
 const hasPassword = require('./crypto/crypto')
 
-// https
-// const fs = require('fs');
-
-// const fastify = require('fastify')({
-// 	logger: false,
-// 	https: {
-// 		key: fs.readFileSync('./path/to/your/private-key.pem'),
-// 		cert: fs.readFileSync('./path/to/your/certificate.pem')
-// 	}
-// });
+// https -- works
+const fastify = require('fastify')({
+	logger: false,
+	https: {
+		key: fs.readFileSync('./https_keys/private-key.pem'),
+		cert: fs.readFileSync('./https_keys/certificate.pem')
+	}
+});
 
 
 // import new knex db;
