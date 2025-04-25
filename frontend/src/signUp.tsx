@@ -42,48 +42,106 @@ function SignUp() {
     };
 
     return (
-        <div>
-            <h2>Sign Up</h2>
-            <form onSubmit={handleSubmit}>
+        <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            height: '100vh',
+            backgroundColor: '#f4f4f4',
+        }}>
+            <form
+                onSubmit={handleSubmit}
+                style={{
+                    background: '#fff',
+                    padding: '20px',
+                    borderRadius: '8px',
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                    width: '300px',
+                }}
+            >
+                <h2 style={{
+                    marginBottom: '20px',
+                    fontSize: '24px',
+                    textAlign: 'center',
+                }}>Signup</h2>
                 <div>
-                    <label>
+                    <label style={{display: 'block', marginBottom: '5px', fontWeight: 'bold'}}>
                         Username
-                        <input
-                            type="text"
-                            name="username"
-                            value={formData.username}
-                            onChange={handleChange}
-                            required
-                        />
                     </label>
+                    <input
+                        type="text"
+                        name="username"
+                        value={formData.username}
+                        onChange={handleChange}
+                        required
+                        style={{
+                            width: '100%',
+                            padding: '10px',
+                            marginBottom: '15px',
+                            border: '1px solid #ccc',
+                            borderRadius: '4px',
+                        }}
+                    />
                 </div>
                 <div>
-                    <label>
+                    <label style={{display: 'block', marginBottom: '5px', fontWeight: 'bold'}}>
                         Email
-                        <input
-                            type="email"
-                            name="email"
-                            value={formData.email}
-                            onChange={handleChange}
-                            required
-                        />
                     </label>
+                    <input
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        required
+                        style={{
+                            width: '100%',
+                            padding: '10px',
+                            marginBottom: '15px',
+                            border: '1px solid #ccc',
+                            borderRadius: '4px',
+                        }}
+                    />
                 </div>
                 <div>
-                    <label>
+                    <label style={{display: 'block', marginBottom: '5px', fontWeight: 'bold'}}>
                         Password
-                        <input
-                            type="password"
-                            name="password"
-                            value={formData.password}
-                            onChange={handleChange}
-                            required
-                        />
                     </label>
+                    <input
+                        type="password"
+                        name="password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        required
+                        style={{
+                            width: '100%',
+                            padding: '10px',
+                            marginBottom: '15px',
+                            border: '1px solid #ccc',
+                            borderRadius: '4px',
+                        }}
+                    />
                 </div>
-                <button type="submit">Sign Up</button>
+                <button
+                    type="submit"
+                    style={{
+                        width: '100%',
+                        padding: '10px',
+                        backgroundColor: '#4CAF50',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        fontSize: '16px',
+                        cursor: 'pointer',
+                    }}
+                >
+                    Sign Up
+                </button>
+                {responseMessage && (
+                    <p style={{marginTop: '15px', textAlign: 'center', color: 'red'}}>
+                        {responseMessage}
+                    </p>
+                )}
             </form>
-            {responseMessage && <p>{responseMessage}</p>}
         </div>
     );
 }
