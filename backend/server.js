@@ -37,12 +37,6 @@ fastify.setNotFoundHandler((req, reply) => {
 	reply.sendFile('index.html'); // Ensure `index.html` exists in thesrc directory
 });
 
-// fastify.register(require('@fastify/static'), {
-// 	root: path.join(__dirname, './public'), // Serve React build files
-// 	prefix: '/', // Serve files at the root URL
-// });
-
-
 //------------ routes --------------
 
 
@@ -54,21 +48,6 @@ fastify.get('/data', async (req, reply) => {
 		console.log(e);
 	}
 });
-//
-// // // Example route to serve the signUp.html file explicitly
-fastify.get('/signUp', (req, reply) => {
-	reply.sendFile('signUp.tsx'); // File must exist in the 'public' folder
-});
-//
-// fastify.get('/logIn', (req, reply) => {
-// 	reply.sendFile('login.html'); // File must exist in the 'public' folder
-// });
-//
-//
-// fastify.get('/delete', (req, reply) => {
-// 	reply.sendFile('delete.html'); // File must exist in the 'public' folder
-// });
-
 
 
 fastify.post('/signUp', async (req, reply) => {
@@ -120,7 +99,7 @@ fastify.post('/logIn', async (req, reply) => {
 			return;
 		}
 
-		// Verify the password (assuming `hasPassword` is used for hashing)
+		// Verify the password (assuming  is used for hashing)
 		if (user.password !== hasPassword(password)) {
 			reply.status(401).send({ error: 'Invalid password' });
 			return;
