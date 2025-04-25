@@ -21,3 +21,14 @@ npm install nodemon@^3.1.9 --save-dev
   - npx knex migrate:make "name"
   - configure the up  and down functions
  3.  npx knex migrate:latest
+
+//-------------------https-------------------
+Steps to Set Up HTTPS
+Obtain an SSL/TLS Certificate:
+For development, you can generate a self-signed certificate using tools like OpenSSL.
+For production, obtain a certificate from a trusted Certificate Authority (CA) like Let's Encrypt.
+Generate a Self-Signed Certificate (for Development): Run the following command to generate a private key and a certificate:
+openssl req -nodes -new -x509 -keyout private-key.pem -out certificate.pem -days 365
+This will create two files:
+private-key.pem: Your private key.
+certificate.pem: Your self-signed certificate.
