@@ -13,7 +13,7 @@ function App() {
             </nav>
 
             <Routes>
-                <Route path="/" element={<Login />} />
+                <Route path="/logIn" element={<Login />} />
                 <Route path="/game" element={<Game />} />
                 <Route path="/signUp" element={<SignUp />} /> {/* Add the SignUp route */}
             </Routes>
