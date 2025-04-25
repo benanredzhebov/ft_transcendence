@@ -32,3 +32,70 @@ openssl req -nodes -new -x509 -keyout private-key.pem -out certificate.pem -days
 This will create two files:
 private-key.pem: Your private key.
 certificate.pem: Your self-signed certificate.
+
+
+//----------------- connect with react -----------------
+--
+npm install typescript --save-dev
+npm run buld
+
+
+
+
+
+
+
+
+
+// fastify.put('/data/:id',async (req,reply) => {
+// 	const { id } = req.params;
+// 	if (!id) {
+// 		reply.status(400).send({ error: 'ID is required' });
+// 		return;
+// 	}
+// 	const { message } = req.body;
+// 	if (!message) {
+// 		reply.status(400).send({ error: 'Message is required' });
+// 		return;
+// 	}
+// 	try {  // use update function from knex to update what you want, i add message as parameter
+// 		const currentTable = await DB('credentialsTable').where({id}).update({message});
+// 		reply.send(currentTable);
+// 		console.log("Updatetd");
+// 	} catch (e) {
+// 		console.log(e);
+// 	}
+//
+// });
+
+
+// fastify.post('/delete',async (req,reply) => {
+// 	// reply.sendFile('delete.html'); // File must exist in the 'public' folder
+//
+// 	const { id } = req.body;  // body for forms, params for url
+// 	if (!id) {
+// 		reply.status(400).send({ error: 'ID is required' });
+// 		return;
+// 	}
+// 	try{
+// 		const currentTable = await DB("credentialsTable").where({id}).del();
+// 		reply.send(currentTable);
+// 		console.log("deleted");
+//
+// 	} catch (e) {
+// 		console.log(e);
+// 	}
+// });
+
+//get by id
+// fastify.get('/data/:id', async (req, reply) => {
+// 	const {id} = req.params;
+//
+// 	try {
+// 		const tableId = await DB("credentialsTable").where({id});
+// 		reply.send(tableId);
+// 		console.log("deleted");
+// 	} catch (e) {
+// 		console.log(e);
+// 	}
+// });

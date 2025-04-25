@@ -26,19 +26,21 @@ const path = require('path');
 fastify.register(require("@fastify/formbody"));
 //register the static plugin
 // npm install @fastify/static
-// fastify.register(require('@fastify/static'), {
-// 	root: path.join(__dirname, '../frontend/src'), // Serve React build files
-// 	prefix: '/', // Serve files at the root URL
-// });
-//
-// fastify.setNotFoundHandler((req, reply) => {
-// 	reply.sendFile('index.html'); // Ensure `index.html` exists in the build directory
-// });
 
+// -------------c0onnect with react server----------
 fastify.register(require('@fastify/static'), {
-	root: path.join(__dirname, './public'), // Serve React build files
+	root: path.join(__dirname, '../frontend/dist'), // Serve React build files
 	prefix: '/', // Serve files at the root URL
 });
+//
+fastify.setNotFoundHandler((req, reply) => {
+	reply.sendFile('index.html'); // Ensure `index.html` exists in thesrc directory
+});
+
+// fastify.register(require('@fastify/static'), {
+// 	root: path.join(__dirname, './public'), // Serve React build files
+// 	prefix: '/', // Serve files at the root URL
+// });
 
 
 //------------ routes --------------
@@ -53,19 +55,19 @@ fastify.get('/data', async (req, reply) => {
 	}
 });
 //
-// // Example route to serve the signUp.html file explicitly
+// // // Example route to serve the signUp.html file explicitly
 fastify.get('/signUp', (req, reply) => {
-	reply.sendFile('signUp.html'); // File must exist in the 'public' folder
+	reply.sendFile('signUp.tsx'); // File must exist in the 'public' folder
 });
-
-fastify.get('/logIn', (req, reply) => {
-	reply.sendFile('login.html'); // File must exist in the 'public' folder
-});
-
-
-fastify.get('/delete', (req, reply) => {
-	reply.sendFile('delete.html'); // File must exist in the 'public' folder
-});
+//
+// fastify.get('/logIn', (req, reply) => {
+// 	reply.sendFile('login.html'); // File must exist in the 'public' folder
+// });
+//
+//
+// fastify.get('/delete', (req, reply) => {
+// 	reply.sendFile('delete.html'); // File must exist in the 'public' folder
+// });
 
 
 
@@ -97,58 +99,6 @@ fastify.post('/signUp', async (req, reply) => {
 });
 
 
-// fastify.put('/data/:id',async (req,reply) => {
-// 	const { id } = req.params;
-// 	if (!id) {
-// 		reply.status(400).send({ error: 'ID is required' });
-// 		return;
-// 	}
-// 	const { message } = req.body;
-// 	if (!message) {
-// 		reply.status(400).send({ error: 'Message is required' });
-// 		return;
-// 	}
-// 	try {  // use update function from knex to update what you want, i add message as parameter
-// 		const currentTable = await DB('credentialsTable').where({id}).update({message});
-// 		reply.send(currentTable);
-// 		console.log("Updatetd");
-// 	} catch (e) {
-// 		console.log(e);
-// 	}
-//
-// });
-
-
-// fastify.post('/delete',async (req,reply) => {
-// 	// reply.sendFile('delete.html'); // File must exist in the 'public' folder
-//
-// 	const { id } = req.body;  // body for forms, params for url
-// 	if (!id) {
-// 		reply.status(400).send({ error: 'ID is required' });
-// 		return;
-// 	}
-// 	try{
-// 		const currentTable = await DB("credentialsTable").where({id}).del();
-// 		reply.send(currentTable);
-// 		console.log("deleted");
-//
-// 	} catch (e) {
-// 		console.log(e);
-// 	}
-// });
-
-//get by id
-// fastify.get('/data/:id', async (req, reply) => {
-// 	const {id} = req.params;
-//
-// 	try {
-// 		const tableId = await DB("credentialsTable").where({id});
-// 		reply.send(tableId);
-// 		console.log("deleted");
-// 	} catch (e) {
-// 		console.log(e);
-// 	}
-// });
 
 
 
