@@ -13,7 +13,6 @@ export default defineConfig({
         changeOrigin: true,
         secure: false, // Disable SSL verification for self-signed certs in dev
       },
-      // Add other backend routes you need to proxy
       '/logIn': {
         target: 'https://localhost:3000',
         changeOrigin: true,
@@ -24,14 +23,13 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
-      // You might need a proxy for socket.io upgrade requests too,
-      // although direct connection from client might be simpler.
-      // '/socket.io': {
-      //   target: 'wss://localhost:3000', // Use wss for secure websockets
-      //   ws: true, // Enable websocket proxying
-      //   secure: false,
-      //   changeOrigin: true,
-      // }
+      // Add WebSocket proxy for socket.io
+      '/socket.io': {
+        target: 'https://localhost:3000', // Use wss for secure WebSocket connections
+        ws: true, // Enable WebSocket proxying
+        secure: false,
+        changeOrigin: true,
+      },
     },
   },
 });
