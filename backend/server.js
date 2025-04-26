@@ -18,7 +18,7 @@ const fastify = require('fastify')({
 
 // import new knex db;
 // const db = require('./data/dbConfig');
-// iport the path
+// inport the path
 const path = require('path');
 
 // for accepting html forms i need formbody
@@ -61,9 +61,18 @@ fastify.post('/signUp', async (req, reply) => {
 	}
 
 	try {
-		// make a check to see if the email already exists
-		// const user = await DB('credentialsTable').where({ email }).first();
 
+		const usrUsername = await DB('credentialsTable').where({ username }).first();
+		if(usrUsername){
+			reply.status(400).send({ error: 'Username already exists' });
+			return;
+		}
+		// make a check to see if the email already exists
+		const userEmail = await DB('credentialsTable').where({ email }).first();
+		if(userEmail){
+			reply.status(400).send({ error: 'Email already in use!' });
+			return;
+		}
 		// hash the password
 		password = hasPassword(password);
 		// Insert the data into the database
@@ -76,9 +85,6 @@ fastify.post('/signUp', async (req, reply) => {
 		reply.status(500).send({ error: 'Failed to insert data' });
 	}
 });
-
-
-
 
 
 fastify.post('/logIn', async (req, reply) => {
@@ -114,6 +120,24 @@ fastify.post('/logIn', async (req, reply) => {
 });
 // ----------------------------------------------------
 
+/// ------------------for cleaning the data base---------------
+
+fastify.post('/delete',async (req,reply) => {
+	// reply.sendFile('delete.html'); // File must exist in the 'public' folder
+	const { id } = req.body;  // body for forms, params for url
+	if (!id) {
+		reply.status(400).send({ error: 'ID is required' });
+		return;
+	}
+	try{
+		const currentTable = await DB("credentialsTable").where({id}).del();
+		reply.send(currentTable);
+		console.log("deleted");
+
+	} catch (e) {
+		console.log(e);
+	}
+});
 
 // start the server
 
