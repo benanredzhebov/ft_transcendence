@@ -3,7 +3,7 @@ const fs = require('fs');
 const repl = require("node:repl");
 const DB = require('./data_controller/dbConfig.js');
 const PORT = process.env.PORT || 3000;
-
+const path = require('path');
 const hasPassword = require('./crypto/crypto')
 
 // https -- works
@@ -15,18 +15,40 @@ const fastify = require('fastify')({
 	}
 });
 
+// -------------------------sockets fort game-------------
 
-// import new knex db;
-// const db = require('./data/dbConfig');
-// inport the path
-const path = require('path');
+// npm install socket.io
+// const server = fastify.server; // Get the underlying HTTP/HTTPS server
+// const io = require('socket.io')(server);
+//
+// io.on('connection', (socket) => {
+// 	console.log('A user connected');
+// 	socket.on('player_move', (data) => {
+// 		console.log('Player move:', data);
+// 	});
+//
+// 	setInterval(() => {
+// 		socket.emit('state_update', {
+// 			paddles: {
+// 				player1: { y: 100, height: 100 },
+// 				player2: { y: 200, height: 100 },
+// 			},
+// 			ball: { x: 450, y: 300, radius: 10 },
+// 		});
+// 	}, 1000 / 60); // 60 FPS
+// });
+//
+// // --------------------------------------------------
+
+
+
+
 
 // for accepting html forms i need formbody
 // npm install @fastify/formbody
 fastify.register(require("@fastify/formbody"));
 //register the static plugin
 // npm install @fastify/static
-
 // -------------c0onnect with react server----------
 fastify.register(require('@fastify/static'), {
 	root: path.join(__dirname, '../frontend/dist'), // Serve React build files
@@ -151,5 +173,51 @@ const start =  async () => {
 		process.exit(1);
 	}
 }
+
+
+
+
+// ----------------------test for game-----------------
+// npm install @fastify/cors
+// fastify.register(require('@fastify/cors'), {
+// 	origin: 'http://localhost:5173', // Replace with your frontend's URL
+// });
+// let io; // Declare io globally
+//
+// const start = async () => {
+// 	try {
+// 		const address = await fastify.listen({ port: PORT });
+// 		console.log("Server running at " + address);
+//
+// 		// Attach socket.io to the Fastify server
+// 		io = require('socket.io')(fastify.server, {
+// 			cors: {
+// 				origin: 'http://localhost:5173', // Replace with your frontend's URL
+// 				methods: ['GET', 'POST'],
+// 			},
+// 		});
+//
+// 		io.on('connection', (socket) => {
+// 			console.log('A user connected');
+// 			socket.on('player_move', (data) => {
+// 				console.log('Player move:', data);
+// 			});
+//
+// 			setInterval(() => {
+// 				socket.emit('state_update', {
+// 					paddles: {
+// 						player1: { y: 100, height: 100 },
+// 						player2: { y: 200, height: 100 },
+// 					},
+// 					ball: { x: 450, y: 300, radius: 10 },
+// 				});
+// 			}, 1000 / 60); // 60 FPS
+// 		});
+// 	} catch (e) {
+// 		fastify.log.error(e);
+// 		process.exit(1);
+// 	}
+// };
+// ----------------------------
 
 start();

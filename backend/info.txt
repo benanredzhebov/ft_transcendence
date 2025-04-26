@@ -39,6 +39,8 @@ certificate.pem: Your self-signed certificate.
 npm install typescript --save-dev
 npm run buld
 
+------------------ install socket .io--------
+npm install socket.io
 
 
 
