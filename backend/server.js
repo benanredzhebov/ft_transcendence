@@ -211,7 +211,7 @@ fastify.post('/delete',async (req,reply) => {
 const start =  async () => {
 	try{
 		const adress = await fastify.listen({port : PORT});
-		console.log("Server running " + adress)
+		console.log("Server running " + "https://localhost:3000/")
 	}
 	catch (e){
 		fastify.log.error(e);
