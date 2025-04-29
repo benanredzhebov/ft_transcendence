@@ -1,6 +1,8 @@
  fronteend
-    enter front end directory
-    type : npm run build 
+    1npm install typescript --save-dev
+
+    2.npm install
+    3.npm run build 
     and nothing more
 
 got to backend
