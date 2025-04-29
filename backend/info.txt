@@ -28,7 +28,10 @@ Obtain an SSL/TLS Certificate:
 For development, you can generate a self-signed certificate using tools like OpenSSL.
 For production, obtain a certificate from a trusted Certificate Authority (CA) like Let's Encrypt.
 Generate a Self-Signed Certificate (for Development): Run the following command to generate a private key and a certificate:
-openssl req -nodes -new -x509 -keyout private-key.pem -out certificate.pem -days 365
+
+command:
+    mkdir -p https_keys && openssl req -nodes -new -x509 -keyout https_keys/private-key.pem -out https_keys/certificate.pem -days 365
+
 This will create two files:
 private-key.pem: Your private key.
 certificate.pem: Your self-signed certificate.
@@ -41,7 +44,7 @@ npm run buld
 
 ------------------ install socket .io--------
 npm install socket.io
-
+npm install socket.io-client
 
 
 
