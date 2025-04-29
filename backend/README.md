@@ -1,5 +1,5 @@
  fronteend
-    1npm install typescript --save-dev
+    1 npm install typescript --save-dev
 
     2.npm install
     3.npm run build 
