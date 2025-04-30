@@ -26,10 +26,11 @@ io.on('connection', (socket) => {
     // Example: Emit a dummy game state periodically
 	const gameState = {
 		paddles: {
-			player1: { y: 100, height: 100, speed: 7 },
-			player2: { y: 200, height: 100, speed: 7 },
+			player1: { y: 100, height: 100, width: 10, speed: 7 },
+			player2: { y: 200, height: 100, width: 10, speed: 7 },
 		},
-		ball: { x: 450, y: 300, radius: 10, dx: 5, dy: 4 }
+		ball: { x: 450, y: 300, radius: 10, dx: 5, dy: 4 },
+		score: { player1: 0, player2: 0 }
 	};
 	socket.on('player_move', ({ playerId, direction }) => {
 		const paddle = gameState.paddles[playerId];
@@ -63,7 +64,12 @@ io.on('connection', (socket) => {
 });
 // --------------------------------------------------
 
-
+//register the cores
+//  for connecting with the forms
+fastify.register(require('@fastify/cors'), {
+	origin: true,
+	credentials: true
+  });
 
 
 
@@ -72,15 +78,17 @@ io.on('connection', (socket) => {
 fastify.register(require("@fastify/formbody"));
 //register the static plugin
 // npm install @fastify/static
-// -------------c0onnect with pages----------
+
+// Serve the compiled frontend files
 fastify.register(require('@fastify/static'), {
-	root: path.join(__dirname, './public'),
+	root: path.join(__dirname, '../frontend/dist'), // Adjust path to the Vite build folder
 	prefix: '/', // Serve files at the root URL
-});
-//
-// fastify.setNotFoundHandler((req, reply) => {
-// 	reply.sendFile('index.html'); // Ensure `index.html` exists in thesrc directory
-// });
+  });
+  
+  // Fallback to index.html for SPA routing
+  fastify.setNotFoundHandler((req, reply) => {
+	reply.sendFile('index.html'); // Ensure `index.html` exists in the `dist` folder
+  });
 
 //------------ routes --------------
 
@@ -94,21 +102,21 @@ fastify.get('/data', async (req, reply) => {
 	}
 });
 
-fastify.get('/signUp', (req, reply) => {
-	reply.sendFile("signUp.html")
-});
+// fastify.get('/signUp', (req, reply) => {
+// 	reply.sendFile("signUp.html")
+// });
 
-fastify.get('/logIn', (req, reply) => {
-	reply.sendFile('logIn.html')
-});
+// fastify.get('/logIn', (req, reply) => {
+// 	reply.sendFile('logIn.html')
+// });
 
-fastify.get('/delete', (req, reply) => {
-	reply.sendFile("delete.html")
-});
+// fastify.get('/delete', (req, reply) => {
+// 	reply.sendFile("delete.html")
+// });
 
-fastify.get('/game', (req, reply) => {
-	reply.sendFile("pong.html")
-});
+// fastify.get('/game', (req, reply) => {
+// 	reply.sendFile("pong.html")
+// });
 
 fastify.post('/signUp', async (req, reply) => {
 	// Extract fields from the request body
@@ -147,7 +155,7 @@ fastify.post('/signUp', async (req, reply) => {
 });
 
 
-fastify.post('/logIn', async (req, reply) => {
+fastify.post('/login', async (req, reply) => {
 	const { email, password } = req.body;
 
 	if (!email || !password) {
@@ -203,7 +211,7 @@ fastify.post('/delete',async (req,reply) => {
 const start =  async () => {
 	try{
 		const adress = await fastify.listen({port : PORT});
-		console.log("Server running " + adress)
+		console.log("Server running " + "https://localhost:3000/")
 	}
 	catch (e){
 		fastify.log.error(e);
