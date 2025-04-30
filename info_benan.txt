@@ -1,0 +1,4 @@
+declaration file to tell TypeScript what those JS modules export(also ask Marian to convert crypto and dbConfig file into ts)
+
+/backend/types/crypto.d.ts
+/backend/types/dbConfig.d.ts
