@@ -133,7 +133,7 @@ fastify.post('/login', async (req, reply) => {
 });
 
 fastify.post('/delete', async (req, reply) => {
-  const { id } = req.body;
+  const { id } = req.body as { id: number };
   if (!id) {
     reply.status(400).send({ error: 'ID is required' });
     return;

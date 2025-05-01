@@ -112,7 +112,7 @@ export function renderGame(containerId: string = 'app') {
 	//This is real-time WebSocket-based multiplayer support, implemented manually (not through any UI framework).
 	socket!.on('connect', () => console.log('✅ Connected:', socket!.id));
 	socket.on('state_update', (state: GameState) => {
-		console.log('State received:', state); // Just to check, should be delete later
+		// console.log('State received:', state); // Just to check, should be delete later
 		requestAnimationFrame(() => drawGame(state));
 	});
 }
