@@ -1,4 +1,7 @@
-declaration file to tell TypeScript what those JS modules export(also ask Marian to convert crypto and dbConfig file into ts)
+I converted `backend/crypto.js` and backend/data_controller/dbConfig.ts to Typescrypt.
 
-/backend/types/crypto.d.ts
-/backend/types/dbConfig.d.ts
+cd backend
+npm run start
+
+cd frontend
+npm run dev

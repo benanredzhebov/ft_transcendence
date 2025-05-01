@@ -1,7 +1,7 @@
 import knex from 'knex';
-import { Knex } from 'knex';
+import type { Knex } from 'knex'; //this is safe in TS/ESM
 
-const db = knex({
+const DB = knex({
   client: 'sqlite3',
   connection: {
     filename: './data_controller/data/myData.db'
@@ -12,4 +12,4 @@ const db = knex({
   }
 });
 
-export default db;
+export default DB;

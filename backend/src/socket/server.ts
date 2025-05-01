@@ -66,16 +66,25 @@ fastify.setNotFoundHandler((req, reply) => {
   reply.sendFile('index.html');
 });
 
-// --- Routes ---
-fastify.get('/data', async (req, reply) => {
-  try {
-    const tables = await DB('credentialsTable');
-    reply.send(tables);
-  } catch (e) {
-    console.error(e);
-    reply.status(500).send({ error: 'Database fetch error' });
-  }
+// Health check route (optional but helpful)
+fastify.get('/', async (req, reply) => {
+  reply.type('text/html').send(`
+    <h1>Backend WebSocket Server is Running</h1>
+    <p>Connected successfully to Fastify at <code>https://localhost:3000</code>.</p>
+    <p>This server powers the real-time Pong game via WebSockets.</p>
+  `);
 });
+
+// --- Routes ---
+  fastify.get('/data', async (req, reply) => {
+    try {
+      const tables = await DB('credentialsTable');
+      reply.send(tables);
+    } catch (e) {
+      console.error(e);
+      reply.status(500).send({ error: 'Database fetch error' });
+    }
+  });
 
 fastify.post('/signUp', async (req, reply) => {
   const { username, email, password: rawPassword } = req.body as any;
