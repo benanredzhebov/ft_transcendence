@@ -208,7 +208,7 @@ function addLoginFormListeners() {
 
       try {
           // Use the correct backend URL (ensure HTTPS and port are right)
-          const response = await fetch('https://localhost:3000/login', {
+          const response = await fetch('https://127.0.0.1:3000/login', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(loginData),
