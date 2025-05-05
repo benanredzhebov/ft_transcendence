@@ -16,3 +16,7 @@ got to backend
 
 4. click the link where is written server running
 
+
+
+
+docker exec -it <frontend-container-id> sh
