@@ -1,0 +1,9 @@
+backend/node_modules
+npm-debug.log
+.DS_Store
+*.env
+frontend/node_modules
+frontend/dist
+frontend/.git
+frontend/.vscode
+backend/https_keys
