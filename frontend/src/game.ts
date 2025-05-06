@@ -1,5 +1,5 @@
-// filepath: c:\Users\piero\Desktop\ft_trascendence\frontend\src\game.ts
-import './game.css'; // Import the CSS file
+
+import './game.css';
 import { io, Socket } from 'socket.io-client';
 
 // --- Interfaces (matching backend GameState) ---
@@ -109,23 +109,23 @@ function drawGame(state: GameState) {
         ctx.stroke();
     }
 
-    // // Draw Score
-    // ctx.fillStyle = 'white';
-    // ctx.font = `${Math.max(24, 40 * Math.min(scaleX, scaleY))}px Arial`;
-    // ctx.textAlign = 'center';
-    // ctx.fillText(
-    //     `${state.score.player1} - ${state.score.player2}`,
-    //     width / 2,
-    //     Math.max(40, 60 * scaleY)
-    // );
+    // Draw Score
+    ctx.fillStyle = 'white';
+    ctx.font = `${Math.max(24, 40 * Math.min(scaleX, scaleY))}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.fillText(
+        `${state.score.player1} - ${state.score.player2}`,
+        width / 2,
+        Math.max(40, 60 * scaleY)
+    );
 
-    // // Check for game end condition
-    // if (state.score.player1 >= 5 || state.score.player2 >= 5) {
-    //     ctx.fillStyle = 'red';
-    //     ctx.font = `${Math.max(40, 70 * Math.min(scaleX, scaleY))}px Arial`;
-    //     ctx.textAlign = 'center';
-    //     ctx.fillText('END', width / 2, height / 2);
-    // }
+    // Check for game end condition
+    if (state.score.player1 >= 5 || state.score.player2 >= 5) {
+        ctx.fillStyle = 'red';
+        ctx.font = `${Math.max(40, 70 * Math.min(scaleX, scaleY))}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.fillText('END', width / 2, height / 2);
+    }
 }
 
 // --- State Update Listener ---
@@ -144,10 +144,6 @@ function handleResize() {
 
     const { clientWidth: containerWidth, clientHeight: containerHeight } = container;
 
-    // Remove the incorrect paddingFactor
-    // const paddingFactor = 2.5; // <-- REMOVE THIS
-    // const availableWidth = containerWidth * paddingFactor; // <-- REMOVE THIS
-    // const availableHeight = containerHeight * paddingFactor; // <-- REMOVE THIS
 
     const aspectRatio = SERVER_WIDTH / SERVER_HEIGHT;
     let newWidth = containerWidth; // Start by assuming width fits container
@@ -167,10 +163,6 @@ function handleResize() {
     canvas.width = newWidth;
     canvas.height = newHeight;
 
-    // Optional: Redraw with last known state immediately after resize
-    // if (lastKnownState) {
-    //     drawGame(lastKnownState);
-    // }
 }
 
 // --- Keyboard Input Handler ---
@@ -220,6 +212,10 @@ export function renderGame() {
 
     canvas = document.createElement('canvas');
     canvas.className = "game-canvas";
+    // Set initial aspect ratio via style to help layout
+    canvas.style.setProperty('--server-width', String(SERVER_WIDTH));
+    canvas.style.setProperty('--server-height', String(SERVER_HEIGHT));
+
     ctx = canvas.getContext('2d');
 
     if (!ctx) {
@@ -233,18 +229,16 @@ export function renderGame() {
     appElement.appendChild(container);
 
     // --- Initialize ---
-    handleResize(); // Set initial canvas size
-
-    // Connect to WebSocket server
-    // socket = io('https://localhost:3000', {
-    //     // Optional: Add connection options if needed
-    //     // e.g., transports: ['websocket']
-    // });
-
-    // By using io() with no parameters, socket.io connects the socket to wherever the page was loaded from.
+    // Call resize once immediately
+    handleResize();
+    // Call resize again in the next animation frame to ensure layout is stable
+    requestAnimationFrame(handleResize);
 
 
-    socket = io(); // Connects to the same origin the page was loaded from
+    socket = io('https://127.0.0.1:3000', {
+        transports: ['websocket'],
+        secure: true
+    });
 
 
     socket.on('connect', () => {
