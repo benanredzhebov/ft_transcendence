@@ -22,3 +22,12 @@ got to backend
 docker exec -it <frontend-container-id> sh
 
 docker-compose up --build
+
+
+
+
+
+https://127.0.0.1:3000/username-google
+
+client id : 532929311202-76tdduvrs9d0oied5k4ard52r7k8pq5t.apps.googleusercontent.com
+client secret":"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"
