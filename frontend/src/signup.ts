@@ -1,4 +1,5 @@
 import './signup.css'; // Import the CSS file
+import { navigateTo } from './main';
 
 export function renderSignUp() {
   const appElement = document.querySelector<HTMLDivElement>('#app');
@@ -87,11 +88,6 @@ export function renderSignUp() {
   const borderDiv = document.createElement('div');
   borderDiv.className = "signup-border";
 
-  // Bottom Content "or sign up with"
-  const bottomParagraph = document.createElement('p');
-  bottomParagraph.className = "signup-bottom-paragraph";
-  bottomParagraph.textContent = "or sign up with";
-
   // Bottom Buttons Container (OAuth)
   const bottomButtonsContainer = document.createElement('div');
   bottomButtonsContainer.className = "signup-bottom-buttons-container";
@@ -115,7 +111,7 @@ export function renderSignUp() {
   googleSignupButton.className = "signup-oauth-button";
   const googleSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   googleSvg.setAttribute("viewBox", "0 0 48 48");
-  googleSvg.innerHTML = `<path fill="#EA4335" d="M24 9.5c3.4 0 6.3 1.2 8.6 3.2l6.4-6.4C34.9 2.8 29.9 1 24 1 14.9 1 7.1 6.6 3.4 14.4l7.7 6C12.8 13.4 18 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.8-.2-3.5-.5-5.2H24v9.9h12.7c-.6 3.2-2.3 5.9-4.9 7.8l7.7 6c4.5-4.1 7-10.1 7-17.5z"/><path fill="#FBBC05" d="M11.1 20.4c-.5 1.5-.8 3.1-.8 4.8s.3 3.3.8 4.8l-7.7 6C1.2 31.6 0 28 0 24s1.2-7.6 3.4-10.4l7.7 6z"/><path fill="#34A853" d="M24 47c5.9 0 10.9-1.9 14.5-5.2l-7.7-6c-2 1.3-4.5 2.1-7.3 2.1-6 0-11.2-3.9-13-9.2l-7.7 6C7.1 40.4 14.9 47 24 47z"/><path fill="none" d="M0 0h48v48H0z"/>`;
+  googleSvg.innerHTML = `<path fill="EA4335" d="M24 9.5c3.4 0 6.3 1.2 8.6 3.2l6.4-6.4C34.9 2.8 29.9 1 24 1 14.9 1 7.1 6.6 3.4 14.4l7.7 6C12.8 13.4 18 9.5 24 9.5z"/><path fill="4285F4" d="M46.5 24.5c0-1.8-.2-3.5-.5-5.2H24v9.9h12.7c-.6 3.2-2.3 5.9-4.9 7.8l7.7 6c4.5-4.1 7-10.1 7-17.5z"/><path fill="FBBC05" d="M11.1 20.4c-.5 1.5-.8 3.1-.8 4.8s.3 3.3.8 4.8l-7.7 6C1.2 31.6 0 28 0 24s1.2-7.6 3.4-10.4l7.7 6z"/><path fill="34A853" d="M24 47c5.9 0 10.9-1.9 14.5-5.2l-7.7-6c-2 1.3-4.5 2.1-7.3 2.1-6 0-11.2-3.9-13-9.2l-7.7 6C7.1 40.4 14.9 47 24 47z"/><path fill="none" d="M0 0h48v48H0z"/>`;
   const googleSpan = document.createElement('span');
   googleSpan.textContent = "Google";
   googleSignupButton.appendChild(googleSvg);
@@ -125,7 +121,7 @@ export function renderSignUp() {
   const loginParagraph = document.createElement('p');
   loginParagraph.className = "signup-login-paragraph";
   const loginLink = document.createElement('a');
-  loginLink.href = "#/login";
+  loginLink.href = "/login";
   loginLink.className = "signup-login-link";
   loginLink.textContent = "Log In";
   loginParagraph.textContent = "Already have an account? ";
@@ -149,14 +145,10 @@ export function renderSignUp() {
   form.appendChild(errorMessageDiv);
   form.appendChild(middleContentContainer);
 
-  bottomButtonsContainer.appendChild(intraSignupButton);
-  bottomButtonsContainer.appendChild(googleSignupButton);
-
   leftSide.appendChild(heading);
   leftSide.appendChild(paragraph);
   leftSide.appendChild(form);
   leftSide.appendChild(borderDiv);
-  leftSide.appendChild(bottomParagraph);
   leftSide.appendChild(bottomButtonsContainer);
   leftSide.appendChild(loginParagraph);
 
@@ -180,10 +172,8 @@ function addSignupFormListeners() {
   const errorDiv = document.getElementById('error-message');
   const signupButton = document.getElementById('signup-button') as HTMLButtonElement;
   const closeButton = document.getElementById('close-signup-button');
-  const googleSignupButton = document.getElementById('google-signup-button');
-  const intraSignupButton = document.getElementById('intra-signup-button');
 
-  if (!form || !errorDiv || !signupButton || !closeButton || !googleSignupButton || !intraSignupButton) {
+  if (!form || !errorDiv || !signupButton || !closeButton ) {
       console.error("One or more signup elements not found. Cannot attach listeners.");
       return;
   }
@@ -213,7 +203,7 @@ function addSignupFormListeners() {
           if (response.ok && data.success !== false) {
               console.log('Signup successful:', data);
               alert('Signup successful! Please log in.'); // Inform user
-              window.location.hash = '#/login'; // Redirect to login page
+              navigateTo('/login'); // Redirect to login page
           } else {
               throw new Error(data.error || 'Signup failed. Please try again.');
           }
@@ -228,17 +218,7 @@ function addSignupFormListeners() {
 
   // Close button navigates back to Welcome page
   closeButton.addEventListener('click', () => {
-      window.location.hash = '#/';
+	navigateTo('/');
   });
 
-  // --- OAuth Button Handlers (Placeholder Actions) ---
-  googleSignupButton.addEventListener('click', () => {
-      console.log('Google signup clicked - initiating OAuth flow...');
-      alert('Google Signup not implemented yet.');
-  });
-
-  intraSignupButton.addEventListener('click', () => {
-      console.log('Intra signup clicked - initiating OAuth flow...');
-      alert('Intra Signup not implemented yet.');
-  });
 }
