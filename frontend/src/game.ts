@@ -235,7 +235,7 @@ export function renderGame() {
     requestAnimationFrame(handleResize);
 
 
-    socket = io('https://localhost:3000', {
+    socket = io('https://127.0.0.1:3000', {
         transports: ['websocket'],
         secure: true
     });
