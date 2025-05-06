@@ -269,9 +269,9 @@ export function renderGame() {
 
     // Add a listener for hash changes to trigger cleanup
     // Note: This assumes the router in main.ts handles navigation
-    // We need a way to know when we navigate *away* from #/game
+    // We need a way to know when we navigate *away* from /game
     const handleHashChangeForCleanup = () => {
-        if (window.location.hash !== '#/game') {
+        if (window.location.hash !== '/game') {
             cleanupGame();
             window.removeEventListener('hashchange', handleHashChangeForCleanup); // Remove self
         }
