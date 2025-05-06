@@ -1,0 +1,10 @@
+1. needs Update the WebSocket connection in your frontend :
+
+const socket = io('wss://localhost:3000', {
+  transports: ['websocket'],
+  secure: true
+});
+
+2. Read Canvas
+
+3.There are 2 .gitignore files. Make it 1
