@@ -1,4 +1,5 @@
 import './login.css'; // Import the CSS file
+import { navigateTo } from './main';
 
 export function renderLogin() {
   const appElement = document.querySelector<HTMLDivElement>('#app');
@@ -90,45 +91,18 @@ export function renderLogin() {
   const borderDiv = document.createElement('div');
   borderDiv.className = "login-border"; // Use CSS class
 
-  // Bottom Content "or log in with"
-  const bottomParagraph = document.createElement('p');
-  bottomParagraph.className = "login-bottom-paragraph"; // Use CSS class
-  bottomParagraph.textContent = "or log in with";
 
   // Bottom Buttons Container
   const bottomButtonsContainer = document.createElement('div');
   bottomButtonsContainer.className = "login-bottom-buttons-container"; // Use CSS class
 
-  // Intra Login Button
-  const intraLoginButton = document.createElement('button');
-  intraLoginButton.id = "intra-login-button";
-  intraLoginButton.className = "login-oauth-button"; // Use common OAuth button class
-  const intraSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  intraSvg.setAttribute("fill", "currentColor");
-  intraSvg.setAttribute("viewBox", "0 0 16 16");
-  intraSvg.innerHTML = `<path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0M2.08 7.978l.31-1.18h.077l.313 1.18h.586l-.55-1.913h-.618l-.548 1.913zm2.17 0V6.063h.403v1.915zm1.302 0V6.063h.403v1.915zm1.285-.907c0-.433.27-.715.646-.715.375 0 .646.282.646.715 0 .43-.27.714-.646.714-.376 0-.646-.284-.646-.714m.403 0c0 .218.12.347.243.347.124 0 .243-.13.243-.347 0-.22-.12-.347-.243-.347-.124 0-.243-.128-.243-.347m1.415.907V6.063h.403v1.915zm1.33-.48h.078l.312 1.18h.585l-.55-1.913h-.618l-.548 1.913h.586l.31-1.18z"/>`;
-  const intraSpan = document.createElement('span');
-  intraSpan.textContent = "Intra";
-  intraLoginButton.appendChild(intraSvg);
-  intraLoginButton.appendChild(intraSpan);
-
-  // Google Login Button
-  const googleLoginButton = document.createElement('button');
-  googleLoginButton.id = "google-login-button";
-  googleLoginButton.className = "login-oauth-button"; // Use common OAuth button class
-  const googleSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  googleSvg.setAttribute("viewBox", "0 0 48 48");
-  googleSvg.innerHTML = `<path fill="#EA4335" d="M24 9.5c3.4 0 6.3 1.2 8.6 3.2l6.4-6.4C34.9 2.8 29.9 1 24 1 14.9 1 7.1 6.6 3.4 14.4l7.7 6C12.8 13.4 18 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.8-.2-3.5-.5-5.2H24v9.9h12.7c-.6 3.2-2.3 5.9-4.9 7.8l7.7 6c4.5-4.1 7-10.1 7-17.5z"/><path fill="#FBBC05" d="M11.1 20.4c-.5 1.5-.8 3.1-.8 4.8s.3 3.3.8 4.8l-7.7 6C1.2 31.6 0 28 0 24s1.2-7.6 3.4-10.4l7.7 6z"/><path fill="#34A853" d="M24 47c5.9 0 10.9-1.9 14.5-5.2l-7.7-6c-2 1.3-4.5 2.1-7.3 2.1-6 0-11.2-3.9-13-9.2l-7.7 6C7.1 40.4 14.9 47 24 47z"/><path fill="none" d="M0 0h48v48H0z"/>`;
-  const googleSpan = document.createElement('span');
-  googleSpan.textContent = "Google";
-  googleLoginButton.appendChild(googleSvg);
-  googleLoginButton.appendChild(googleSpan);
 
   // Sign Up Link Paragraph
   const signUpParagraph = document.createElement('p');
   signUpParagraph.className = "login-signup-paragraph"; // Use CSS class
   const signUpLink = document.createElement('a');
-  signUpLink.href = "#/signUp";
+  signUpParagraph.textContent = "Don't have an account? ";
+  signUpLink.href = "/signUp"; // Changed from /signUp
   signUpLink.className = "login-signup-link"; // Use CSS class
   signUpLink.textContent = "Sign Up";
   signUpParagraph.textContent = "Don't have an account? ";
@@ -154,14 +128,10 @@ export function renderLogin() {
   form.appendChild(errorMessageDiv);
   form.appendChild(middleContentContainer);
 
-  bottomButtonsContainer.appendChild(intraLoginButton);
-  bottomButtonsContainer.appendChild(googleLoginButton);
-
   leftSide.appendChild(heading);
   leftSide.appendChild(paragraph);
   leftSide.appendChild(form);
   leftSide.appendChild(borderDiv);
-  leftSide.appendChild(bottomParagraph);
   leftSide.appendChild(bottomButtonsContainer);
   leftSide.appendChild(signUpParagraph);
 
@@ -186,11 +156,9 @@ function addLoginFormListeners() {
   const errorDiv = document.getElementById('error-message');
   const loginButton = document.getElementById('login-button') as HTMLButtonElement;
   const closeButton = document.getElementById('close-login-button');
-  const googleLoginButton = document.getElementById('google-login-button');
-  const intraLoginButton = document.getElementById('intra-login-button');
   const forgotPasswordLink = document.getElementById('forgot-password');
 
-  if (!form || !errorDiv || !loginButton || !closeButton || !googleLoginButton || !intraLoginButton || !forgotPasswordLink) {
+  if (!form || !errorDiv || !loginButton || !closeButton || !forgotPasswordLink) {
       console.error("One or more login elements not found. Cannot attach listeners.");
       return;
   }
@@ -207,7 +175,6 @@ function addLoginFormListeners() {
       const loginData = { email, password };
 
       try {
-          // Use the correct backend URL (ensure HTTPS and port are right)
           const response = await fetch('https://127.0.0.1:3000/login', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -215,15 +182,19 @@ function addLoginFormListeners() {
           });
 
           const data = await response.json();
-
           if (response.ok && data.success !== false) { // Check for explicit failure if backend sends success: false
-              console.log('Login successful:', data);
-              // Store token if received (example)
-              // if (data.token) { localStorage.setItem('authToken', data.token); }
-              window.location.hash = '#/dashboard'; // Navigate to dashboard/game on success
-          } else {
-              throw new Error(data.error || 'Login failed. Please try again.');
-          }
+			console.log('Login successful:', data);
+			// Store token if received (example)
+			if (data.token) { // Ensure your backend sends a 'token' field
+			  localStorage.setItem('authToken', data.token); 
+			} else {
+			  console.warn('No token received from login endpoint.');
+			  // Handle cases where token might not be sent, or use a different field name
+			}
+			navigateTo('/dashboard'); // Navigate to dashboard/game on success
+		} else {
+			throw new Error(data.error || 'Login failed. Please try again.');
+		}
       } catch (error: any) {
           console.error('Error during login:', error);
           if (errorDiv) errorDiv.textContent = error.message || 'An error occurred during login.';
@@ -237,19 +208,9 @@ function addLoginFormListeners() {
 
   // Close button navigates back to Welcome page
   closeButton.addEventListener('click', () => {
-      window.location.hash = '#/';
+	navigateTo('/');
   });
 
-  // --- OAuth Button Handlers (Placeholder Actions) ---
-  googleLoginButton.addEventListener('click', () => {
-      console.log('Google login clicked - initiating OAuth flow...');
-      alert('Google Login not implemented yet.');
-  });
-
-  intraLoginButton.addEventListener('click', () => {
-      console.log('Intra login clicked - initiating OAuth flow...');
-      alert('Intra Login not implemented yet.');
-  });
 
   // Forgot password link
   forgotPasswordLink.addEventListener('click', () => {
