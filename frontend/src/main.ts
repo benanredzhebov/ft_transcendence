@@ -2,7 +2,10 @@ import './style.css';
 import { renderLogin } from './login';
 import { renderSignUp } from './signup'; 
 import { renderDashboard } from './dashboard';
-import { renderGame } from './game'; 
+import { renderGame } from './game';
+import { renderDelete } from './delete'; // Import the delete page renderer
+import {renderHomePage} from "./user_google.ts";
+
 
 // --- DOM ---
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -63,6 +66,9 @@ const routes: { [key: string]: () => void } = {
   '/signUp': renderSignUp,
   '/game': renderGame,
   '/dashboard': renderDashboard,
+  '/delete': renderDelete, // Add the delete route
+  '/username-google': renderHomePage
+
 };
 
 function router() {

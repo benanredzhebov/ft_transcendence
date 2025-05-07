@@ -9,15 +9,10 @@ const fastifyCors = require('@fastify/cors');
 const { Server } = require('socket.io');
 
 const GameEngine = require('./gamelogic/GameEngine.js');
-const hashPassword = require('./crypto/crypto.js');
-const DB = require('./data_controller/dbConfig.js');
 
-// token
-const {exchangeCodeForToken, fetchUserInfo} = require('./token_google/exchangeToken.js')
+// routes
+const {developerRoutes, credentialsRoutes,noHandlerRoute} = require('./routes/routes'); // Import the routes
 
-
-const PORT = 3000;
-const HOST = '0.0.0.0'; // Bind to all network interfaces
 
 // Load SSL certificates
 const keyPath = path.join(__dirname, 'https_keys/private-key.pem');
@@ -77,133 +72,16 @@ app.register(fastifyStatic, {
   prefix: '/',
 });
 
-// Fallback for SPA routing
-app.setNotFoundHandler((req, reply) => {
-  reply.sendFile('index.html'); // Serve index.html from the root specified in fastifyStatic
-});
-
-// Health check route (optional but helpful)
-app.get('/health', async (req, reply) => {
-  reply.type('text/html').send(`
-    <h1>Backend Server is Running (JS)</h1>
-    <p>Fastify server is active at <code>https://${HOST}:${PORT}</code>.</p>
-    <p>Socket.IO is listening for connections.</p>
-  `);
-});
-
-// --- API Routes ---
-app.get('/data', async (req, reply) => {
-  try {
-    const tables = await DB('credentialsTable');
-    reply.send(tables);
-  } catch (e) {
-    console.error(e);
-    reply.status(500).send({ error: 'Database fetch error' });
-  }
-});
+//--------Routes------------
+noHandlerRoute(app);
+developerRoutes(app);
+credentialsRoutes(app);
+//-------------------------
 
 
 
-app.post('/signUp', async (req, reply) => {
-  const { username, email, password: rawPassword } = req.body;
-  if (!username || !email || !rawPassword) {
-    reply.status(400).send({ error: 'All fields (username, email, password) are required' });
-    return;
-  }
-
-  try {
-    //check if already exists
-    const exists = await DB('credentialsTable')
-      .where({ username })
-      .orWhere({ email })
-      .first();
-    if (exists) {
-      reply.status(400).send({ error: 'Username or email already in use' });
-      return;
-    }
-
-    const password = hashPassword(rawPassword);
-    const [id] = await DB('credentialsTable').insert({ username, email, password });
-    reply.status(201).send({ success: true, id: id });
-  } catch (e) {
-    console.error(e);
-    reply.status(500).send({ error: 'Signup failed due to server error' });
-  }
-});
-
-app.post('/login', async (req, reply) => {
-  const { email, password: rawPassword } = req.body;
-  if (!email || !rawPassword) {
-    reply.status(400).send({ error: 'Email and password are required' });
-    return;
-  }
-
-  try {
-    const user = await DB('credentialsTable').where({ email }).first();
-    if (!user || user.password !== hashPassword(rawPassword)) {
-      reply.status(401).send({ error: 'Invalid email or password' });
-      return;
-    }
-    reply.send({ success: true, message: 'Login successful', userId: user.id });
-  } catch (e) {
-    console.error(e);
-    reply.status(500).send({ error: 'Login failed due to server error' });
-  }
-});
-
-
-app.get('/username-google', async (req, reply) => {
-  const { code } = req.query; // Extract the authorization code from the query parameters
-
-  if (!code) {
-    reply.status(400).send({ error: 'Authorization code is missing' });
-    return;
-  }
-
-  try {
-    // Exchange the authorization code for an access token (implement this logic)
-    const tokenResponse = await exchangeCodeForToken(code);
-    const userInfo = await fetchUserInfo(tokenResponse.access_token);
-    const {email, name} = userInfo;
-    const existingUser = await DB('credentialsTable').where({ email }).first();
-    if (!existingUser) {
-      const username = name;
-      let passwordBeforeHas = '##';
-	  const password = hashPassword(passwordBeforeHas);
-      const [id] =  await DB('credentialsTable').insert({ email, username, password });
-      const user = { id, email, username };
-      reply.send({ success: true, user })
-    }
-    else {
-      reply.send({ success: true, message: 'Login successful', userId: existingUser.id });
-    }
-
-  } catch (e) {
-    console.error(e);
-    reply.status(500).send({ error: 'Failed to handle Google OAuth callback' });
-  }
-});
-
-app.post('/delete', async (req, reply) => {
-  const { id } = req.body;
-
-  if (!id || typeof id !== 'number') { // Basic validation
-    reply.status(400).send({ error: 'A valid numeric ID is required' });
-    return;
-  }
-
-  try {
-    const deletedCount = await DB('credentialsTable').where({ id }).del();
-    if (deletedCount > 0) {
-        reply.send({ success: true, message: `User with ID ${id} deleted.` });
-    } else {
-        reply.status(404).send({ success: false, message: `User with ID ${id} not found.` });
-    }
-  } catch (e) {
-    console.error(e);
-    reply.status(500).send({ error: 'Delete operation failed due to server error' });
-  }
-});
+const PORT = 3000;
+const HOST = '0.0.0.0'; // Bind to all network interfaces
 
 // --- Start Server ---
 const start =  async () => {
