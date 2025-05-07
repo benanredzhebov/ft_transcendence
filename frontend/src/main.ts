@@ -3,6 +3,8 @@ import { renderLogin } from './login';
 import { renderSignUp } from './signup';
 import { renderDashboard } from './dashboard';
 import { renderGame } from './game';
+import { renderDelete } from './delete';
+import getGoogleAuth from './GetGoogleAuth'; // Import the function
 import { renderGoogle } from './google';
 
 // --- DOM ---
@@ -89,9 +91,9 @@ function renderWelcome(): (() => void) | void {
    googleLoginButton.appendChild(googleLogo);
    
    googleLoginButton.addEventListener('click', () => {
-	 // This is where you would initiate the Google OAuth flow
-	 navigateTo('/username-google'); 
-   });
+    const googleAuthUrl = getGoogleAuth(); // Generate the Google OAuth URL
+    window.location.href = googleAuthUrl; // Redirect the user to the Google OAuth URL
+});
    googleLoginDiv.appendChild(googleLoginButton);
 
   buttonContainer.appendChild(loginButtonDiv);
@@ -125,6 +127,9 @@ const routes: { [key: string]: () => (() => void) | void } = { // render functio
   '/username-google' : renderGoogle,
   '/game': renderGame,
   '/dashboard': renderDashboard,
+  '/delete': renderDelete, // Add the delete route
+  // '/username-google': renderHomePage
+
 };
 
 let currentCleanupFunction: (() => void) | null = null;
