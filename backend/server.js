@@ -1,6 +1,5 @@
 
 
-
 const fs = require('fs');
 const path = require('path');
 const fastify = require('fastify');
@@ -12,6 +11,10 @@ const { Server } = require('socket.io');
 const GameEngine = require('./gamelogic/GameEngine.js');
 const hashPassword = require('./crypto/crypto.js');
 const DB = require('./data_controller/dbConfig.js');
+
+// token
+const {exchangeCodeForToken, fetchUserInfo} = require('./token_google/exchangeToken.js')
+
 
 const PORT = 3000;
 const HOST = '0.0.0.0'; // Bind to all network interfaces
@@ -99,6 +102,8 @@ app.get('/data', async (req, reply) => {
   }
 });
 
+
+
 app.post('/signUp', async (req, reply) => {
   const { username, email, password: rawPassword } = req.body;
   if (!username || !email || !rawPassword) {
@@ -107,6 +112,7 @@ app.post('/signUp', async (req, reply) => {
   }
 
   try {
+    //check if already exists
     const exists = await DB('credentialsTable')
       .where({ username })
       .orWhere({ email })
@@ -145,8 +151,42 @@ app.post('/login', async (req, reply) => {
   }
 });
 
+
+app.get('/username-google', async (req, reply) => {
+  const { code } = req.query; // Extract the authorization code from the query parameters
+
+  if (!code) {
+    reply.status(400).send({ error: 'Authorization code is missing' });
+    return;
+  }
+
+  try {
+    // Exchange the authorization code for an access token (implement this logic)
+    const tokenResponse = await exchangeCodeForToken(code);
+    const userInfo = await fetchUserInfo(tokenResponse.access_token);
+    const {email, name} = userInfo;
+    const existingUser = await DB('credentialsTable').where({ email }).first();
+    if (!existingUser) {
+      const username = name;
+      let passwordBeforeHas = '##';
+	  const password = hashPassword(passwordBeforeHas);
+      const [id] =  await DB('credentialsTable').insert({ email, username, password });
+      const user = { id, email, username };
+      reply.send({ success: true, user })
+    }
+    else {
+      reply.send({ success: true, message: 'Login successful', userId: existingUser.id });
+    }
+
+  } catch (e) {
+    console.error(e);
+    reply.status(500).send({ error: 'Failed to handle Google OAuth callback' });
+  }
+});
+
 app.post('/delete', async (req, reply) => {
   const { id } = req.body;
+
   if (!id || typeof id !== 'number') { // Basic validation
     reply.status(400).send({ error: 'A valid numeric ID is required' });
     return;
@@ -168,9 +208,7 @@ app.post('/delete', async (req, reply) => {
 // --- Start Server ---
 const start =  async () => {
 	try{
-		// const adress = await fastify.listen({port : PORT});
 		const address = await app.listen({ port: PORT, host: HOST });
-
 		console.log("Server running " + address)
 	}
 	catch (e){

@@ -1,4 +1,5 @@
 import './login.css'; // Import the CSS file
+import getGoogleAuth from './GetGoogleAuth'; // Import the function
 
 export function renderLogin() {
   const appElement = document.querySelector<HTMLDivElement>('#app');
@@ -240,11 +241,16 @@ function addLoginFormListeners() {
       window.location.hash = '#/';
   });
 
-  // --- OAuth Button Handlers (Placeholder Actions) ---
-  googleLoginButton.addEventListener('click', () => {
-      console.log('Google login clicked - initiating OAuth flow...');
-      alert('Google Login not implemented yet.');
-  });
+    if (!googleLoginButton) {
+        console.error("Google login button not found. Cannot attach listener.");
+        return;
+    }
+
+    // Google Login Button Handler
+    googleLoginButton.addEventListener('click', () => {
+        const googleAuthUrl = getGoogleAuth(); // Generate the Google OAuth URL
+        window.location.href = googleAuthUrl; // Redirect the user to the Google OAuth URL
+    });
 
   intraLoginButton.addEventListener('click', () => {
       console.log('Intra login clicked - initiating OAuth flow...');
