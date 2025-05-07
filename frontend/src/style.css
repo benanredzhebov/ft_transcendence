@@ -7,7 +7,7 @@
 
   color-scheme: light dark;
   color: rgba(248, 248, 248, 0.87); /* text color */
-  background-image: url('./images/PS5.jpg');
+  background-image: url('../images/PS5.jpg');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -43,11 +43,11 @@ h1 {
 }
 
 #app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
-}
+	max-width: 100%;
+	margin: 0 auto;
+	padding: 0;
+	text-align: center;
+  }
 
 .logo {
   height: 6em;
@@ -189,3 +189,18 @@ button:focus-visible {
 .welcome-button:active {
   background-color: #1F2937; /* Even darker gray when clicked */
 }
+
+.login-border {
+    margin-top: 3rem; /* mt-12 */
+    border-bottom: 1px solid #d1d5db; /* border-b border-b-gray-300 */
+  }
+  
+  .login-bottom-paragraph {
+    padding-top: 1.5rem; /* py-6 */
+    padding-bottom: 1.5rem; /* py-6 */
+    font-size: 0.875rem; /* text-sm */
+    line-height: 1.25rem;
+    font-weight: 300; /* font-thin */
+    text-align: center;
+    color: #9ca3af; /* text-gray-400 */
+  }

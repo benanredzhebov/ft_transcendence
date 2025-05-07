@@ -1,4 +1,5 @@
 import './dashboard.css';
+import { navigateTo } from './main';
 
 export function renderDashboard() {
   const appElement = document.querySelector<HTMLDivElement>('#app');
@@ -90,9 +91,8 @@ export function renderDashboard() {
 
   // Logout button
   logoutButton.addEventListener('click', () => {
-    // Clear potential auth tokens, etc.
-    // localStorage.removeItem('authToken');
-    window.location.hash = '#/'; // Navigate to welcome page
+    localStorage.removeItem('authToken');
+    navigateTo('/');
   });
 
   // --- Initial View ---
@@ -100,25 +100,75 @@ export function renderDashboard() {
 }
 
 // --- Helper Function to Set Active View ---
-function setActiveView(view: string, buttons: HTMLButtonElement[], contentArea: HTMLDivElement) {
-  // Update button styles
-  buttons.forEach(btn => {
-    if (btn.dataset.view === view) {
-      btn.classList.add('active');
-    } else {
-      btn.classList.remove('active');
-    }
-  });
+async function setActiveView(view: string, buttons: HTMLButtonElement[], contentArea: HTMLDivElement) {
+	// Update button styles
+	buttons.forEach(btn => {
+	  if (btn.dataset.view === view) {
+		btn.classList.add('active');
+	  } else {
+		btn.classList.remove('active');
+	  }
+	}
+);
 
   // Update content area
-  contentArea.innerHTML = ''; // Clear previous content
+  contentArea.innerHTML = '';
   switch (view) {
     case 'profile':
-      contentArea.innerHTML = `
-        <h3 class="dashboard-content-heading">Profile</h3>
-        <p class="dashboard-content-paragraph">Manage your profile settings here.</p>
-        <!-- Add profile elements here -->
-      `;
+      contentArea.innerHTML = `<h3 class="dashboard-content-heading">Profile</h3><p class="dashboard-content-paragraph">Loading profile...</p>`; // Show loading state
+      try {
+        // Attempt to get the auth token from localStorage
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+          contentArea.innerHTML = `
+            <h3 class="dashboard-content-heading">Profile</h3>
+            <p class="dashboard-content-paragraph">Error: You are not logged in or your session has expired.</p>
+            <p class="dashboard-content-paragraph">Please <a href="/login">login</a> again.</p>
+          `;
+		            return;
+        }
+		const response = await fetch('/api/profile', { // Replace with your actual API endpoint
+			method: 'GET',
+			headers: {
+			  'Content-Type': 'application/json',
+			  'Authorization': `Bearer ${token}` // Send the token in the Authorization header
+			}
+		  });
+		
+		if (!response.ok) {
+			if (response.status === 401 || response.status === 403) {
+			  contentArea.innerHTML = `
+				<h3 class="dashboard-content-heading">Profile</h3>
+				<p class="dashboard-content-paragraph">Error: Unauthorized. Your session may have expired.</p>
+				<p class="dashboard-content-paragraph">Please <a href="/login">login</a> again.</p>
+			  `;
+			} else {
+			  throw new Error(`API Error: ${response.status} ${response.statusText}`);
+			}
+			return;
+		}
+
+		const userProfile = await response.json();
+
+        // Ensure userProfile has expected fields before trying to access them
+        contentArea.innerHTML = `
+          <h3 class="dashboard-content-heading">Profile</h3>
+          <div class="profile-details">
+            <p class="dashboard-content-paragraph"><strong>Username:</strong> ${userProfile.username || 'N/A'}</p>
+            <p class="dashboard-content-paragraph"><strong>Email:</strong> ${userProfile.email || 'N/A'}</p>
+            <p class="dashboard-content-paragraph"><strong>Member Since:</strong> ${userProfile.memberSince ? new Date(userProfile.memberSince).toLocaleDateString() : 'N/A'}</p>
+            <p class="dashboard-content-paragraph"><strong>Games Played:</strong> ${userProfile.gamesPlayed !== undefined ? userProfile.gamesPlayed : 'N/A'}</p>
+            <p class="dashboard-content-paragraph"><strong>Wins:</strong> ${userProfile.wins !== undefined ? userProfile.wins : 'N/A'}</p>
+            <!-- Add more profile elements or an edit button here -->
+          </div>
+        `;
+      } catch (error) {
+        console.error('Failed to fetch profile:', error);
+        contentArea.innerHTML = `
+          <h3 class="dashboard-content-heading">Profile</h3>
+          <p class="dashboard-content-paragraph">Could not load profile information. Please try again later.</p>
+        `;
+      }
       break;
     case 'game':
       const gameContent = document.createElement('div');
@@ -130,16 +180,15 @@ function setActiveView(view: string, buttons: HTMLButtonElement[], contentArea: 
       const onlineButton = document.createElement('button');
       onlineButton.className = "dashboard-game-button";
       onlineButton.innerHTML = `<span>Online Match</span>`;
-      onlineButton.addEventListener('click', () => window.location.hash = '#/game');
+      onlineButton.addEventListener('click', () => navigateTo('/game'));
       gameContent.appendChild(onlineButton);
 
       // Local Match Button
       const localButton = document.createElement('button');
       localButton.className = "dashboard-game-button";
       localButton.innerHTML = `<span>Local Match</span>`;
-      localButton.addEventListener('click', () => window.location.hash = '#/game'); // Or a different route/logic for local
+      localButton.addEventListener('click', () => navigateTo('/game')); // Or a different route/logic for local
       gameContent.appendChild(localButton);
-
       contentArea.appendChild(gameContent);
       break;
     case 'chat':
