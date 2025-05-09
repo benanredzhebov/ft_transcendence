@@ -3,6 +3,7 @@ const path = require('path');
 const DB = require('../data_controller/dbConfig.js');
 const hashPassword = require('../crypto/crypto.js');
 const {exchangeCodeForToken, fetchUserInfo} = require('../token_google/exchangeToken.js')
+const fastifyStatic = require('@fastify/static');
 
 
 const noHandlerRoute = (app) => {
@@ -48,6 +49,15 @@ const developerRoutes = (app) => {
 			console.error(e);
 			reply.status(500).send({ error: 'Delete operation failed due to server error' });
 		}
+	});
+
+	// app.register(fastifyStatic, {
+	// 	root: path.join(__dirname, '../public'), // Path to public directory
+	// 	prefix: '/public', // Serve public files under /public
+	// });
+
+	app.get('/test', (req,reply) =>{
+		reply.sendFile('test.html');
 	});
 }
 
@@ -135,6 +145,20 @@ const credentialsRoutes = (app) =>{
       reply.status(500).send({ error: 'Failed to handle Google OAuth callback' });
     }
   });
+
+
+	app.get('/dashboard', (req, reply) => {
+
+		// console.log("muie fraiere");
+	});
+
+	app.get('/game/:room', (req, reply) => {
+		const roomName = req.query;
+		console.log("Room name = " + roomName);
+	});
+
+
+
 }
 
 module.exports = {developerRoutes, credentialsRoutes, noHandlerRoute};
