@@ -6,13 +6,11 @@ const fastify = require('fastify');
 const fastifyStatic = require('@fastify/static');
 const fastifyFormbody = require('@fastify/formbody');
 const fastifyCors = require('@fastify/cors');
-const { Server } = require('socket.io');
-
-const GameEngine = require('./gamelogic/GameEngine.js');
 
 // routes
 const {developerRoutes, credentialsRoutes,noHandlerRoute} = require('./routes/routes'); // Import the routes
 
+const {gameSockets} = require("./sockets/sockets");
 
 // Load SSL certificates
 const keyPath = path.join(__dirname, 'https_keys/private-key.pem');
@@ -34,43 +32,21 @@ const app = fastify({
   https: httpsOptions,
 });
 
-const server = app.server; // Get the underlying HTTPS server
-const io = new Server(server, {
-  cors: { origin: '*' }, // Allow all origins for Socket.IO
-});
-
-// ***** Game Logic (WebSocket + Game Loop)*******
-const game = new GameEngine();
-
-io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
-
-  socket.on('player_move', ({ playerId, direction }) => {
-    game.handlePlayerInput(playerId, direction);
-  });
-
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-    // Handle player disconnection in the game engine if necessary
-    // game.removePlayer(socket.id);
-  });
-});
-
-// Game loop
-setInterval(() => {
-  game.update(1 / 60);
-  io.emit('state_update', game.getState());
-}, 1000 / 60); // 60 times per second
-
 // --- Middlewares ---
 app.register(fastifyCors, { origin: true, credentials: true });
 app.register(fastifyFormbody);
 
 // Serve frontend static files
 app.register(fastifyStatic, {
-  root: path.join(__dirname, '../frontend/dist'), // Path to compiled frontend
-  prefix: '/',
+	root: path.join(__dirname, '../frontend/dist'), // Path to compiled frontend
+	prefix: '/',
 });
+
+const rooms = {};
+
+
+gameSockets(app);
+
 
 //--------Routes------------
 noHandlerRoute(app);

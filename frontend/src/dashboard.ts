@@ -2,7 +2,25 @@ import './dashboard.css';
 import { navigateTo } from './main';
 
 export function renderDashboard() {
-  const appElement = document.querySelector<HTMLDivElement>('#app');
+    // -----------------test- socket---------------------
+    // Add the Socket.IO script to the head
+    // const socketIoScript = document.createElement("script");
+    // socketIoScript.src = "/socket.io/socket.io.js";
+    // document.head.appendChild(socketIoScript);
+    //
+    // // Add the inline script to initialize the socket
+    // const inlineScript = document.createElement("script");
+    // inlineScript.textContent = `
+    //   var socket = io();
+    //   socket.on('connect', () => {
+    //     console.log('Connected to server:', socket.id);
+    //   });
+    // `;
+    // document.head.appendChild(inlineScript);
+    // // -----------------test- socket---------------------
+
+
+    const appElement = document.querySelector<HTMLDivElement>('#app');
   if (!appElement) {
     throw new Error('App root element (#app) not found!');
   }
