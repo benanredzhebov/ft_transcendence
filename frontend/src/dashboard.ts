@@ -117,7 +117,7 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
     case 'profile':
       contentArea.innerHTML = `<h3 class="dashboard-content-heading">Profile</h3><p class="dashboard-content-paragraph">Loading profile...</p>`; // Show loading state
       try {
-        // Attempt to get the auth token from localStorage
+        // Get the token from local storage
         const token = localStorage.getItem('authToken');
         if (!token) {
           contentArea.innerHTML = `
@@ -127,13 +127,19 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
           `;
 		            return;
         }
-		const response = await fetch('/api/profile', { // Replace with your actual API endpoint
-			method: 'GET',
-			headers: {
-			  'Content-Type': 'application/json',
-			  'Authorization': `Bearer ${token}` // Send the token in the Authorization header
-			}
+		    const response = await fetch('/api/profile', {
+			  method: 'GET',
+			  headers: {
+			    'Content-Type': 'application/json',
+			    'Authorization': `Bearer ${token}`
+			  }
 		  });
+      //*** Debugging logs
+        console.log('Fetch response status:', response.status);
+        console.log('Fetch response ok:', response.ok);
+        const responseText = await response.clone().text(); // Clone to read text without consuming body for json()
+        console.log('Fetch response text:', responseText); // ***JSON should be here
+    
 		
 		if (!response.ok) {
 			if (response.status === 401 || response.status === 403) {
@@ -143,7 +149,7 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
 				<p class="dashboard-content-paragraph">Please <a href="/login">login</a> again.</p>
 			  `;
 			} else {
-			  throw new Error(`API Error: ${response.status} ${response.statusText}`);
+        throw new Error(`API Error: ${response.status} ${response.statusText}. Response: ${responseText}`);
 			}
 			return;
 		}
@@ -156,14 +162,11 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
           <div class="profile-details">
             <p class="dashboard-content-paragraph"><strong>Username:</strong> ${userProfile.username || 'N/A'}</p>
             <p class="dashboard-content-paragraph"><strong>Email:</strong> ${userProfile.email || 'N/A'}</p>
-            <p class="dashboard-content-paragraph"><strong>Member Since:</strong> ${userProfile.memberSince ? new Date(userProfile.memberSince).toLocaleDateString() : 'N/A'}</p>
-            <p class="dashboard-content-paragraph"><strong>Games Played:</strong> ${userProfile.gamesPlayed !== undefined ? userProfile.gamesPlayed : 'N/A'}</p>
-            <p class="dashboard-content-paragraph"><strong>Wins:</strong> ${userProfile.wins !== undefined ? userProfile.wins : 'N/A'}</p>
             <!-- Add more profile elements or an edit button here -->
           </div>
         `;
       } catch (error) {
-        console.error('Failed to fetch profile:', error);
+        console.error('HERE-Failed to fetch profile:', error);
         contentArea.innerHTML = `
           <h3 class="dashboard-content-heading">Profile</h3>
           <p class="dashboard-content-paragraph">Could not load profile information. Please try again later.</p>

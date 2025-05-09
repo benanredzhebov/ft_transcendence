@@ -73,9 +73,10 @@ app.register(fastifyStatic, {
 });
 
 //--------Routes------------
-noHandlerRoute(app);
 developerRoutes(app);
 credentialsRoutes(app);
+
+noHandlerRoute(app);
 //-------------------------
 
 

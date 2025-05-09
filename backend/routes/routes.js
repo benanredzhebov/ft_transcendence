@@ -3,6 +3,10 @@ const path = require('path');
 const DB = require('../data_controller/dbConfig.js');
 const hashPassword = require('../crypto/crypto.js');
 const {exchangeCodeForToken, fetchUserInfo} = require('../token_google/exchangeToken.js')
+const jwt = require('jsonwebtoken');
+
+// IMPORTANT: Store your secret in an environment variable in a real application!
+const JWT_SECRET = process.env.JWT_SECRET || 'hbj2io4@@#!v7946h3&^*2cn9!@09*@B627B^*N39&^847,1';
 
 
 const noHandlerRoute = (app) => {
@@ -52,6 +56,49 @@ const developerRoutes = (app) => {
 }
 
 const credentialsRoutes = (app) =>{
+  app.get('/api/profile', async (req, reply) => {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      reply.status(401).send({ error: 'Unauthorized: No token provided' });
+      return;
+    }
+
+    const token = authHeader.substring(7); // Remove 'Bearer '
+
+    try {
+      const decodedToken = jwt.verify(token, JWT_SECRET);
+      const userId = decodedToken.userId;
+
+      if (!userId) {
+        reply.status(401).send({ error: 'Unauthorized: Invalid token payload' });
+        return;
+      }
+
+      const user = await DB('credentialsTable').where({ id: userId }).first();
+
+      if (!user) {
+        reply.status(404).send({ error: 'User not found' });
+        return;
+      }
+
+      // JSON sending to frontend
+      const userProfile = {
+        username: user.username,
+        email: user.email,
+      };
+
+      reply.send(userProfile); // Send profile data as JSON
+
+    } catch (err) {
+      if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+        reply.status(401).send({ error: `Unauthorized: ${err.message}` });
+      } else {
+        console.error('Error fetching profile:', err);
+        reply.status(500).send({ error: 'Server error while fetching profile' });
+      }
+    }
+  });
 
   app.post('/signUp', async (req, reply) => {
     const { username, email, password: rawPassword } = req.body;
@@ -98,7 +145,22 @@ const credentialsRoutes = (app) =>{
         reply.status(401).send({ error: 'Invalid email or password' });
         return;
       }
-      reply.send({ success: true, message: 'Login successful', userId: user.id });
+      // Generate token
+      const tokenPayload = {
+        userId: user.id,
+        email: user.email,
+        username: user.username
+      };
+      // Sign the token - expires in 1 hour
+      const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '1h' });
+      
+      reply.send({
+        success: true,
+        message: 'Login successful',
+        userId: user.id,
+        username: user.username,
+        token: token // Send token to frontend
+      });    
     } catch (e) {
       console.error(e);
       reply.status(500).send({ error: 'Login failed due to server error' });
@@ -107,7 +169,7 @@ const credentialsRoutes = (app) =>{
 
 
   app.get('/username-google', async (req, reply) => {
-    const { code } = req.query; // Extract the authorization code from the query parameters
+    const { code } = req.query; // Extract the authozation code from the query parameters
 
     if (!code) {
       reply.status(400).send({ error: 'Authorization code is missing' });
