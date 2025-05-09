@@ -75,23 +75,8 @@ export function renderGoogle() {
     // and then making a POST request to a new backend endpoint.
     console.log("Username submitted:", username);
     try {
-      // Example:
-      // const googleProfile = JSON.parse(sessionStorage.getItem('googleProfile') || '{}');
-      // const response = await fetch('https://127.0.0.1:3000/complete-google-signup', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ username, email: googleProfile.email, googleId: googleProfile.id }),
-      // });
-      // const data = await response.json();
-      // if (response.ok && data.success) {
-      //   alert('Username set successfully! Redirecting to dashboard...');
-      //   window.location.hash = '#/dashboard';
-      // } else {
-      //   throw new Error(data.error || 'Failed to set username.');
-      // }
       alert(`Username "${username}" would be processed here. Implement backend call.`);
-      // For now, redirect to dashboard as a placeholder
-      window.location.hash = '#/dashboard';
+      window.location.hash = '/dashboard';
 
     } catch (error: any) {
       console.error('Error setting username:', error);
