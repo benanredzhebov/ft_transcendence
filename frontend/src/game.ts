@@ -1,280 +1,170 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   game.ts                                            :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2025/05/09 10:37:25 by beredzhe          #+#    #+#             */
+/*   Updated: 2025/05/09 10:37:25 by beredzhe         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
 
 import './game.css';
 import { io, Socket } from 'socket.io-client';
 
-// --- Interfaces (matching backend GameState) ---
+
 interface PaddleState {
-    y: number;
-    height: number;
-    width: number;
+	y: number;
+	height: number;
+	width: number;
 }
-
 interface BallState {
-    x: number;
-    y: number;
-    radius: number;
+	x: number;
+	y: number;
+	radius: number;
 }
-
 interface GameState {
-    paddles: {
-        player1: PaddleState;
-        player2: PaddleState;
-    };
-    ball: BallState;
-    score: {
-        player1: number;
-        player2: number;
-    };
+	paddles: { player1: PaddleState; player2: PaddleState };
+	ball: BallState;
+	score: { player1: number; player2: number };
 }
 
-// --- Constants ---
 const SERVER_WIDTH = 900;
 const SERVER_HEIGHT = 600;
 
-// --- Module-level variables ---
 let socket: Socket | null = null;
 let canvas: HTMLCanvasElement | null = null;
 let ctx: CanvasRenderingContext2D | null = null;
-let animationFrameId: number | null = null;
 
-// --- Drawing Logic ---
 function drawGame(state: GameState) {
-    if (!canvas || !ctx) {
-        console.error('Canvas or context not available for drawing');
-        return;
-    }
+	if (!ctx || !canvas) return;
+	const scaleX = canvas.width / SERVER_WIDTH;
+	const scaleY = canvas.height / SERVER_HEIGHT;
 
-    const { width, height } = canvas; // Use current canvas dimensions
+	ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Calculate scaling factors
-    const scaleX = width / SERVER_WIDTH;
-    const scaleY = height / SERVER_HEIGHT;
+	// Background
+	ctx.fillStyle = 'black';
+	ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Clear canvas
-    ctx.clearRect(0, 0, width, height);
+	// Paddles
+	ctx.fillStyle = 'white';
+	ctx.fillRect(0, state.paddles.player1.y * scaleY, 10 * scaleX, state.paddles.player1.height * scaleY);
+	ctx.fillRect(
+		canvas.width - 10 * scaleX,
+		state.paddles.player2.y * scaleY,
+		10 * scaleX,
+		state.paddles.player2.height * scaleY
+	);
 
-    // Create a gradient board based on current height
-    const gradient = ctx.createLinearGradient(0, 0, 0, height);
-    gradient.addColorStop(0, '#1a1a2e'); // Dark blue at the top
-    gradient.addColorStop(1, '#16213e'); // Slightly lighter blue at the bottom
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, width, height);
+	// Ball
+	ctx.fillStyle = 'yellow';
+	ctx.beginPath();
+	ctx.arc(
+		state.ball.x * scaleX,
+		state.ball.y * scaleY,
+		state.ball.radius * Math.min(scaleX, scaleY),
+		0,
+		Math.PI * 2
+	);
+	ctx.fill();
 
-    // --- Add shadows before drawing paddles ---
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-    ctx.shadowBlur = 5;
-    ctx.shadowOffsetX = 3;
-    ctx.shadowOffsetY = 3;
-
-    // Draw paddles (scaled)
-    ctx.fillStyle = 'white';
-    const paddleWidth = 10 * scaleX; // Scale paddle width too
-    const paddle1Height = state.paddles.player1.height * scaleY;
-    const paddle2Height = state.paddles.player2.height * scaleY;
-
-    ctx.fillRect(
-        0, // Player 1 is at x=0
-        state.paddles.player1.y * scaleY,
-        paddleWidth,
-        paddle1Height
-    );
-    ctx.fillRect(
-        width - paddleWidth, // Player 2 is at the right edge
-        state.paddles.player2.y * scaleY,
-        paddleWidth,
-        paddle2Height
-    );
-
-    // --- Reset shadows ---
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-
-    // Draw ball (scaled) only if game is not over
-    if (state.score.player1 < 5 && state.score.player2 < 5) {
-        ctx.fillStyle = 'yellow';
-        ctx.strokeStyle = 'orange';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        const ballRadius = state.ball.radius * Math.min(scaleX, scaleY);
-        ctx.arc(
-            state.ball.x * scaleX,
-            state.ball.y * scaleY,
-            ballRadius,
-            0,
-            Math.PI * 2
-        );
-        ctx.fill();
-        ctx.stroke();
-    }
-
-    // Draw Score
-    ctx.fillStyle = 'white';
-    ctx.font = `${Math.max(24, 40 * Math.min(scaleX, scaleY))}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.fillText(
-        `${state.score.player1} - ${state.score.player2}`,
-        width / 2,
-        Math.max(40, 60 * scaleY)
-    );
-
-    // Check for game end condition
-    if (state.score.player1 >= 5 || state.score.player2 >= 5) {
-        ctx.fillStyle = 'red';
-        ctx.font = `${Math.max(40, 70 * Math.min(scaleX, scaleY))}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.fillText('END', width / 2, height / 2);
-    }
-}
-
-// --- State Update Listener ---
-function handleStateUpdate(state: GameState) {
-    if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-    }
-    animationFrameId = requestAnimationFrame(() => drawGame(state));
-}
-
-// --- Resize Canvas ---
-function handleResize() {
-    if (!canvas) return;
-    const container = canvas.parentElement;
-    if (!container) return;
-
-    const { clientWidth: containerWidth, clientHeight: containerHeight } = container;
-
-
-    const aspectRatio = SERVER_WIDTH / SERVER_HEIGHT;
-    let newWidth = containerWidth; // Start by assuming width fits container
-    let newHeight = newWidth / aspectRatio;
-
-    // If calculated height is too tall, adjust based on container height instead
-    if (newHeight > containerHeight) {
-        newHeight = containerHeight;
-        newWidth = newHeight * aspectRatio;
-    }
-
-    // Ensure the canvas doesn't exceed container dimensions (safety check)
-    newWidth = Math.min(newWidth, containerWidth);
-    newHeight = Math.min(newHeight, containerHeight);
-
-
-    canvas.width = newWidth;
-    canvas.height = newHeight;
+	// Draw score
+	ctx.fillStyle = 'green';
+	ctx.font = `${40 * Math.min(scaleX, scaleY)}px Arial`;
+	ctx.textAlign = 'center';
+	ctx.fillText(
+	`${state.score.player1} : ${state.score.player2}`,
+	canvas.width / 2,
+	50 * scaleY
+);
 
 }
 
-// --- Keyboard Input Handler ---
+function handleResize(container: HTMLElement) {
+	if (!canvas) return;
+
+	const aspectRatio = SERVER_WIDTH / SERVER_HEIGHT;
+	let newWidth = container.clientWidth;
+	let newHeight = newWidth / aspectRatio;
+	if (newHeight > container.clientHeight) {
+		newHeight = container.clientHeight;
+		newWidth = newHeight * aspectRatio;
+	}
+	canvas.width = newWidth;
+	canvas.height = newHeight;
+}
+
 function handleKeyDown(e: KeyboardEvent) {
-    if (!socket) return;
-    const key = e.key.toLowerCase();
-    if (key === 'arrowup') socket.emit('player_move', { playerId: 'player2', direction: 'up' });
-    if (key === 'arrowdown') socket.emit('player_move', { playerId: 'player2', direction: 'down' });
-    if (key === 'w') socket.emit('player_move', { playerId: 'player1', direction: 'up' });
-    if (key === 's') socket.emit('player_move', { playerId: 'player1', direction: 'down' });
+	if (!socket) return;
+	const key = e.key.toLowerCase();
+	if (key === 'w') socket.emit('player_move', { playerId: 'player1', direction: 'up' });
+	if (key === 's') socket.emit('player_move', { playerId: 'player1', direction: 'down' });
+	if (key === 'arrowup') socket.emit('player_move', { playerId: 'player2', direction: 'up' });
+	if (key === 'arrowdown') socket.emit('player_move', { playerId: 'player2', direction: 'down' });
 }
 
-// --- Cleanup function ---
 function cleanupGame() {
-    console.log("Cleaning up game resources...");
-    if (socket) {
-        socket.off('state_update', handleStateUpdate);
-        socket.disconnect();
-        socket = null;
-    }
-    if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-        animationFrameId = null;
-    }
-    window.removeEventListener('resize', handleResize);
-    window.removeEventListener('keydown', handleKeyDown);
-    canvas = null;
-    ctx = null;
+	if (socket) {
+		socket.disconnect();
+		socket = null;
+	}
+	window.removeEventListener('keydown', handleKeyDown);
 }
 
-// --- Main Render Function ---
-export function renderGame() {
-    // Ensure cleanup happens if renderGame is called again
-    cleanupGame();
+export function renderGame(containerId: string = 'app') {
+	//console.log("🕹️ render game Called");
+	const container = document.getElementById(containerId);
+	if (!container) return;
 
-    const appElement = document.querySelector<HTMLDivElement>('#app');
-    if (!appElement) {
-        throw new Error('App root element (#app) not found!');
-    }
+	// Clear previous content
+	container.innerHTML = '';
 
-    // Clear previous content
-    appElement.innerHTML = '';
+	// Create and style canvas. Using the HTML5 Canvas API directly
+	canvas = document.createElement('canvas');
+	canvas.className = 'border-2 border-white rounded';
+	ctx = canvas.getContext('2d');
+	container.appendChild(canvas);
 
-    // --- Create Elements ---
-    const container = document.createElement('div');
-    container.className = "game-container";
+	// Resize canvas to fit
+	handleResize(container);
+	window.addEventListener('resize', () => handleResize(container));
+	window.addEventListener('keydown', handleKeyDown);
 
-    canvas = document.createElement('canvas');
-    canvas.className = "game-canvas";
-    // Set initial aspect ratio via style to help layout
-    canvas.style.setProperty('--server-width', String(SERVER_WIDTH));
-    canvas.style.setProperty('--server-height', String(SERVER_HEIGHT));
+	// Cleanup when navigating away
+	window.addEventListener('beforeunload', cleanupGame);
 
-    ctx = canvas.getContext('2d');
+	// Connect to server
+	//connects frontend to the backend
+	socket = io('https://127.0.0.1:3000', {
+		transports: ['websocket'], 
+		secure: true
+	});
+	
+	console.log("Connecting to the WebSocket server...")
 
-    if (!ctx) {
-        container.innerHTML = '<p>Canvas not supported</p>';
-        appElement.appendChild(container);
-        return;
-    }
+	// Added connect error listener
+	socket.on('connect_error', (err) => {
+		console.error('WebSocket connection error:', err.message);
+	});
 
-    // --- Append Elements ---
-    container.appendChild(canvas);
-    appElement.appendChild(container);
-
-    // --- Initialize ---
-    // Call resize once immediately
-    handleResize();
-    // Call resize again in the next animation frame to ensure layout is stable
-    requestAnimationFrame(handleResize);
-
-
-    socket = io('https://127.0.0.1:3000', {
-        transports: ['websocket'],
-        secure: true
-    });
-
-
-    socket.on('connect', () => {
-        console.log('Connected to game server:', socket?.id);
-    });
-
-    socket.on('disconnect', () => {
-        console.log('Disconnected from game server');
-    });
-
-    socket.on('connect_error', (err) => {
-        console.error('Connection Error:', err.message);
-        // Optionally display an error message on the canvas or page
-        if (ctx) {
-            ctx.fillStyle = 'red';
-            ctx.font = '20px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Connection Error', canvas!.width / 2, canvas!.height / 2);
-        }
-    });
-
-    // Listen for state updates
-    socket.on('state_update', handleStateUpdate);
-
-    // Add event listeners
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('keydown', handleKeyDown);
-
-    // Add a listener for hash changes to trigger cleanup
-    // Note: This assumes the router in main.ts handles navigation
-    // We need a way to know when we navigate *away* from #/game
-    const handleHashChangeForCleanup = () => {
-        if (window.location.hash !== '#/game') {
-            cleanupGame();
-            window.removeEventListener('hashchange', handleHashChangeForCleanup); // Remove self
-        }
-    };
-    window.addEventListener('hashchange', handleHashChangeForCleanup);
+	//This is real-time WebSocket-based multiplayer support, implemented manually (not through any UI framework).
+	socket!.on('connect', () => console.log('✅ Connected:', socket!.id));
+	//Disconnect listener here
+	socket.on('disconnect', () => {
+		console.warn('🔌 Disconnected from server');
+		if (ctx && canvas) {
+			console.log('Canvas and context are available for rendering');
+			ctx.fillStyle = 'red';
+			ctx.font = '20px Arial';
+			ctx.textAlign = 'center';
+			ctx.fillText('Disconnected', canvas.width / 2, canvas.height / 2);
+		}
+	});
+	socket.on('state_update', (state: GameState) => {
+		console.log('State received:', state); // Just to check, should be delete later
+		console.log("🎾 Ball State:", state.ball);
+		requestAnimationFrame(() => drawGame(state));
+	});
 }

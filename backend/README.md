@@ -1,3 +1,10 @@
+migrated from CommonJS to ESM :
+
+-Use native ES modules throughout (import/export)
+-Eliminate require() and module.exports
+-Avoid .default.default bugs
+-Be compatible with future Node.js standards
+
  fronteend
     1 npm install typescript --save-dev
 

@@ -6,21 +6,27 @@
 /*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/06 14:57:56 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/05/09 12:35:29 by beredzhe         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import fastifyFormbody from '@fastify/formbody';
 import fastifyCors from '@fastify/cors';
 import { Server } from 'socket.io';
 
-const GameEngine = require('./GameLogic/GameEngine.js').default.default;
+// const GameEngine = require('./GameLogic/GameEngine.js').default.default;
+import GameEngine from './GameLogic/GameEngine.js'; 
 import hashPassword from './crypto/crypto.js';
 import DB from './data_controller/dbConfig.js';
+
+// Fix __dirname in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const PORT = 3000;
 const HOST = '0.0.0.0'; // Bind to all network interfaces
@@ -57,6 +63,7 @@ io.on('connection', (socket) => {
 	console.log('Client connected:', socket.id);
 
 	socket.on('player_move', ({ playerId, direction }) => {
+		console.log(`Player ${playerId} moved ${direction}`);
 		game.handlePlayerInput(playerId, direction);
 	});
 
