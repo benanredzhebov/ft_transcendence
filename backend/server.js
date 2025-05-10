@@ -42,7 +42,6 @@ app.register(fastifyStatic, {
 	prefix: '/',
 });
 
-const rooms = {};
 
 
 gameSockets(app);
