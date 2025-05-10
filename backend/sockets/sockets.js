@@ -1,5 +1,6 @@
 const {Server} = require("socket.io");
 const GameEngine = require("../gamelogic/GameEngine");
+// const DB = require('../data_controller/dbConfig.js');
 
 const gameSockets = (app) =>{
 // ------------org version----------------
@@ -47,21 +48,53 @@ const gameSockets = (app) =>{
 
 
 // ----------------------testing-----------------------
-
-// const server = app.server; // Get the underlying HTTPS server
-// const io = new Server(server, {
-// 	cors: { origin: '*' }, // Allow all origins for Socket.IO
-// });
 //
-// io.on('connection',socket =>{
-// 	console.log('a user conected');
-//
-// 	socket.on('disconnect', () => {
-// 		console.log('user disconnected');
+// 	const server = app.server; // Get the underlying HTTPS server
+// 	const io = new Server(server, {
+// 		cors: { origin: '*' }, // Allow all origins for Socket.IO
 // 	});
-// });
+//
+// 	const connectedUsers = new Map(); // Map to track connected users
+//
+// 	io.on('connection', (socket) => {
+// 		console.log('A user connected: ' + socket.id);
+//
+// 		// Listen for user registration
+// 		socket.on('register_user', async () => {
+// 			try {
+// 				const userId = DB('credentialsTable').where({ id } ).first();
+// 				// Store the mapping of socket.id to userId
+// 				connectedUsers.set(socket.id, userId);
+// 				console.log(`User ${userId} registered on socket ${socket.id}`);
+// 			} catch (err) {
+// 				console.error('Error during user registration:', err);
+// 			}
+// 		});
+//
+// 		// Retrieve userId based on socket.id
+// 		// socket.on('get_user_id', () => {
+// 		// 	const userId = connectedUsers.get(socket.id);
+// 		// 	if (userId) {
+// 		// 		console.log(`UserId for socket ${socket.id}: ${userId}`);
+// 		// 		socket.emit('user_id', { userId });
+// 		// 	} else {
+// 		// 		console.error(`No userId found for socket ${socket.id}`);
+// 		// 	}
+// 		// });
+//
+// 		// Handle disconnection
+// 		socket.on('disconnect', () => {
+// 			const userId = connectedUsers.get(socket.id);
+// 			if (userId) {
+// 				connectedUsers.delete(socket.id);
+// 				console.log(`User ${userId} disconnected (Socket: ${socket.id})`);
+// 			} else {
+// 				console.log(`Socket ${socket.id} disconnected without a registered user`);
+// 			}
+// 		});
+// 	});
 
-// ----------------------testing-----------------------
+	// ----------------------testing-----------------------
 
 
 }

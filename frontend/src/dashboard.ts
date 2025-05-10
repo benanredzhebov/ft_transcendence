@@ -1,22 +1,20 @@
 import './dashboard.css';
-import { navigateTo } from './main';
-
+import { navigateTo } from './main'
+import { io } from "socket.io-client";
+//
+//
 export function renderDashboard() {
     // -----------------test- socket---------------------
     // Add the Socket.IO script to the head
-    // const socketIoScript = document.createElement("script");
-    // socketIoScript.src = "/socket.io/socket.io.js";
-    // document.head.appendChild(socketIoScript);
-    //
-    // // Add the inline script to initialize the socket
-    // const inlineScript = document.createElement("script");
-    // inlineScript.textContent = `
-    //   var socket = io();
-    //   socket.on('connect', () => {
-    //     console.log('Connected to server:', socket.id);
-    //   });
-    // `;
-    // document.head.appendChild(inlineScript);
+    const socket = io("https://127.0.0.1:3000");
+
+    socket.on('connect', () => {
+        console.log('Connected to server:', socket.id);
+
+        socket.emit('register_user');
+    });
+
+
     // // -----------------test- socket---------------------
 
 

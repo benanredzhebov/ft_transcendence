@@ -1,9 +1,8 @@
 
-const path = require('path');
 const DB = require('../data_controller/dbConfig.js');
 const hashPassword = require('../crypto/crypto.js');
 const {exchangeCodeForToken, fetchUserInfo} = require('../token_google/exchangeToken.js')
-const fastifyStatic = require('@fastify/static');
+const io = require('socket.io-client');
 
 
 const noHandlerRoute = (app) => {
@@ -11,12 +10,6 @@ const noHandlerRoute = (app) => {
 	reply.sendFile('index.html'); // Serve index.html from the root specified in fastifyStatic
 });
 }
-
-// Fallback for SPA routing
-// app.setNotFoundHandler((req, reply) => {
-// 	reply.sendFile('index.html'); // Serve index.html from the root specified in fastifyStatic
-// });
-
 
 const developerRoutes = (app) => {
 
@@ -50,11 +43,6 @@ const developerRoutes = (app) => {
 			reply.status(500).send({ error: 'Delete operation failed due to server error' });
 		}
 	});
-
-	// app.register(fastifyStatic, {
-	// 	root: path.join(__dirname, '../public'), // Path to public directory
-	// 	prefix: '/public', // Serve public files under /public
-	// });
 
 	app.get('/test', (req,reply) =>{
 		reply.sendFile('test.html');
@@ -147,10 +135,10 @@ const credentialsRoutes = (app) =>{
   });
 
 
-	app.get('/dashboard', (req, reply) => {
-
-		// console.log("muie fraiere");
-	});
+	// app.get('/dashboard', (req, reply) => {
+	//
+	// 	// console.log("muie fraiere");
+	// });
 
 	app.get('/game/:room', (req, reply) => {
 		const roomName = req.query;
