@@ -156,15 +156,97 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
 
 		const userProfile = await response.json();
 
-        // Ensure userProfile has expected fields before trying to access them
         contentArea.innerHTML = `
           <h3 class="dashboard-content-heading">Profile</h3>
           <div class="profile-details">
+            <div class="profile-avatar-container">
+              <img id="profileAvatar" src="${userProfile.avatar ? `data:image/jpeg;base64,${userProfile.avatar}` : '/images/default-avatar.png'}" alt="User Avatar" class="profile-avatar-img">
+              <input type="file" id="avatarUpload" accept="image/jpeg, image/png, image/gif" style="display: none;">
+              <button id="changeAvatarButton" class="dashboard-button">Change Picture</button>
+            </div>
             <p class="dashboard-content-paragraph"><strong>Username:</strong> ${userProfile.username || 'N/A'}</p>
             <p class="dashboard-content-paragraph"><strong>Email:</strong> ${userProfile.email || 'N/A'}</p>
-            <!-- Add more profile elements or an edit button here -->
+            <button id="uploadAvatarButton" class="dashboard-button" style="display: none;">Upload Selected</button>
+            <p id="avatarUploadStatus" class="dashboard-content-paragraph" style="min-height: 1.2em;"></p>
           </div>
         `;
+        const changeAvatarButton = contentArea.querySelector<HTMLButtonElement>('#changeAvatarButton');
+        const avatarUploadInput = contentArea.querySelector<HTMLInputElement>('#avatarUpload');
+        const uploadAvatarButton = contentArea.querySelector<HTMLButtonElement>('#uploadAvatarButton');
+        const profileAvatarImg = contentArea.querySelector<HTMLImageElement>('#profileAvatar');
+        const avatarUploadStatus = contentArea.querySelector<HTMLParagraphElement>('#avatarUploadStatus');
+
+        if (changeAvatarButton && avatarUploadInput && uploadAvatarButton && profileAvatarImg && avatarUploadStatus) {
+          changeAvatarButton.addEventListener('click', () => {
+            avatarUploadInput.click(); // Trigger file input click
+          });
+
+          avatarUploadInput.addEventListener('change', () => {
+            if (avatarUploadInput.files && avatarUploadInput.files.length > 0) {
+              const file = avatarUploadInput.files[0];
+              // Preview image (optional)
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                if (e.target && e.target.result) {
+                  // profileAvatarImg.src = e.target.result as string; // Preview if desired
+                }
+              };
+              reader.readAsDataURL(file);
+              uploadAvatarButton.style.display = 'inline-block'; // Show upload button
+              avatarUploadStatus.textContent = `Selected: ${file.name}`;
+            } else {
+              uploadAvatarButton.style.display = 'none';
+              avatarUploadStatus.textContent = '';
+            }
+          });
+          uploadAvatarButton.addEventListener('click', async () => {
+            if (!avatarUploadInput.files || avatarUploadInput.files.length === 0) {
+              avatarUploadStatus.textContent = 'Please select a file first.';
+              return;
+            }
+            const file = avatarUploadInput.files[0];
+            const formData = new FormData();
+            formData.append('avatar', file); // 'avatar' must match the field name expected by backend
+
+            avatarUploadStatus.textContent = 'Uploading...';
+            uploadAvatarButton.disabled = true;
+
+            try {
+              const uploadResponse = await fetch('/api/profile/avatar', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  // 'Content-Type': 'multipart/form-data' is set automatically by browser with FormData
+                },
+                body: formData,
+              });
+              const result = await uploadResponse.json();
+              console.log('Upload response from backend:', result); // Log the entire response
+              console.log('profileAvatarImg element:', profileAvatarImg); // Check if the img element is found
+
+              if (uploadResponse.ok && result.success) {
+                avatarUploadStatus.textContent = 'Upload successful!';
+                if (result.avatar && profileAvatarImg) { // *** SHOW PICTURE ***
+                  const newSrc = `data:image/jpeg;base64,${result.avatar}`;
+                  console.log('Setting new image src (first 100 chars):', newSrc.substring(0, 100) + '...');
+                  profileAvatarImg.src = newSrc; // Update displayed avatar
+                  console.log('Image src after update (first 100 chars):', profileAvatarImg.src.substring(0, 100) + '...');
+                }
+              } else {
+                console.log('Either result.avatar is missing or profileAvatarImg element was not found.');
+                if (!result.avatar) console.log('result.avatar is missing or empty.');
+                if (!profileAvatarImg) console.log('profileAvatarImg element is null.');
+              }
+              uploadAvatarButton.style.display = 'none';
+
+            } catch (uploadError) {
+              console.error('Error uploading avatar:', uploadError);
+              avatarUploadStatus.textContent = 'Upload error. See console.';
+            } finally {
+              uploadAvatarButton.disabled = false;
+            }
+          });
+        }
       } catch (error) {
         console.error('HERE-Failed to fetch profile:', error);
         contentArea.innerHTML = `
