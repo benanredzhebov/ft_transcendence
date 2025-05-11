@@ -131,6 +131,32 @@
     line-height: 1.6;
 }
 
+
+
+/* Profile Details Specific Styles */
+.profile-details {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem; /* Space between profile items */
+}
+
+.profile-avatar-container {
+    display: flex;
+    flex-direction: column; /* Stack image and button vertically */
+    align-items: center; /* Center items horizontally */
+    margin-bottom: 1.5rem; /* Space below the avatar area */
+    gap: 0.75rem; /* Space between avatar and button */
+}
+
+.profile-avatar-img {
+    width: 120px; /* Adjust size as needed */
+    height: 120px; /* Adjust size as needed */
+    border-radius: 50%; /* Makes the image circular */
+    object-fit: cover; /* Ensures the image covers the area without distortion */
+    border: 3px solid rgba(255, 255, 255, 0.2); /* Optional: adds a subtle border */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Optional: adds a slight shadow */
+}
+
 /* Game buttons in content area */
 .dashboard-game-button {
     margin-top: 1rem;

@@ -6,6 +6,7 @@ const fastify = require('fastify');
 const fastifyStatic = require('@fastify/static');
 const fastifyFormbody = require('@fastify/formbody');
 const fastifyCors = require('@fastify/cors');
+const multipart = require('@fastify/multipart');
 const { Server } = require('socket.io');
 
 const GameEngine = require('./gamelogic/GameEngine.js');
@@ -64,6 +65,15 @@ setInterval(() => {
 
 // --- Middlewares ---
 app.register(fastifyCors, { origin: true, credentials: true });
+
+// Register Multipart plugin
+app.register(multipart, { // Now 'multipart' is defined
+  // attachFieldsToBody: true,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+  }
+});
+
 app.register(fastifyFormbody);
 
 // Serve frontend static files
