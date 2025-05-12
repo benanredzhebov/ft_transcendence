@@ -13,7 +13,6 @@
 import './game.css';
 import { io, Socket } from 'socket.io-client';
 
-
 interface PaddleState {
 	y: number;
 	height: number;
@@ -36,9 +35,11 @@ const SERVER_HEIGHT = 600;
 let socket: Socket | null = null;
 let canvas: HTMLCanvasElement | null = null;
 let ctx: CanvasRenderingContext2D | null = null;
+let resizeObserver: ResizeObserver | null = null; // ✅ NEW
 
 function drawGame(state: GameState) {
 	if (!ctx || !canvas) return;
+
 	const scaleX = canvas.width / SERVER_WIDTH;
 	const scaleY = canvas.height / SERVER_HEIGHT;
 
@@ -75,11 +76,10 @@ function drawGame(state: GameState) {
 	ctx.font = `${40 * Math.min(scaleX, scaleY)}px Arial`;
 	ctx.textAlign = 'center';
 	ctx.fillText(
-	`${state.score.player1} : ${state.score.player2}`,
-	canvas.width / 2,
-	50 * scaleY
-);
-
+		`${state.score.player1} : ${state.score.player2}`,
+		canvas.width / 2,
+		50 * scaleY
+	);
 }
 
 function handleResize(container: HTMLElement) {
@@ -111,60 +111,83 @@ function cleanupGame() {
 		socket = null;
 	}
 	window.removeEventListener('keydown', handleKeyDown);
+	window.removeEventListener('resize', onResize); // ✅ CLEANUP
+	window.removeEventListener('orientationchange', onResize); // ✅ CLEANUP
+	window.removeEventListener('focus', onResize); // ✅ CLEANUP
+	document.removeEventListener('visibilitychange', onResize); // ✅ CLEANUP
+	resizeObserver?.disconnect(); // ✅ CLEANUP ResizeObserver
+	resizeObserver = null;
+}
+
+function onResize() {
+	if (canvas?.parentElement) {
+		handleResize(canvas.parentElement);
+	}
 }
 
 export function renderGame(containerId: string = 'app') {
-	//console.log("🕹️ render game Called");
 	const container = document.getElementById(containerId);
 	if (!container) return;
 
-	// Clear previous content
 	container.innerHTML = '';
 
-	// Create and style canvas. Using the HTML5 Canvas API directly
+	// Apply the container styling
+	container.className = 'game-container'
+
+	// Create and style canvas
 	canvas = document.createElement('canvas');
-	canvas.className = 'border-2 border-white rounded';
+	canvas.className = 'game-canvas'; //Apply the CSS class for styling
 	ctx = canvas.getContext('2d');
 	container.appendChild(canvas);
 
-	// Resize canvas to fit
+	// Initial resize
 	handleResize(container);
-	window.addEventListener('resize', () => handleResize(container));
-	window.addEventListener('keydown', handleKeyDown);
+	// window.addEventListener('resize', () => handleResize(container));
 
-	// Cleanup when navigating away
+
+	// ✅ RESIZE LISTENERS
+	window.addEventListener('resize', onResize);
+	window.addEventListener('orientationchange', onResize);
+	window.addEventListener('focus', onResize);
+	document.addEventListener('visibilitychange', () => {
+		if (document.visibilityState === 'visible') onResize();
+	});
+
+	// ✅ ResizeObserver for precision
+	if (canvas?.parentElement) {
+		resizeObserver = new ResizeObserver(() => {
+		handleResize(container);
+	});
+	resizeObserver.observe(container);
+	}
+
+	window.addEventListener('keydown', handleKeyDown);
 	window.addEventListener('beforeunload', cleanupGame);
 
-	// Connect to server
-	//connects frontend to the backend
 	socket = io('https://127.0.0.1:3000', {
-		transports: ['websocket'], 
+		transports: ['websocket'],
 		secure: true
 	});
-	
-	console.log("Connecting to the WebSocket server...")
+	console.log("Connecting to the WebSocket server...");
 
-	// Added connect error listener
 	socket.on('connect_error', (err) => {
 		console.error('WebSocket connection error:', err.message);
 	});
 
-	//This is real-time WebSocket-based multiplayer support, implemented manually (not through any UI framework).
-	socket!.on('connect', () => console.log('✅ Connected:', socket!.id));
-	//Disconnect listener here
+	socket.on('connect', () => console.log('✅ Connected:', socket!.id));
 	socket.on('disconnect', () => {
 		console.warn('🔌 Disconnected from server');
 		if (ctx && canvas) {
-			console.log('Canvas and context are available for rendering');
 			ctx.fillStyle = 'red';
 			ctx.font = '20px Arial';
 			ctx.textAlign = 'center';
 			ctx.fillText('Disconnected', canvas.width / 2, canvas.height / 2);
 		}
 	});
+
+	// ✅ Ensure canvas is resized before every render
 	socket.on('state_update', (state: GameState) => {
-		console.log('State received:', state); // Just to check, should be delete later
-		console.log("🎾 Ball State:", state.ball);
+		if (canvas?.parentElement) handleResize(canvas.parentElement);
 		requestAnimationFrame(() => drawGame(state));
 	});
 }
