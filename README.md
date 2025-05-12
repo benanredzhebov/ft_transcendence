@@ -1,4 +1,15 @@
- fronteend
+
+***Pierotti***
+
+1. added knex file for Profile photo
+2. installed @fastify.multipart
+3. added new route for /api/profile
+4. used JWT to send token of LoginProfile to frontend
+
+------------------------
+
+
+fronteend
     1 npm install typescript --save-dev
 
     2.npm install
