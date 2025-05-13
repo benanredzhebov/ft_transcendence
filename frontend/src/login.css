@@ -180,8 +180,9 @@
   .login-bottom-buttons-container {
     display: flex;
     flex-direction: column;
+	align-items: center;
+    justify-content: center;
   }
-   /* space-y-6 equivalent */
   .login-bottom-buttons-container > * + * {
      margin-top: 1.5rem;
   }
