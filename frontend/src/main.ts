@@ -6,7 +6,6 @@ import { renderGame } from './game';
 import { renderDelete } from './delete';
 import getGoogleAuth from './GetGoogleAuth'; // Import the function
 import { renderGoogle } from './google';
-// import {createTestPage} from './test.ts'
 
 // --- DOM ---
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -129,7 +128,6 @@ const routes: { [key: string]: () => (() => void) | void } = { // render functio
   '/game': renderGame,
   '/dashboard': renderDashboard,
   '/delete': renderDelete, // Add the delete route
-  // '/test': createTestPage
   // '/username-google': renderHomePage
 
 };

@@ -6,11 +6,18 @@ const fastify = require('fastify');
 const fastifyStatic = require('@fastify/static');
 const fastifyFormbody = require('@fastify/formbody');
 const fastifyCors = require('@fastify/cors');
+const multipart = require('@fastify/multipart');
+const { Server } = require('socket.io');
 
-// routes
-const {developerRoutes, credentialsRoutes,noHandlerRoute} = require('./routes/routes'); // Import the routes
+const GameEngine = require('./gamelogic/GameEngine.js');
+const hashPassword = require('./crypto/crypto.js');
+const DB = require('./data_controller/dbConfig.js');
 
-const {gameSockets} = require("./sockets/sockets");
+const {gameSockets} = require("./sockets/sockets.js")
+const {noHandlerRoute,developerRoutes,credentialsRoutes} = require("./routes/routes.js")
+
+// const PORT = 3000;
+// const HOST = '0.0.0.0'; // Bind to all network interfaces
 
 // Load SSL certificates
 const keyPath = path.join(__dirname, 'https_keys/private-key.pem');
@@ -34,6 +41,15 @@ const app = fastify({
 
 // --- Middlewares ---
 app.register(fastifyCors, { origin: true, credentials: true });
+
+// Register Multipart plugin
+app.register(multipart, { // Now 'multipart' is defined
+  // attachFieldsToBody: true,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+  }
+});
+
 app.register(fastifyFormbody);
 
 // Serve frontend static files

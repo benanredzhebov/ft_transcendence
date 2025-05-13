@@ -451,17 +451,18 @@ function addLoginFormListeners() {
               body: JSON.stringify(loginData),
           });
 
-          const data = await response.json();
-          if (response.ok && data.success !== false) { // Check for explicit failure if backend sends success: false
+      const data = await response.json();
+      if (response.ok && data.success !== false) {
 			console.log('Login successful:', data);
+
 			// Store token if received (example)
-			if (data.token) { // Ensure your backend sends a 'token' field
-			  localStorage.setItem('authToken', data.token); 
+			if (data.token) {
+			  localStorage.setItem('authToken', data.token);
+        console.log('Token sent after Login!', data);
 			} else {
 			  console.warn('No token received from login endpoint.');
-			  // Handle cases where token might not be sent, or use a different field name
 			}
-			navigateTo('/dashboard'); // Navigate to dashboard/game on success
+			navigateTo('/dashboard');
 		} else {
 			throw new Error(data.error || 'Login failed. Please try again.');
 		}

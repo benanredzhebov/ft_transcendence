@@ -1,8 +1,12 @@
 
+const path = require('path');
 const DB = require('../data_controller/dbConfig.js');
 const hashPassword = require('../crypto/crypto.js');
 const {exchangeCodeForToken, fetchUserInfo} = require('../token_google/exchangeToken.js')
-const io = require('socket.io-client');
+const jwt = require('jsonwebtoken');
+
+// IMPORTANT: Store your secret in an environment variable in a real application!
+const JWT_SECRET = process.env.JWT_SECRET || 'hbj2io4@@#!v7946h3&^*2cn9!@09*@B627B^*N39&^847,1';
 
 
 const noHandlerRoute = (app) => {
@@ -10,6 +14,12 @@ const noHandlerRoute = (app) => {
 	reply.sendFile('index.html'); // Serve index.html from the root specified in fastifyStatic
 });
 }
+
+// Fallback for SPA routing
+// app.setNotFoundHandler((req, reply) => {
+// 	reply.sendFile('index.html'); // Serve index.html from the root specified in fastifyStatic
+// });
+
 
 const developerRoutes = (app) => {
 
@@ -43,13 +53,108 @@ const developerRoutes = (app) => {
 			reply.status(500).send({ error: 'Delete operation failed due to server error' });
 		}
 	});
-
-	app.get('/test', (req,reply) =>{
-		reply.sendFile('test.html');
-	});
 }
 
 const credentialsRoutes = (app) =>{
+  app.get('/api/profile', async (req, reply) => {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      reply.status(401).send({ error: 'Unauthorized: No token provided' });
+      return;
+    }
+
+    const token = authHeader.substring(7); // Remove 'Bearer '
+
+    try {
+      const decodedToken = jwt.verify(token, JWT_SECRET);
+      const userId = decodedToken.userId;
+
+      if (!userId) {
+        reply.status(401).send({ error: 'Unauthorized: Invalid token payload' });
+        return;
+      }
+
+      const user = await DB('credentialsTable').where({ id: userId }).first();
+
+      if (!user) {
+        reply.status(404).send({ error: 'User not found' });
+        return;
+      }
+
+      // JSON sending to frontend
+      const userProfile = {
+        username: user.username,
+        email: user.email,
+        avatar: user.avatar ? user.avatar.toString('base64') : null // Send avatar as base64
+      };
+
+      reply.send(userProfile); // Send profile data as JSON
+
+    } catch (err) {
+      if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+        reply.status(401).send({ error: `Unauthorized: ${err.message}` });
+      } else {
+        console.error('Error fetching profile:', err);
+        reply.status(500).send({ error: 'Server error while fetching profile' });
+      }
+    }
+  });
+
+  app.post('/api/profile/avatar', async (req, reply) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.status(401).send({ error: 'Unauthorized: No token provided' });
+    }
+
+    const token = authHeader.substring(7);
+    let decodedToken;
+    try {
+      decodedToken = jwt.verify(token, JWT_SECRET);
+    } catch (err) {
+      return reply.status(401).send({ error: 'Unauthorized: Invalid token' });
+    }
+    const userId = decodedToken.userId;
+    if (!userId) {
+      return reply.status(401).send({ error: 'Unauthorized: Invalid token payload' });
+    }
+
+    console.log('--- Avatar Upload Request ---');
+    console.log('Request Headers:', JSON.stringify(req.headers, null, 2));
+
+    const data = await req.file(); // From @fastify/multipart
+    console.log('Data from req.file():', data); // Log what req.file() returns
+
+
+    if (!data || !data.file) {
+      console.error('Condition failed: !data || !data.file. Data was:', data);
+      return reply.status(400).send({ error: 'No file uploaded or invalid format.' });
+    }
+
+    // Basic MIME type check (can be more robust)
+    console.log('Uploaded file mimetype:', data.mimetype);
+    if (!['image/jpeg', 'image/png', 'image/gif'].includes(data.mimetype)) {
+        return reply.status(400).send({ error: 'Invalid file type. Only JPG, PNG, GIF allowed.' });
+    }
+
+    try {
+      const buffer = await data.toBuffer(); // Get file content as a buffer
+
+      await DB('credentialsTable')
+        .where({ id: userId })
+        .update({ avatar: buffer });
+        console.log('Avatar updated in DB for userId:', userId);
+
+
+      reply.send({ success: true, message: 'Avatar uploaded successfully.', avatar: buffer.toString('base64') });
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      if (error.message.includes('Request file too large')) { // Example for specific error
+        return reply.status(413).send({ error: 'File too large.' });
+      }
+      reply.status(500).send({ error: 'Failed to upload avatar.' });
+    }
+  });
 
   app.post('/signUp', async (req, reply) => {
     const { username, email, password: rawPassword } = req.body;
@@ -96,7 +201,22 @@ const credentialsRoutes = (app) =>{
         reply.status(401).send({ error: 'Invalid email or password' });
         return;
       }
-      reply.send({ success: true, message: 'Login successful', userId: user.id });
+      // Generate token
+      const tokenPayload = {
+        userId: user.id,
+        email: user.email,
+        username: user.username
+      };
+      // Sign the token - expires in 1 hour
+      const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '1h' });
+      
+      reply.send({
+        success: true,
+        message: 'Login successful',
+        userId: user.id,
+        username: user.username,
+        token: token // Send token to frontend
+      });    
     } catch (e) {
       console.error(e);
       reply.status(500).send({ error: 'Login failed due to server error' });
@@ -105,7 +225,7 @@ const credentialsRoutes = (app) =>{
 
 
   app.get('/username-google', async (req, reply) => {
-    const { code } = req.query; // Extract the authorization code from the query parameters
+    const { code } = req.query; // Extract the authozation code from the query parameters
 
     if (!code) {
       reply.status(400).send({ error: 'Authorization code is missing' });
@@ -133,20 +253,6 @@ const credentialsRoutes = (app) =>{
       reply.status(500).send({ error: 'Failed to handle Google OAuth callback' });
     }
   });
-
-
-	// app.get('/dashboard', (req, reply) => {
-	//
-	// 	// console.log("muie fraiere");
-	// });
-
-	app.get('/game/:room', (req, reply) => {
-		const roomName = req.query;
-		console.log("Room name = " + roomName);
-	});
-
-
-
 }
 
 module.exports = {developerRoutes, credentialsRoutes, noHandlerRoute};
