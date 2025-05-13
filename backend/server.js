@@ -1,7 +1,5 @@
-
-
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs'); // Ensure fs is imported
+const path = require('node:path'); // Ensure path is imported
 const fastify = require('fastify');
 const fastifyStatic = require('@fastify/static');
 const fastifyFormbody = require('@fastify/formbody');
@@ -70,11 +68,28 @@ app.register(fastifyCors, { origin: true, credentials: true });
 app.register(multipart, { // Now 'multipart' is defined
   // attachFieldsToBody: true,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB
+    fileSize: 10 * 1024 * 1024, // 5MB
   }
 });
 
 app.register(fastifyFormbody);
+
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+const avatarsDir = path.join(uploadsDir, 'avatars');
+if (!fs.existsSync(avatarsDir)) {
+  fs.mkdirSync(avatarsDir, { recursive: true });
+}
+
+// Serve uploaded avatars
+app.register(fastifyStatic, {
+  root: avatarsDir,
+  prefix: '/uploads/avatars/', // URL prefix to access these files
+  decorateReply: false // To avoid conflict if already decorated for other static serving
+});
 
 // Serve frontend static files
 app.register(fastifyStatic, {

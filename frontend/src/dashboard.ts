@@ -1,6 +1,14 @@
 import './dashboard.css';
 import { navigateTo } from './main';
 
+// Define predefined avatars (can be at module scope if preferred)
+const PREDEFINED_AVATARS = [
+  '/avatars/girl.png',
+  '/avatars/boy.png',
+	'/avatars/gojo.png',
+	'/avatars/luffy.png'
+];
+
 export function renderDashboard() {
   const appElement = document.querySelector<HTMLDivElement>('#app');
   if (!appElement) {
@@ -99,17 +107,117 @@ export function renderDashboard() {
   setActiveView('profile', navButtons, contentArea); // Set initial view to profile
 }
 
+// --- Helper Function to Open Avatar Selection Modal ---
+async function openAvatarSelectionModal(
+  token: string,
+  currentProfileAvatarImg: HTMLImageElement,
+  avatarStatusElement: HTMLParagraphElement
+) {
+  // Modal overlay
+  const modalOverlay = document.createElement('div');
+  modalOverlay.className = 'avatar-modal-overlay';
+  
+  // Modal content
+  const modalContent = document.createElement('div');
+  modalContent.className = 'avatar-modal-content';
+
+  const modalTitle = document.createElement('h4');
+  modalTitle.textContent = 'Choose Your Avatar';
+  modalTitle.style.textAlign = 'center';
+  modalTitle.style.marginBottom = '20px';
+
+  const avatarsGrid = document.createElement('div');
+  avatarsGrid.className = 'avatar-modal-grid';
+
+  PREDEFINED_AVATARS.forEach(avatarSrc => {
+    const imgWrapper = document.createElement('div');
+    imgWrapper.className = 'avatar-modal-option';
+    const imgEl = document.createElement('img');
+    imgEl.src = avatarSrc;
+    imgEl.alt = `Avatar ${avatarSrc.split('/').pop()}`;
+    imgEl.style.width = '80px';
+    imgEl.style.height = '80px';
+    imgEl.style.borderRadius = '50%';
+    imgEl.style.objectFit = 'cover';
+    imgEl.style.cursor = 'pointer';
+
+    imgWrapper.appendChild(imgEl);
+    imgWrapper.addEventListener('click', async () => {
+      avatarStatusElement.textContent = 'Processing...';
+      modalContent.style.pointerEvents = 'none'; // Disable further clicks during processing
+      try {
+        const imageResponse = await fetch(avatarSrc);
+        if (!imageResponse.ok) {
+          throw new Error(`Failed to fetch avatar: ${imageResponse.statusText}`);
+        }
+        const imageBlob = await imageResponse.blob();
+        const fileName = avatarSrc.split('/').pop() || 'avatar.png';
+        const imageFile = new File([imageBlob], fileName, { type: imageBlob.type });
+
+        const formData = new FormData();
+        formData.append('avatar', imageFile);
+
+        const uploadResponse = await fetch('/api/profile/avatar', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData,
+        });
+
+        const result = await uploadResponse.json();
+
+        if (uploadResponse.ok && result.success) {
+          avatarStatusElement.textContent = 'Avatar updated successfully!';
+          if (result.avatarPath) { // Check for avatarPath
+            currentProfileAvatarImg.src = result.avatarPath; // Use the path directly
+          }
+        } else {
+          avatarStatusElement.textContent = result.error || 'Failed to update avatar.';
+          console.error('Avatar update error:', result);
+        }
+      } catch (error) {
+        console.error('Error selecting/uploading predefined avatar:', error);
+        avatarStatusElement.textContent = 'Error updating avatar. See console.';
+      } finally {
+        closeModal();
+      }
+    });
+    avatarsGrid.appendChild(imgWrapper);
+  });
+
+  const closeButton = document.createElement('button');
+  closeButton.textContent = 'Close';
+  closeButton.className = 'avatar-modal-close-button';
+  closeButton.addEventListener('click', closeModal);
+
+  modalContent.appendChild(modalTitle);
+  modalContent.appendChild(avatarsGrid);
+  modalContent.appendChild(closeButton);
+  modalOverlay.appendChild(modalContent);
+  document.body.appendChild(modalOverlay);
+
+  function closeModal() {
+    if (document.body.contains(modalOverlay)) {
+      document.body.removeChild(modalOverlay);
+    }
+  }
+  // Close modal if overlay is clicked
+  modalOverlay.addEventListener('click', (event) => {
+    if (event.target === modalOverlay) {
+        closeModal();
+    }
+  });
+}
+
 // --- Helper Function to Set Active View ---
 async function setActiveView(view: string, buttons: HTMLButtonElement[], contentArea: HTMLDivElement) {
-	// Update button styles
-	buttons.forEach(btn => {
-	  if (btn.dataset.view === view) {
-		btn.classList.add('active');
-	  } else {
-		btn.classList.remove('active');
-	  }
-	}
-);
+  // Update button styles
+  buttons.forEach(btn => {
+    if (btn.dataset.view === view) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
 
   // Update content area
   contentArea.innerHTML = '';
@@ -125,130 +233,59 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
             <p class="dashboard-content-paragraph">Error: You are not logged in or your session has expired.</p>
             <p class="dashboard-content-paragraph">Please <a href="/login">login</a> again.</p>
           `;
-		            return;
+          return;
         }
-		    const response = await fetch('/api/profile', {
-			  method: 'GET',
-			  headers: {
-			    'Content-Type': 'application/json',
-			    'Authorization': `Bearer ${token}`
-			  }
-		  });
-      //*** Debugging logs
-        console.log('Fetch response status:', response.status);
-        console.log('Fetch response ok:', response.ok);
-        const responseText = await response.clone().text(); // Clone to read text without consuming body for json()
-        console.log('Fetch response text:', responseText); // ***JSON should be here
-    
-		
-		if (!response.ok) {
-			if (response.status === 401 || response.status === 403) {
-			  contentArea.innerHTML = `
-				<h3 class="dashboard-content-heading">Profile</h3>
-				<p class="dashboard-content-paragraph">Error: Unauthorized. Your session may have expired.</p>
-				<p class="dashboard-content-paragraph">Please <a href="/login">login</a> again.</p>
-			  `;
-			} else {
-        throw new Error(`API Error: ${response.status} ${response.statusText}. Response: ${responseText}`);
-			}
-			return;
-		}
+        const response = await fetch('/api/profile', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
 
-		const userProfile = await response.json();
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            contentArea.innerHTML = `
+              <h3 class="dashboard-content-heading">Profile</h3>
+              <p class="dashboard-content-paragraph">Error: Unauthorized. Your session may have expired.</p>
+              <p class="dashboard-content-paragraph">Please <a href="/login">login</a> again.</p>
+              <style> .dashboard-content-paragraph a { color: #3498db; text-decoration: underline; } </style>
+            `;
+          } else {
+			throw new Error(`API Error: ${response.status} ${response.statusText}`);
+          }
+          return;
+        }
+
+        const userProfile = await response.json();
 
         contentArea.innerHTML = `
           <h3 class="dashboard-content-heading">Profile</h3>
           <div class="profile-details">
             <div class="profile-avatar-container">
-              <img id="profileAvatar" src="${userProfile.avatar ? `data:image/jpeg;base64,${userProfile.avatar}` : '/images/default-avatar.png'}" alt="User Avatar" class="profile-avatar-img">
-              <input type="file" id="avatarUpload" accept="image/jpeg, image/png, image/gif" style="display: none;">
-              <button id="changeAvatarButton" class="dashboard-button">Change Picture</button>
+              <img id="profileAvatar" 
+                   src="${userProfile.avatar || '/images/default-avatar.png'}" 
+                   alt="User Avatar" 
+                   class="profile-avatar-img" 
+                   style="cursor: pointer;" 
+                   title="Click to change avatar">
             </div>
             <p class="dashboard-content-paragraph"><strong>Username:</strong> ${userProfile.username || 'N/A'}</p>
             <p class="dashboard-content-paragraph"><strong>Email:</strong> ${userProfile.email || 'N/A'}</p>
-            <button id="uploadAvatarButton" class="dashboard-button" style="display: none;">Upload Selected</button>
-            <p id="avatarUploadStatus" class="dashboard-content-paragraph" style="min-height: 1.2em;"></p>
+            <p id="avatarUploadStatus" class="dashboard-content-paragraph" style="min-height: 1.2em; margin-top: 0.5rem;"></p>
           </div>
         `;
-        const changeAvatarButton = contentArea.querySelector<HTMLButtonElement>('#changeAvatarButton');
-        const avatarUploadInput = contentArea.querySelector<HTMLInputElement>('#avatarUpload');
-        const uploadAvatarButton = contentArea.querySelector<HTMLButtonElement>('#uploadAvatarButton');
+        
         const profileAvatarImg = contentArea.querySelector<HTMLImageElement>('#profileAvatar');
         const avatarUploadStatus = contentArea.querySelector<HTMLParagraphElement>('#avatarUploadStatus');
 
-        if (changeAvatarButton && avatarUploadInput && uploadAvatarButton && profileAvatarImg && avatarUploadStatus) {
-          changeAvatarButton.addEventListener('click', () => {
-            avatarUploadInput.click(); // Trigger file input click
-          });
-
-          avatarUploadInput.addEventListener('change', () => {
-            if (avatarUploadInput.files && avatarUploadInput.files.length > 0) {
-              const file = avatarUploadInput.files[0];
-              // Preview image (optional)
-              const reader = new FileReader();
-              reader.onload = (e) => {
-                if (e.target && e.target.result) {
-                  // profileAvatarImg.src = e.target.result as string; // Preview if desired
-                }
-              };
-              reader.readAsDataURL(file);
-              uploadAvatarButton.style.display = 'inline-block'; // Show upload button
-              avatarUploadStatus.textContent = `Selected: ${file.name}`;
-            } else {
-              uploadAvatarButton.style.display = 'none';
-              avatarUploadStatus.textContent = '';
-            }
-          });
-          uploadAvatarButton.addEventListener('click', async () => {
-            if (!avatarUploadInput.files || avatarUploadInput.files.length === 0) {
-              avatarUploadStatus.textContent = 'Please select a file first.';
-              return;
-            }
-            const file = avatarUploadInput.files[0];
-            const formData = new FormData();
-            formData.append('avatar', file); // 'avatar' must match the field name expected by backend
-
-            avatarUploadStatus.textContent = 'Uploading...';
-            uploadAvatarButton.disabled = true;
-
-            try {
-              const uploadResponse = await fetch('/api/profile/avatar', {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  // 'Content-Type': 'multipart/form-data' is set automatically by browser with FormData
-                },
-                body: formData,
-              });
-              const result = await uploadResponse.json();
-              console.log('Upload response from backend:', result); // Log the entire response
-              console.log('profileAvatarImg element:', profileAvatarImg); // Check if the img element is found
-
-              if (uploadResponse.ok && result.success) {
-                avatarUploadStatus.textContent = 'Upload successful!';
-                if (result.avatar && profileAvatarImg) { // *** SHOW PICTURE ***
-                  const newSrc = `data:image/jpeg;base64,${result.avatar}`;
-                  console.log('Setting new image src (first 100 chars):', newSrc.substring(0, 100) + '...');
-                  profileAvatarImg.src = newSrc; // Update displayed avatar
-                  console.log('Image src after update (first 100 chars):', profileAvatarImg.src.substring(0, 100) + '...');
-                }
-              } else {
-                console.log('Either result.avatar is missing or profileAvatarImg element was not found.');
-                if (!result.avatar) console.log('result.avatar is missing or empty.');
-                if (!profileAvatarImg) console.log('profileAvatarImg element is null.');
-              }
-              uploadAvatarButton.style.display = 'none';
-
-            } catch (uploadError) {
-              console.error('Error uploading avatar:', uploadError);
-              avatarUploadStatus.textContent = 'Upload error. See console.';
-            } finally {
-              uploadAvatarButton.disabled = false;
-            }
+        if (profileAvatarImg && avatarUploadStatus && token) {
+          profileAvatarImg.addEventListener('click', () => {
+            openAvatarSelectionModal(token, profileAvatarImg, avatarUploadStatus);
           });
         }
       } catch (error) {
-        console.error('HERE-Failed to fetch profile:', error);
+        console.error('Failed to fetch profile:', error);
         contentArea.innerHTML = `
           <h3 class="dashboard-content-heading">Profile</h3>
           <p class="dashboard-content-paragraph">Could not load profile information. Please try again later.</p>

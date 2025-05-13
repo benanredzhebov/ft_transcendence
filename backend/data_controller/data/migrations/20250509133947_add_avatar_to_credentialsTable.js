@@ -4,9 +4,8 @@
  */
 exports.up = async (knex) => {
     await knex.schema.alterTable('credentialsTable', (table) => {
-      table.binary('avatar');
-      // If you wanted to store a file path instead:
-      // table.string('avatar_path');
+      // table.dropColumn('avatar'); // If changing from existing binary, uncomment if needed
+      table.string('avatar_path'); // Store the path as a string
     });
   };
   
@@ -16,7 +15,7 @@ exports.up = async (knex) => {
    */
   exports.down = async (knex) => {
     await knex.schema.alterTable('credentialsTable', (table) => {
-      table.dropColumn('avatar');
-      // table.dropColumn('avatar_path');
+      table.dropColumn('avatar_path');
+      // table.binary('avatar'); // If reverting
     });
   };
