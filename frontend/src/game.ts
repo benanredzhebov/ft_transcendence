@@ -1,6 +1,8 @@
 
 import './game.css';
 import { io, Socket } from 'socket.io-client';
+// import { getSocket } from "./socketManager";
+
 
 // --- Interfaces (matching backend GameState) ---
 interface PaddleState {
