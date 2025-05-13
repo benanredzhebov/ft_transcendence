@@ -3,23 +3,23 @@
 /*                                                        :::      ::::::::   */
 /*   server.js                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
+/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/09 12:35:29 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/05/13 20:15:35 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
+import fs from 'fs'
 import { existsSync, readFileSync } from 'fs';
-import { join, dirname } from 'path';
+import path, { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
+import multipart from '@fastify/multipart'
 import fastifyFormbody from '@fastify/formbody';
 import fastifyCors from '@fastify/cors';
 import { Server } from 'socket.io';
-
-// const GameEngine = require('./GameLogic/GameEngine.js').default.default;
 import GameEngine from './GameLogic/GameEngine.js'; 
 import hashPassword from './crypto/crypto.js';
 import DB from './data_controller/dbConfig.js';
@@ -27,6 +27,21 @@ import DB from './data_controller/dbConfig.js';
 // Fix __dirname in ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+const avatarsDir = path.join(uploadsDir, 'avatars');
+if (!fs.existsSync(avatarsDir)) {
+  fs.mkdirSync(avatarsDir, { recursive: true });
+}
+
+// Create uploads directory if it doesn't exist
+if (!fs.existsSync(avatarsDir)) {
+  fs.mkdirSync(avatarsDir, { recursive: true });
+}
 
 const PORT = 3000;
 const HOST = '0.0.0.0'; // Bind to all network interfaces
@@ -72,6 +87,11 @@ io.on('connection', (socket) => {
 		// Handle player disconnection in the game engine if necessary
 		// game.removePlayer(socket.id);
 	});
+
+	socket.on('restart_game', () => {
+		game.state.resetGame(); // Resets the score , ball paddles	
+		io.emit('state_update', game.getState()); // Push to all clients
+	});
 });
 
 // Game loop
@@ -82,7 +102,23 @@ setInterval(() => {
 
 // --- Middlewares ---
 app.register(fastifyCors, { origin: true, credentials: true });
+
+// Register Multipart plugin
+app.register(multipart, { // Now 'multipart' is defined
+  // attachFieldsToBody: true,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 5MB
+  }
+});
+
 app.register(fastifyFormbody);
+
+// Serve uploaded avatars
+app.register(fastifyStatic, {
+  root: avatarsDir,
+  prefix: '/uploads/avatars/', // URL prefix to access these files
+  decorateReply: false // To avoid conflict if already decorated for other static serving
+});
 
 // Serve frontend static files
 app.register(fastifyStatic, {
@@ -184,9 +220,7 @@ app.post('/delete', async (req, reply) => {
 // --- Start Server ---
 const start =  async () => {
 	try{
-		// const adress = await fastify.listen({port : PORT});
 		const address = await app.listen({ port: PORT, host: HOST });
-
 		console.log("Server running " + address)
 	}
 	catch (e){

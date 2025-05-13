@@ -12,6 +12,7 @@
 
 import './game.css';
 import { io, Socket } from 'socket.io-client';
+let gameEnded = false;
 
 interface PaddleState {
 	y: number;
@@ -39,6 +40,8 @@ let resizeObserver: ResizeObserver | null = null; // ✅ NEW
 
 function drawGame(state: GameState) {
 	if (!ctx || !canvas) return;
+
+	if (gameEnded) return;
 
 	const scaleX = canvas.width / SERVER_WIDTH;
 	const scaleY = canvas.height / SERVER_HEIGHT;
@@ -97,7 +100,7 @@ function handleResize(container: HTMLElement) {
 }
 
 function handleKeyDown(e: KeyboardEvent) {
-	if (!socket) return;
+	if (!socket || gameEnded) return;
 	const key = e.key.toLowerCase();
 	if (key === 'w') socket.emit('player_move', { playerId: 'player1', direction: 'up' });
 	if (key === 's') socket.emit('player_move', { playerId: 'player1', direction: 'down' });
@@ -128,6 +131,8 @@ function onResize() {
 function showGameOverScreen(winner: string) {
 	if (!canvas?.parentElement) return;
 
+	gameEnded = true; // stop drawing and movement
+
 	const	overlay = document.createElement('div');
 	overlay.className = 'game-overlay';
 
@@ -141,7 +146,12 @@ function showGameOverScreen(winner: string) {
 	const restartBtn = document.createElement('button');
 	restartBtn.textContent = "Restart game";
 	restartBtn.onclick = () => {
-		window.location.reload(); // Simple restart
+		if (socket) {
+			socket.emit('restart_game');
+			gameEnded = false; //Allow movement and drawing again
+			overlay.remove(); //Remove overlay from UI
+			canvas?.focus();
+		}
 };
 
 	const dashboardBtn = document.createElement('button');
@@ -158,13 +168,18 @@ function showGameOverScreen(winner: string) {
 	canvas.parentElement.appendChild(overlay);
 }
 
-
-
 export function renderGame(containerId: string = 'app') {
 	const container = document.getElementById(containerId);
 	if (!container) return;
 
 	container.innerHTML = '';
+	gameEnded = false;
+
+	// Show loading
+	const loading = document.createElement('div');
+	loading.textContent = 'Loading game...';
+	loading.className = 'game-loading';
+	container.appendChild(loading);
 
 	// Apply the container styling
 	container.className = 'game-container'
@@ -209,7 +224,15 @@ export function renderGame(containerId: string = 'app') {
 		console.error('WebSocket connection error:', err.message);
 	});
 
-	socket.on('connect', () => console.log('✅ Connected:', socket!.id));
+	// socket.on('connect', () => console.log('✅ Connected:', socket!.id));
+	socket.on('connect', () => {
+		console.log('✅ Connected:', socket!.id);
+	
+		//  Trigger a fresh game session
+		socket!.emit('restart_game');
+		gameEnded = false; // reset flag on reconnect
+	});
+
 	socket.on('disconnect', () => {
 		console.warn('🔌 Disconnected from server');
 		if (ctx && canvas) {
@@ -222,14 +245,17 @@ export function renderGame(containerId: string = 'app') {
 
 	// ✅ Ensure canvas is resized before every render
 	socket.on('state_update', (state: GameState) => {
+		const loading = document.querySelector(".game-loading");
+		if (loading) loading.remove();
+
 		if (canvas?.parentElement) handleResize(canvas.parentElement);
 		requestAnimationFrame(() => drawGame(state));
 
-		//Game ends at score 5
-		if (state.score.player1 >= 5 || state.score.player2 >= 5) {
+		//Game over logic
+		if (!gameEnded && (state.score.player1 >= 5 || state.score.player2 >= 5)) {
 			const winner = state.score.player1 >= 5 ? 'Player 1' : 'Player 2';
 			showGameOverScreen(winner);
-			socket?.disconnect(); // stop receving updates
+			gameEnded = true;
 		}
 	});
 }

@@ -1,203 +1,284 @@
-/* filepath: c:\Users\piero\Desktop\ft_trascendence\frontend\src\dashboard.css */
-
-/* --- Dashboard Page Styles --- */
-
 .dashboard-global-container {
-    position: relative;
-    /* background-image: url('/images/PS5.jpg'); */ /* Handled by main style.css */
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    min-height: 100vh;
+    position: fixed; /* Take full viewport */
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(22, 33, 62, 0.95); /* Dark blue transparent background (e.g., #16213e at 90% opacity) */
     display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem; /* p-4 */
-  }
-  
-  .dashboard-card-container {
-    position: relative;
+    padding: 0;
+    overflow: hidden; /* Prevent scrollbars on the body if content fits */
+}
+
+.dashboard-card-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: row; /* Sidebar on left, content on right */
+    background-color: transparent; /* Global container has the background */
+    box-shadow: none; /* Remove existing shadow */
+    border-radius: 0; /* No border radius for full page */
+    margin: 0;
+    padding: 0;
+}
+
+/* Media query for responsiveness (optional, current setup is mostly fluid) */
+@media (min-width: 768px) {
+    /* Styles for medium screens and up if needed, current flex layout is responsive */
+}
+
+.dashboard-sidebar {
+    flex: 0 0 260px; /* Fixed width for the sidebar, adjust as needed */
+    height: 100vh; /* Full viewport height */
+    padding: 1.5rem;
+    border-right: 1px solid rgba(255, 255, 255, 0.1); /* Lighter border for dark bg */
+    background-color: rgba(10, 20, 40, 0.5); /* Slightly different shade for sidebar, also transparent */
+    box-sizing: border-box;
+    overflow-y: auto; /* Allow scrolling if sidebar content exceeds height */
+    color: #e0e0e0; /* Light text color for dark background */
+    display: flex;
+    flex-direction: column; /* To allow logout button at bottom */
+}
+
+.dashboard-heading {
+    font-family: 'Courier New', Courier, monospace;
+    margin-bottom: 1.5rem;
+    font-size: 1.75rem;
+    line-height: 2rem;
+    font-weight: 700;
+    color: #ffffff; /* White heading */
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dashboard-nav {
     display: flex;
     flex-direction: column;
-    background-color: #fff;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); /* shadow-2xl */
-    border-radius: 1rem; /* rounded-2xl */
-    margin: 3rem; /* m-12 */
+    flex-grow: 1; /* Allows logout button to be pushed to the bottom */
+}
+
+.dashboard-nav > * + * {
+     margin-top: 0.5rem; /* Space between nav items */
+}
+
+.dashboard-nav-button {
     width: 100%;
-    max-width: 56rem; /* max-w-4xl */
-  }
-  
-  /* Styles for medium screens and up (md:) */
-  @media (min-width: 768px) {
-    .dashboard-card-container {
-      flex-direction: row;
-      margin: 0; /* md:m-0 */
-    }
-    .dashboard-sidebar {
-      width: 33.333333%; /* md:w-1/3 */
-    }
-    .dashboard-content-area {
-       width: 66.666667%; /* md:w-2/3 */
-    }
-    .dashboard-close-button {
-       background-color: #fff !important; /* md:bg-white */
-       top: 1rem !important; /* md:top-4 */
-    }
-  }
-  
-  .dashboard-sidebar {
-    width: 100%;
-    padding: 1.5rem; /* p-6 */
-    border-right: 1px solid #e5e7eb; /* border-r border-gray-200 */
-  }
-  @media (min-width: 768px) {
-    .dashboard-sidebar {
-      padding: 3rem; /* md:p-12 */
-    }
-  }
-  
-  .dashboard-heading {
-    font-family: 'Courier New', Courier, monospace; /* font-mono */
-    margin-bottom: 2rem; /* mb-8 */
-    font-size: 1.875rem; /* text-3xl */
-    line-height: 2.25rem;
-    font-weight: 700; /* font-bold */
-    color: #1f2937; /* text-gray-800 */
-  }
-  
-  .dashboard-nav {
-    /* space-y-4 equivalent */
-  }
-  .dashboard-nav > * + * {
-     margin-top: 1rem;
-  }
-  
-  .dashboard-nav-button {
-    width: 100%;
-    padding: 0.75rem; /* p-3 */
+    padding: 0.85rem 1rem;
     text-align: left;
-    border-radius: 0.375rem; /* rounded-md */
-    font-weight: 500; /* font-medium */
-    transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out; /* transition duration-150 */
-    color: #4b5563; /* text-gray-600 */
-    background-color: transparent; /* Default */
-    border: none;
-    cursor: pointer;
-    font-family: inherit; /* Ensure consistent font */
-    font-size: 1rem; /* Default button size */
-  }
-  .dashboard-nav-button:hover {
-    background-color: #f3f4f6; /* hover:bg-gray-100 */
-  }
-  .dashboard-nav-button.active {
-    background-color: #cffafe; /* bg-cyan-100 */
-    color: #155e75; /* text-cyan-800 */
-  }
-  
-  .dashboard-logout-button {
-    margin-top: 2rem; /* mt-8 */
-    width: 100%;
-    padding: 0.75rem; /* p-3 */
-    text-align: left;
-    border-radius: 0.375rem; /* rounded-md */
-    font-weight: 500; /* font-medium */
-    transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out; /* transition duration-150 */
-    color: #dc2626; /* text-red-600 */
+    border-radius: 0.375rem;
+    font-weight: 500;
+    transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
+    color: #d1d5db; /* Lighter gray for text */
     background-color: transparent;
     border: none;
     cursor: pointer;
     font-family: inherit;
-    font-size: 1rem;
-  }
-  .dashboard-logout-button:hover {
-    background-color: #fee2e2; /* hover:bg-red-50 */
-  }
-  
-  .dashboard-content-area {
+    font-size: 0.95rem;
+}
+.dashboard-nav-button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+.dashboard-nav-button.active {
+    background-color: rgba(79, 70, 229, 0.6); /* Example: Indigo, semi-transparent */
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.dashboard-logout-button {
+    margin-top: auto; /* Pushes to the bottom because .dashboard-nav is flex-grow: 1 */
+    padding-top: 1rem; /* Space above the logout button */
+    border-top: 1px solid rgba(255, 255, 255, 0.1); /* Separator line */
     width: 100%;
-    padding: 1.5rem; /* p-6 */
-    min-height: 30rem;
-    max-width: 100rem;
+    padding: 0.85rem 1rem; /* Consistent padding */
+    text-align: left;
+    border-radius: 0.375rem;
+    font-weight: 500;
+    transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
+    color: #fca5a5; /* Lighter red for logout text */
+    background-color: transparent;
+    border: none; /* Remove default button border */
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.95rem;
+}
+.dashboard-logout-button:hover {
+    background-color: rgba(239, 68, 68, 0.2); /* Light red hover background */
+    color: #fecaca; /* Even lighter red text on hover */
+}
+
+.dashboard-content-area {
+    flex-grow: 1; /* Takes remaining space */
+    height: 100vh; /* Full viewport height */
+    padding: 2rem;
+    box-sizing: border-box;
+    overflow-y: auto; /* Allow scrolling if content exceeds height */
+    color: #e0e0e0; /* Light text color for dark background */
+}
+
+.dashboard-content-heading {
+    font-size: 1.75rem;
+    line-height: 2rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    color: #ffffff;
+}
+
+.dashboard-content-paragraph {
+    color: #cccccc;
+    margin-bottom: 1rem;
+    line-height: 1.6;
+}
+
+.dashboard-content-subheading {
+        margin-top: 1.5rem;
+        margin-bottom: 0.75rem;
+        font-size: 1.1rem;
+        color: #e0e0e0;
+        font-weight: 600;
+    }
+
+    #predefinedAvatarsContainer {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px; /* Increased gap */
+        margin-bottom: 1rem;
+        padding: 5px; /* Padding around the container */
+    }
+
+    #predefinedAvatarsContainer > div { /* Styling for the wrapper div */
+        cursor: pointer;
+        padding: 3px; /* Padding around each image for the border effect */
+        border: 2px solid transparent;
+        border-radius: 50%; /* Circular border highlight */
+        transition: border-color 0.2s ease-in-out;
+    }
+
+    #predefinedAvatarsContainer > div:hover {
+        border-color: #06b6d4; /* Highlight color on hover */
+    }
+
+    #predefinedAvatarsContainer img {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        object-fit: cover;
+        display: block; /* Removes extra space below image */
+    }
+
+    #avatarUploadStatus {
+        min-height: 1.2em;
+        margin-top: 0.5rem;
+        font-size: 0.9rem;
+        color: #b0b0b0; /* Subdued color for status */
+    }
+
+
+
+
+
+/* Profile Details Specific Styles */
+.profile-details {
     display: flex;
     flex-direction: column;
-    justify-content: center;
-  }
-   @media (min-width: 768px) {
-    .dashboard-content-area {
-      padding: 3rem; /* md:p-12 */
-    }
-  }
-  
-  .dashboard-content-heading {
-    font-size: 1.5rem; /* text-2xl */
-    line-height: 2rem;
-    font-weight: 600; /* font-semibold */
-    margin-bottom: 1rem; /* mb-4 */
-    color: #374151; /* text-gray-700 */
-  }
-  
-  .dashboard-content-paragraph {
-    color: #4b5563; /* text-gray-600 */
-  }
-  
-  /* Specific button style for game section */
-  .dashboard-game-button {
-    margin-top: 1rem; /* mt-4 */
-    width: 100%;
+    gap: 1rem; /* Space between profile items */
+}
+
+.profile-avatar-container {
     display: flex;
+    flex-direction: column; /* Stack image and button vertically */
+    align-items: center; /* Center items horizontally */
+    margin-bottom: 1.5rem; /* Space below the avatar area */
+    gap: 0.75rem; /* Space between avatar and button */
+}
+
+.profile-avatar-img {
+    width: 120px; /* Adjust size as needed */
+    height: 120px; /* Adjust size as needed */
+    border-radius: 50%; /* Makes the image circular */
+    object-fit: cover; /* Ensures the image covers the area without distortion */
+    border: 3px solid rgba(255, 255, 255, 0.2); /* Optional: adds a subtle border */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Optional: adds a slight shadow */
+}
+
+/* Game buttons in content area */
+.dashboard-game-button {
+    margin-top: 1rem;
+    margin-right: 1rem; /* Space between buttons if they are inline */
+    width: auto;
+    min-width: 160px;
+    display: inline-flex;
     justify-content: center;
     align-items: center;
-    padding: 0.75rem; /* p-3 */
-    font-family: system-ui, sans-serif; /* font-sans */
-    font-weight: 700; /* font-bold */
-    color: #fff; /* text-white */
-    border-radius: 0.375rem; /* rounded-md */
-    background-color: #0e7490; /* bg-cyan-700 */
-    box-shadow: 0 4px 6px -1px rgba(16, 185, 216, 0.1), 0 2px 4px -1px rgba(16, 185, 216, 0.06); /* shadow-lg shadow-cyan-100 */
-    border: 1px solid transparent; /* border */
-    transition: all 0.15s ease-in-out; /* transition duration-150 */
+    padding: 0.75rem 1.5rem;
+    font-family: system-ui, sans-serif;
+    font-weight: 700;
+    color: #fff;
+    border-radius: 0.375rem;
+    background-color: #0891b2; /* Cyan color */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.12);
+    border: 1px solid transparent;
+    transition: all 0.15s ease-in-out;
     cursor: pointer;
-  }
-  .dashboard-game-button:hover {
-    background-color: rgba(14, 116, 144, 0.9); /* hover:bg-opacity-90 */
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05), 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-sm hover:shadow-lg */
-    transform: translateY(-0.125rem); /* hover:-translate-y-0.5 */
-  }
-  .dashboard-game-button span {
-    /* margin-right: 0.5rem; */ /* space-x-2 (applied via flex gap or margin) */
-  }
-  
-  
-  .dashboard-close-button {
-    position: absolute;
-    top: -1.25rem; /* -top-5 */
-    right: 1rem; /* right-4 */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.5rem; /* w-10 */
-    height: 2.5rem; /* h-10 */
-    background-color: #e5e7eb; /* bg-gray-200 */
-    border-radius: 9999px; /* rounded-full */
-    transition: all 0.15s ease-in-out; /* transition duration-150 */
-    cursor: pointer;
-  }
-  .dashboard-close-button:hover {
-    transform: translateY(-0.125rem); /* hover:-translate-y-0.5 */
-  }
-  .dashboard-close-button svg {
-    width: 1.5rem; /* w-6 */
-    height: 1.5rem; /* h-6 */
-    color: #000; /* text-black */
-    stroke-width: 1.5;
-    stroke: currentColor;
-    fill: none;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-  .dashboard-close-button:hover svg {
-     color: #4b5563; /* group-hover:text-gray-600 */
-  }
-  .dashboard-close-button svg path {
-     d: path("M6 18L18 6M6 6l12 12");
-  }
+}
+.dashboard-game-button:last-child {
+    margin-right: 0;
+}
+.dashboard-game-button:hover {
+    background-color: #06b6d4; /* Lighter cyan on hover */
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.1), 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+    transform: translateY(-0.125rem);
+}
+
+/* Avatar Modal Styles */
+.avatar-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000; /* Ensure it's on top */
+}
+
+.avatar-modal-content {
+  background-color: #2c2f33; /* Dark theme background */
+  padding: 25px;
+  border-radius: 8px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+  width: auto;
+  max-width: 500px;
+  color: #e0e0e0; /* Light text for dark background */
+}
+
+.avatar-modal-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.avatar-modal-option img:hover {
+  outline: 3px solid #06b6d4; /* Highlight on hover */
+  opacity: 0.8;
+}
+
+.avatar-modal-close-button {
+  display: block;
+  margin: 10px auto 0;
+  padding: 10px 20px;
+  background-color: #7289da; /* Discord-like button color */
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.avatar-modal-close-button:hover {
+  background-color: #5f73bc;
+}

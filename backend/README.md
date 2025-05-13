@@ -27,3 +27,5 @@ got to backend
 
 
 docker exec -it <frontend-container-id> sh
+
+docker-compose up --build
