@@ -125,6 +125,41 @@ function onResize() {
 	}
 }
 
+function showGameOverScreen(winner: string) {
+	if (!canvas?.parentElement) return;
+
+	const	overlay = document.createElement('div');
+	overlay.className = 'game-overlay';
+
+	const message = document.createElement('div');
+	message.className = 'game-message';
+	message.textContent = `${winner} wins!`;
+
+	const buttons = document.createElement('div');
+	buttons.className = 'game-buttons';
+
+	const restartBtn = document.createElement('button');
+	restartBtn.textContent = "Restart game";
+	restartBtn.onclick = () => {
+		window.location.reload(); // Simple restart
+};
+
+	const dashboardBtn = document.createElement('button');
+	dashboardBtn.textContent = 'Back to Dashboard';
+	dashboardBtn.onclick = () => {
+		window.location.href = '/dashboard'; // route of the dashboard
+	};
+
+	buttons.appendChild(restartBtn);
+	buttons.appendChild(dashboardBtn);
+
+	overlay.appendChild(message);
+	overlay.appendChild(buttons);
+	canvas.parentElement.appendChild(overlay);
+}
+
+
+
 export function renderGame(containerId: string = 'app') {
 	const container = document.getElementById(containerId);
 	if (!container) return;
@@ -189,5 +224,12 @@ export function renderGame(containerId: string = 'app') {
 	socket.on('state_update', (state: GameState) => {
 		if (canvas?.parentElement) handleResize(canvas.parentElement);
 		requestAnimationFrame(() => drawGame(state));
+
+		//Game ends at score 5
+		if (state.score.player1 >= 5 || state.score.player2 >= 5) {
+			const winner = state.score.player1 >= 5 ? 'Player 1' : 'Player 2';
+			showGameOverScreen(winner);
+			socket?.disconnect(); // stop receving updates
+		}
 	});
 }
