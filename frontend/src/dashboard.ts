@@ -1,24 +1,33 @@
 import './dashboard.css';
 import { navigateTo } from './main'
-import { io } from "socket.io-client";
-//
+// import { io } from "socket.io-client";
+import { getSocket } from "./socketManager";
+
 //
 export function renderDashboard() {
     // -----------------test- socket---------------------
     // Add the Socket.IO script to the head
-    const socket = io("https://127.0.0.1:3000");
+    // const socket = io("https://127.0.0.1:3000");
+    //
+    // socket.on('connect', () => {
+    //     console.log('Connected to server:', socket.id);
+    //
+    //     socket.emit('register_user');
+    // });
 
-    socket.on('connect', () => {
-        console.log('Connected to server:', socket.id);
+  const socket = getSocket();
 
-        socket.emit('register_user');
-    });
+  socket.on('connect', () => {
+      console.log('Connected to server:', socket.id);
+
+      socket.emit('register_user');
+  });
 
 
-    // // -----------------test- socket---------------------
+  // // -----------------test- socket---------------------
 
 
-    const appElement = document.querySelector<HTMLDivElement>('#app');
+  const appElement = document.querySelector<HTMLDivElement>('#app');
   if (!appElement) {
     throw new Error('App root element (#app) not found!');
   }
