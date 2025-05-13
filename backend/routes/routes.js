@@ -1,9 +1,10 @@
-
 const path = require('path');
 const DB = require('../data_controller/dbConfig.js');
 const hashPassword = require('../crypto/crypto.js');
 const {exchangeCodeForToken, fetchUserInfo} = require('../token_google/exchangeToken.js')
 const jwt = require('jsonwebtoken');
+const fs = require('node:fs').promises; // For async file operations
+const crypto = require('node:crypto'); // For generating unique filenames
 
 // IMPORTANT: Store your secret in an environment variable in a real application!
 const JWT_SECRET = process.env.JWT_SECRET || 'hbj2io4@@#!v7946h3&^*2cn9!@09*@B627B^*N39&^847,1';
@@ -86,7 +87,7 @@ const credentialsRoutes = (app) =>{
       const userProfile = {
         username: user.username,
         email: user.email,
-        avatar: user.avatar ? user.avatar.toString('base64') : null // Send avatar as base64
+        avatar: user.avatar_path || null // Send avatar path
       };
 
       reply.send(userProfile); // Send profile data as JSON
@@ -119,38 +120,36 @@ const credentialsRoutes = (app) =>{
       return reply.status(401).send({ error: 'Unauthorized: Invalid token payload' });
     }
 
-    console.log('--- Avatar Upload Request ---');
-    console.log('Request Headers:', JSON.stringify(req.headers, null, 2));
-
-    const data = await req.file(); // From @fastify/multipart
-    console.log('Data from req.file():', data); // Log what req.file() returns
-
+    const data = await req.file();
 
     if (!data || !data.file) {
-      console.error('Condition failed: !data || !data.file. Data was:', data);
       return reply.status(400).send({ error: 'No file uploaded or invalid format.' });
     }
 
-    // Basic MIME type check (can be more robust)
-    console.log('Uploaded file mimetype:', data.mimetype);
     if (!['image/jpeg', 'image/png', 'image/gif'].includes(data.mimetype)) {
-        return reply.status(400).send({ error: 'Invalid file type. Only JPG, PNG, GIF allowed.' });
+      return reply.status(400).send({ error: 'Invalid file type. Only JPG, PNG, GIF allowed.' });
     }
 
     try {
-      const buffer = await data.toBuffer(); // Get file content as a buffer
+      const buffer = await data.toBuffer();
+      const fileExtension = path.extname(data.filename) || `.${data.mimetype.split('/')[1]}`;
+      const uniqueFilename = `${userId}_${crypto.randomBytes(8).toString('hex')}${fileExtension}`;
+      const avatarFilePath = path.join(__dirname, '..', '..', 'uploads', 'avatars', uniqueFilename); // Adjusted path
+      const avatarUrlPath = `/uploads/avatars/${uniqueFilename}`; // Path to be stored in DB and used by frontend
+
+      await fs.writeFile(avatarFilePath, buffer);
 
       await DB('credentialsTable')
         .where({ id: userId })
-        .update({ avatar: buffer });
-        console.log('Avatar updated in DB for userId:', userId);
+        .update({ avatar_path: avatarUrlPath }); // Store the URL path
 
+      console.log('Avatar path updated in DB for userId:', userId, 'to', avatarUrlPath);
 
-      reply.send({ success: true, message: 'Avatar uploaded successfully.', avatar: buffer.toString('base64') });
+      reply.send({ success: true, message: 'Avatar uploaded successfully.', avatarPath: avatarUrlPath }); // Send the path back
     } catch (error) {
       console.error('Error uploading avatar:', error);
-      if (error.message.includes('Request file too large')) { // Example for specific error
-        return reply.status(413).send({ error: 'File too large.' });
+      if (error.code === 'FST_REQ_FILE_TOO_LARGE') {
+        return reply.status(413).send({ error: 'File too large. Maximum size is 5MB.' });
       }
       reply.status(500).send({ error: 'Failed to upload avatar.' });
     }

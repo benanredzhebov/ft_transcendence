@@ -83,7 +83,7 @@ function renderWelcome(): (() => void) | void {
    
   // Google logo
   const googleLogo = document.createElement('img');
-  googleLogo.src = '/images/google.jpg'; // Assuming google.jpg is in public/images
+  googleLogo.src = '/google.jpg'; // Assuming google.jpg is in public/images
   googleLogo.style.height = '30px'; // Set a fixed, smaller height for the logo
   googleLogo.style.width = '30px';  // Set a fixed, smaller width for the logo
   googleLogo.style.verticalAlign = 'center';
