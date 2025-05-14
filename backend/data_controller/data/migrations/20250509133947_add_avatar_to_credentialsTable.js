@@ -4,8 +4,8 @@
  */
 exports.up = async (knex) => {
     await knex.schema.alterTable('credentialsTable', (table) => {
-      // table.dropColumn('avatar'); // If changing from existing binary, uncomment if needed
-      table.string('avatar_path'); // Store the path as a string
+      // table.dropColumn('avatar');
+      table.string('avatar_path');
     });
   };
   
@@ -16,6 +16,6 @@ exports.up = async (knex) => {
   exports.down = async (knex) => {
     await knex.schema.alterTable('credentialsTable', (table) => {
       table.dropColumn('avatar_path');
-      // table.binary('avatar'); // If reverting
+      // table.binary('avatar');
     });
   };

@@ -1,7 +1,7 @@
 const path = require('path');
 const DB = require('../data_controller/dbConfig.js');
 const hashPassword = require('../crypto/crypto.js');
-const {exchangeCodeForToken, fetchUserInfo} = require('../token_google/exchangeToken.js')
+const {exchangeCodeForToken, fetchUserInfo} = require('../token_google/exchangeToken.js');
 const jwt = require('jsonwebtoken');
 const fs = require('node:fs').promises; // For async file operations
 const crypto = require('node:crypto'); // For generating unique filenames
@@ -224,32 +224,55 @@ const credentialsRoutes = (app) =>{
 
 
   app.get('/username-google', async (req, reply) => {
-    const { code } = req.query; // Extract the authozation code from the query parameters
+    const { code } = req.query;
 
     if (!code) {
-      reply.status(400).send({ error: 'Authorization code is missing' });
-      return;
+      return reply.redirect('/login?error=google_auth_missing_code');
     }
 
     try {
-      // Exchange the authorization code for an access token (implement this logic)
       const tokenResponse = await exchangeCodeForToken(code);
-      const userInfo = await fetchUserInfo(tokenResponse.access_token);
-      const {email, name} = userInfo;
-      const existingUser = await DB('credentialsTable').where({ email }).first();
-      if (!existingUser) {
-        const username = name;
-        let passwordBeforeHas = '##';
-      const password = hashPassword(passwordBeforeHas);
-        const [id] =  await DB('credentialsTable').insert({ email, username, password });
-        const user = { id, email, username };
-
+      if (!tokenResponse || !tokenResponse.access_token) {
+        console.error('Failed to exchange code for token or access_token missing:', tokenResponse);
+        return reply.redirect('/login?error=google_token_exchange_failed');
       }
-      reply.redirect('/dashboard');
+      const userInfo = await fetchUserInfo(tokenResponse.access_token);
+      if (!userInfo || !userInfo.email) {
+        console.error('Failed to fetch user info from Google or email missing:', userInfo);
+        return reply.redirect('/login?error=google_user_info_failed');
+      }
+
+      const {email, name} = userInfo;
+      let user = await DB('credentialsTable').where({ email }).first();
+
+      if (!user) {
+        const username = name || `user_${Date.now()}`; // Use Google name or a fallback
+        // For Google-authenticated users, you might use a placeholder password
+        // or a flag indicating Google auth, as they won't use this password to log in.
+        const placeholderPassword = hashPassword(`google_auth_${email}_${Date.now()}`);
+        const [id] =  await DB('credentialsTable').insert({
+            email,
+            username,
+            password: placeholderPassword
+            // Consider adding a field like 'auth_provider' and set it to 'google'
+        });
+        user = { id, email, username }; // Use the newly created user's details
+      }
+
+      // Generate JWT token for the user
+      const tokenPayload = {
+        userId: user.id,
+        email: user.email,
+        username: user.username
+      };
+      const jwtAuthToken = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '1h' });
+
+      reply.redirect(`/google-auth-handler?token=${jwtAuthToken}`);
 
     } catch (e) {
-      console.error(e);
-      reply.status(500).send({ error: 'Failed to handle Google OAuth callback' });
+      console.error('Error during Google OAuth callback:', e);
+      // Redirect to frontend login with a generic error
+      reply.redirect('/login?error=google_auth_failed');
     }
   });
 }
