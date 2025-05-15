@@ -282,3 +282,36 @@
 .avatar-modal-close-button:hover {
   background-color: #5f73bc;
 }
+
+/* Online Users Section */
+.dashboard-online-users {
+  margin-top: 20px;
+  padding: 15px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+}
+
+.dashboard-online-users h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 1.1em;
+  color: #333;
+}
+
+.dashboard-online-users ul {
+  list-style-type: none;
+  padding-left: 0;
+  margin-bottom: 0;
+}
+
+.dashboard-online-users li {
+  padding: 4px 0;
+  font-size: 0.95em;
+  color: #555;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.dashboard-online-users li:last-child {
+  border-bottom: none;
+}

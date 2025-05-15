@@ -5,6 +5,8 @@ import { renderDashboard } from './dashboard';
 import { renderGame } from './game';
 import getGoogleAuth from './GetGoogleAuth';
 import { renderGoogle } from './google';
+import { connectSocket } from './socketManager';
+
 
 // --- DOM ---
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -36,6 +38,7 @@ function handleGoogleAuthToken(): (() => void) | void {
   if (token) {
     localStorage.setItem('authToken', token);
     console.log('Google Auth Token stored successfully.');
+    connectSocket(token); // Connect socket after Google Auth
     navigateTo('/dashboard');
   } else if (error) {
     console.error('Google authentication failed:', error);

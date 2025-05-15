@@ -1,13 +1,19 @@
 import './dashboard.css';
 import { navigateTo } from './main';
+import { disconnectSocket, getSocket } from './socketManager'; // Import getSocket
 
 // Define predefined avatars (can be at module scope if preferred)
 const PREDEFINED_AVATARS = [
   '/avatars/girl.png',
   '/avatars/boy.png',
-	'/avatars/gojo.png',
-	'/avatars/luffy.png'
+  '/avatars/gojo.png',
+  '/avatars/luffy.png'
 ];
+
+// Module-level variable to hold the listener function and UI element for online users
+let onlineUsersUpdateListener: ((users: { username: string }[]) => void) | null = null;
+let onlineUsersListContainer: HTMLDivElement | null = null;
+let onSocketConnectForDashboardListener: (() => void) | null = null; // New variable
 
 export function renderDashboard() {
   const appElement = document.querySelector<HTMLDivElement>('#app');
@@ -69,10 +75,9 @@ export function renderDashboard() {
   nav.appendChild(profileButton);
   nav.appendChild(gameButton);
   nav.appendChild(chatButton);
-  nav.appendChild(logoutButton); // Add logout button to nav
-
   sidebar.appendChild(sidebarHeading);
   sidebar.appendChild(nav);
+  nav.appendChild(logoutButton);
 
   // --- Assemble Card ---
   cardContainer.appendChild(sidebar);
@@ -100,10 +105,39 @@ export function renderDashboard() {
   // Logout button
   logoutButton.addEventListener('click', () => {
     localStorage.removeItem('authToken');
+    disconnectSocket(); // Disconnect the socket on logout
+    // Clean up dashboard-specific listeners if any were global to the dashboard itself
+    const currentSocket = getSocket();
+    if (currentSocket && onlineUsersUpdateListener) {
+      currentSocket.off('online_users_update', onlineUsersUpdateListener);
+      onlineUsersUpdateListener = null;
+    }
+    if (currentSocket && onSocketConnectForDashboardListener) {
+      currentSocket.off('connect', onSocketConnectForDashboardListener);
+      onSocketConnectForDashboardListener = null;
+    }
+    if (onlineUsersListContainer) {
+      onlineUsersListContainer.remove();
+      onlineUsersListContainer = null;
+    }
     navigateTo('/');
   });
 
   // --- Initial View ---
+  // Cleanup any listeners from a potential previous full render of the dashboard.
+  const currentSocketOnInitialLoad = getSocket();
+  if (currentSocketOnInitialLoad && onlineUsersUpdateListener) {
+    currentSocketOnInitialLoad.off('online_users_update', onlineUsersUpdateListener);
+    onlineUsersUpdateListener = null;
+  }
+  if (currentSocketOnInitialLoad && onSocketConnectForDashboardListener) {
+    currentSocketOnInitialLoad.off('connect', onSocketConnectForDashboardListener);
+    onSocketConnectForDashboardListener = null;
+  }
+  if (onlineUsersListContainer) {
+    onlineUsersListContainer.remove();
+    onlineUsersListContainer = null;
+  }
   setActiveView('profile', navButtons, contentArea); // Set initial view to profile
 }
 
@@ -219,8 +253,25 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
     }
   });
 
+  // --- Cleanup listener and UI from previous 'game' view ---
+  const currentSocket = getSocket();
+  if (onlineUsersUpdateListener && currentSocket) {
+    currentSocket.off('online_users_update', onlineUsersUpdateListener);
+    onlineUsersUpdateListener = null;
+    console.log("Removed previous online_users_update listener from dashboard.");
+  }
+  if (onSocketConnectForDashboardListener && currentSocket) { // Cleanup the new listener
+    currentSocket.off('connect', onSocketConnectForDashboardListener);
+    onSocketConnectForDashboardListener = null;
+    console.log("Removed previous onSocketConnectForDashboardListener from dashboard.");
+  }
+  if (onlineUsersListContainer) {
+    onlineUsersListContainer.remove();
+    onlineUsersListContainer = null;
+  }
+
   // Update content area
-  contentArea.innerHTML = '';
+  contentArea.innerHTML = ''; // Clear previous content
   switch (view) {
     case 'profile':
       contentArea.innerHTML = `<h3 class="dashboard-content-heading">Profile</h3><p class="dashboard-content-paragraph">Loading profile...</p>`; // Show loading state
@@ -296,22 +347,89 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
       const gameContent = document.createElement('div');
       gameContent.innerHTML = `
         <h3 class="dashboard-content-heading">Game</h3>
-        <p class="dashboard-content-paragraph">Matchmaking with online players.</p>
+        <p class="dashboard-content-paragraph">Ready to play or see who is online.</p>
       `;
       // Online Match Button
       const onlineButton = document.createElement('button');
       onlineButton.className = "dashboard-game-button";
-      onlineButton.innerHTML = `<span>Online Match</span>`;
+      onlineButton.innerHTML = `<span>Play Online Match</span>`;
       onlineButton.addEventListener('click', () => navigateTo('/game'));
       gameContent.appendChild(onlineButton);
 
       // Local Match Button
       const localButton = document.createElement('button');
       localButton.className = "dashboard-game-button";
-      localButton.innerHTML = `<span>Local Match</span>`;
-      localButton.addEventListener('click', () => navigateTo('/game')); // Or a different route/logic for local
+      localButton.innerHTML = `<span>Play Local Match</span>`;
+      localButton.addEventListener('click', () => navigateTo('/game')); // Adjust if local game has a different route
       gameContent.appendChild(localButton);
+
+      onlineUsersListContainer = document.createElement('div');
+      onlineUsersListContainer.className = 'dashboard-online-users';
+      onlineUsersListContainer.innerHTML = '<h4>Online Users:</h4><ul><li>Loading...</li></ul>';
+      gameContent.appendChild(onlineUsersListContainer);
       contentArea.appendChild(gameContent);
+
+      const socket = getSocket(); // Get socket instance
+
+      if (socket) {
+        console.log(`Dashboard 'game' view: Socket ID: ${socket.id}, Connected: ${socket.connected}`);
+
+        onlineUsersUpdateListener = (users: { username: string }[]) => {
+          if (!onlineUsersListContainer) return;
+          console.log('Dashboard received online_users_update:', users);
+          const ul = document.createElement('ul');
+          if (users.length === 0) {
+            const li = document.createElement('li');
+            li.textContent = 'No users currently online.';
+            ul.appendChild(li);
+          } else {
+            users.forEach(user => {
+              const li = document.createElement('li');
+              li.textContent = user.username;
+              ul.appendChild(li);
+            });
+          }
+          const heading = onlineUsersListContainer.querySelector('h4');
+          onlineUsersListContainer.innerHTML = '';
+          if (heading) onlineUsersListContainer.appendChild(heading);
+          onlineUsersListContainer.appendChild(ul);
+        };
+
+        const setupOnlineUsersListener = () => {
+          if (socket && onlineUsersUpdateListener && !socket.hasListeners('online_users_update')) {
+            socket.on('online_users_update', onlineUsersUpdateListener);
+            console.log("Attached online_users_update listener for dashboard game view.");
+            // Your backend already emits the list when a new user connects,
+            // so an explicit request here might be redundant but can be added if needed:
+            // socket.emit('get_initial_online_users');
+          }
+        };
+
+        if (socket.connected) {
+          setupOnlineUsersListener();
+        } else {
+          if (onlineUsersListContainer) {
+            onlineUsersListContainer.innerHTML = '<h4>Online Users:</h4><ul><li>Socket connecting...</li></ul>';
+          }
+          console.warn("Dashboard 'game' view: Socket not connected. Setting up listener for 'connect' event.");
+          
+          onSocketConnectForDashboardListener = () => {
+            console.log("Dashboard 'game' view: Socket connected via onSocketConnectForDashboardListener. Setting up online users listener.");
+            setupOnlineUsersListener();
+            // Clean up this specific one-time connect listener
+            if (socket && onSocketConnectForDashboardListener) {
+              socket.off('connect', onSocketConnectForDashboardListener);
+              onSocketConnectForDashboardListener = null;
+            }
+          };
+          socket.on('connect', onSocketConnectForDashboardListener);
+        }
+      } else {
+        if (onlineUsersListContainer) {
+          onlineUsersListContainer.innerHTML = '<h4>Online Users:</h4><ul><li>Socket not available.</li></ul>';
+        }
+        console.error("Dashboard 'game' view: Socket instance not available.");
+      }
       break;
     case 'chat':
       contentArea.innerHTML = `

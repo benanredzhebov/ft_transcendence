@@ -1,13 +1,16 @@
-const fs = require('node:fs'); // Ensure fs is imported
-const path = require('node:path'); // Ensure path is imported
+const fs = require('node:fs');
+const path = require('node:path');
 const fastify = require('fastify');
 const fastifyStatic = require('@fastify/static');
 const fastifyFormbody = require('@fastify/formbody');
 const fastifyCors = require('@fastify/cors');
 const multipart = require('@fastify/multipart');
 const { Server } = require('socket.io');
+const jwt = require('jsonwebtoken');
 
 const GameEngine = require('./gamelogic/GameEngine.js');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'hbj2io4@@#!v7946h3&^*2cn9!@09*@B627B^*N39&^847,1'; // Ensure this is defined and matches
 
 // routes
 const {developerRoutes, credentialsRoutes,noHandlerRoute} = require('./routes/routes'); // Import the routes
@@ -38,20 +41,61 @@ const io = new Server(server, {
   cors: { origin: '*' }, // Allow all origins for Socket.IO
 });
 
-// ***** Game Logic (WebSocket + Game Loop)*******
 const game = new GameEngine();
+const onlineUsers = new Map(); // <userId, { username: string }>
 
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
+  console.log('Client attempting to connect:', socket.id);
+
+  const token = socket.handshake.auth.token;
+  let decodedTokenPayload;
+
+  if (token) {
+    try {
+      decodedTokenPayload = jwt.verify(token, JWT_SECRET);
+      socket.userId = decodedTokenPayload.userId;
+      socket.username = decodedTokenPayload.username; // Assuming username is in token
+      console.log(`Socket ${socket.id} authenticated for user ${socket.userId} (Username: ${socket.username})`);
+
+      // Add user to the list of online users
+      if (socket.userId && socket.username) {
+        onlineUsers.set(socket.userId, { username: socket.username });
+        // Emit the updated list to all connected clients
+        io.emit('online_users_update', Array.from(onlineUsers.values()));
+        console.log('Online users:', Array.from(onlineUsers.values()));
+      }
+
+    } catch (err) {
+      console.log(`Socket ${socket.id} authentication failed: Invalid token.`, err.message);
+      socket.disconnect(true);
+      return;
+    }
+  } else {
+    console.log(`Socket ${socket.id} connection attempt without token. Disconnecting.`);
+    socket.disconnect(true);
+    return;
+  }
 
   socket.on('player_move', ({ playerId, direction }) => {
+    if (!socket.userId) {
+      console.log(`Player move event from unauthenticated/unassociated socket ${socket.id}`);
+      return; 
+    }
+    // Add validation if needed: e.g., ensure socket.userId matches the user controlling playerId
+    console.log(`Player move from ${socket.username} (ID: ${socket.userId}): ${playerId} -> ${direction}`);
     game.handlePlayerInput(playerId, direction);
   });
 
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-    // Handle player disconnection in the game engine if necessary
-    // game.removePlayer(socket.id);
+  socket.on('disconnect', (reason) => {
+    console.log(`Client disconnected: ${socket.id}, User: ${socket.username || 'N/A'}, Reason: ${reason}`);
+    // Remove user from the list of online users
+    if (socket.userId) {
+      onlineUsers.delete(socket.userId);
+      // Emit the updated list to all connected clients
+      io.emit('online_users_update', Array.from(onlineUsers.values()));
+      console.log('Online users after disconnect:', Array.from(onlineUsers.values()));
+    }
+    // game.removePlayer(socket.id); // Or based on socket.userId if your game engine uses it
   });
 });
 

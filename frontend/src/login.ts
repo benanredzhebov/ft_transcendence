@@ -267,8 +267,10 @@
 //   };
 
  
-import './login.css'; // Import the CSS file
+import './login.css';
 import { navigateTo } from './main';
+import { connectSocket } from './socketManager';
+
 
 
 export function renderLogin() {
@@ -459,6 +461,7 @@ function addLoginFormListeners() {
 			if (data.token) {
 			  localStorage.setItem('authToken', data.token);
         console.log('Token sent after Login!', data);
+        connectSocket(data.token); // Connect the socket
 			} else {
 			  console.warn('No token received from login endpoint.');
 			}
