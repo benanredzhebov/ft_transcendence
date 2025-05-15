@@ -12,7 +12,9 @@
 
 import './game.css';
 import { io, Socket } from 'socket.io-client';
+
 let gameEnded = false;
+let pressedKeys = new Set<string>(); // Set to track currently pressed keys and handle movement using a game loop
 
 interface PaddleState {
 	y: number;
@@ -99,14 +101,25 @@ function handleResize(container: HTMLElement) {
 	canvas.height = newHeight;
 }
 
-function handleKeyDown(e: KeyboardEvent) {
+function movePlayers() {
 	if (!socket || gameEnded) return;
-	const key = e.key.toLowerCase();
-	if (key === 'w') socket.emit('player_move', { playerId: 'player1', direction: 'up' });
-	if (key === 's') socket.emit('player_move', { playerId: 'player1', direction: 'down' });
-	if (key === 'arrowup') socket.emit('player_move', { playerId: 'player2', direction: 'up' });
-	if (key === 'arrowdown') socket.emit('player_move', { playerId: 'player2', direction: 'down' });
+	if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
+	if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
+	if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
+	if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
+
+	requestAnimationFrame(movePlayers); //Movement is updated in sync with the game loop 
 }
+
+function handleKeyDown(e: KeyboardEvent) {
+	if (gameEnded) return;
+	pressedKeys.add(e.key.toLowerCase());
+}
+
+function handleKeyUp(e: KeyboardEvent) {
+	pressedKeys.delete(e.key.toLowerCase());
+}
+
 
 function cleanupGame() {
 	if (socket) {
@@ -120,6 +133,7 @@ function cleanupGame() {
 	document.removeEventListener('visibilitychange', onResize); // ✅ CLEANUP
 	resizeObserver?.disconnect(); // ✅ CLEANUP ResizeObserver
 	resizeObserver = null;
+	pressedKeys.clear(); // clear key state
 }
 
 function onResize() {
@@ -212,6 +226,7 @@ export function renderGame(containerId: string = 'app') {
 	}
 
 	window.addEventListener('keydown', handleKeyDown);
+	window.addEventListener('keyup', handleKeyUp);
 	window.addEventListener('beforeunload', cleanupGame);
 
 	socket = io('https://127.0.0.1:3000', {
@@ -231,6 +246,7 @@ export function renderGame(containerId: string = 'app') {
 		//  Trigger a fresh game session
 		socket!.emit('restart_game');
 		gameEnded = false; // reset flag on reconnect
+		movePlayers(); //starting the paddle movement after connection is ready
 	});
 
 	socket.on('disconnect', () => {
