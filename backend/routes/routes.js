@@ -2,7 +2,7 @@ const path = require('path');
 const DB = require('../data_controller/dbConfig.js');
 const hashPassword = require('../crypto/crypto.js');
 const {exchangeCodeForToken, fetchUserInfo} = require('../token_google/exchangeToken.js')
-const jwt = require('jsonwebtoken');
+const jwt = require('jsonwebtoken'); 
 const fs = require('node:fs').promises; // For async file operations
 const crypto = require('node:crypto'); // For generating unique filenames
 

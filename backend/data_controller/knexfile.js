@@ -5,7 +5,7 @@ const config = {
   development: {
     client: 'sqlite3',
     connection: {
-      filename: './data_controller/data/myData.db',
+      filename: './data_controller/data/myData.db', //SQLite database file  
     },
     migrations: {
       directory: './data/migrations', // where you declare the tables

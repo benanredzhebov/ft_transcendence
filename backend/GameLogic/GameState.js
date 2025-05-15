@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   GameState.js                                       :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
+/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:27:35 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/09 11:01:59 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/05/15 16:00:48 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,7 +14,7 @@ class GameState {
 	constructor() {
 		this.width = 900;
 		this.height = 600;
-		this.paddleSpeed = 30;
+		this.paddleSpeed = 20;
 
 		this.paddles = {
 			player1: { y: 250, height: 100, width: 10 },
