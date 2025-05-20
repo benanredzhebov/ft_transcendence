@@ -6,7 +6,7 @@
 /*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/13 20:15:35 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/05/19 17:44:17 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -20,7 +20,8 @@ import multipart from '@fastify/multipart'
 import fastifyFormbody from '@fastify/formbody';
 import fastifyCors from '@fastify/cors';
 import { Server } from 'socket.io';
-import GameEngine from './GameLogic/GameEngine.js'; 
+import GameEngine from './GameLogic/GameEngine.js';
+import Tournament from './GameLogic/Tournament.js';
 import hashPassword from './crypto/crypto.js';
 import DB from './data_controller/dbConfig.js';
 
@@ -73,6 +74,7 @@ const io = new Server(server, {
 
 // ***** Game Logic (WebSocket + Game Loop)*******
 const game = new GameEngine();
+const tournament = new Tournament();
 
 io.on('connection', (socket) => {
 	console.log('Client connected:', socket.id);
@@ -82,16 +84,38 @@ io.on('connection', (socket) => {
 		game.handlePlayerInput(playerId, direction);
 	});
 
-	socket.on('disconnect', () => {
+	socket.on('restart_game', () => {
+		game.state.resetGame(); // Resets the score , ball paddles	
+		io.emit('state_update', game.getState()); // Push to all clients
+	});
+
+	// *** Tournament Logic *** //
+	socket.on('register_alias', (alias) => {
+		const success = tournament.registerPlayer(alias);
+		socket.emit('alias_registered', {success});
+	});
+	
+	socket.on('start_tournament', () => {
+		tournament.generateMatches();
+		const current = tournament.currentMatch;
+		io.emit('match_announcement', current);
+	});
+
+	socket.on('match_ended', () => {
+		const next = tournament.nextMatch();
+		if (next) {
+			io.emit('match_announcement', next);
+		} else {
+			io.emit('tournament_over');
+		}
+	});
+
+		socket.on('disconnect', () => {
 		console.log('Client disconnected:', socket.id);
 		// Handle player disconnection in the game engine if necessary
 		// game.removePlayer(socket.id);
 	});
 
-	socket.on('restart_game', () => {
-		game.state.resetGame(); // Resets the score , ball paddles	
-		io.emit('state_update', game.getState()); // Push to all clients
-	});
 });
 
 // Game loop
