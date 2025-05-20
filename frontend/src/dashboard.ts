@@ -298,6 +298,15 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
         <h3 class="dashboard-content-heading">Game</h3>
         <p class="dashboard-content-paragraph">Matchmaking with online players.</p>
       `;
+      // Tournament Mode button
+      const tournamentBtn = document.createElement('button');
+      tournamentBtn.className = "dashboard-game-button";
+      tournamentBtn.innerHTML = `<span>Tournament Mode</span>`;
+      tournamentBtn.onclick = () => {
+	      navigateTo('/game?tournament=true'); // it will trigger tournament flow from game.ts
+      };
+      gameContent.appendChild(tournamentBtn);
+
       // Online Match Button
       const onlineButton = document.createElement('button');
       onlineButton.className = "dashboard-game-button";

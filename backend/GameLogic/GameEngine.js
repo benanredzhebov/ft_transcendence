@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   GameEngine.js                                      :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
+/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:28:07 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/06 14:54:39 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/05/19 17:09:26 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 

@@ -15,6 +15,7 @@ import { io, Socket } from 'socket.io-client';
 
 let gameEnded = false;
 let pressedKeys = new Set<string>(); // Set to track currently pressed keys and handle movement using a game loop
+let inTournament = false;
 
 interface PaddleState {
 	y: number;
@@ -44,6 +45,8 @@ function drawGame(state: GameState) {
 	if (!ctx || !canvas) return;
 
 	if (gameEnded) return;
+	
+	if (inTournament) return;
 
 	const scaleX = canvas.width / SERVER_WIDTH;
 	const scaleY = canvas.height / SERVER_HEIGHT;
@@ -157,6 +160,12 @@ function showGameOverScreen(winner: string) {
 	const buttons = document.createElement('div');
 	buttons.className = 'game-buttons';
 
+	const startBtn = document.createElement('button');
+	startBtn.textContent = "Start Tournament";
+	startBtn.onclick = () => {
+		promptAliasRegistration();
+	}
+
 	const restartBtn = document.createElement('button');
 	restartBtn.textContent = "Restart game";
 	restartBtn.onclick = () => {
@@ -180,6 +189,25 @@ function showGameOverScreen(winner: string) {
 	overlay.appendChild(message);
 	overlay.appendChild(buttons);
 	canvas.parentElement.appendChild(overlay);
+}
+
+//Alias registration and listening for the tournaments
+function promptAliasRegistration() {
+	const alias = prompt("Enter your tournament alias:");
+	if (!alias) return;
+
+	socket?.emit('register_alias', alias);
+
+	socket?.once('alias_registered', ({ success }) => {
+		if (success) {
+			inTournament = true;
+			alert("Alias registered successfully!");
+			socket?.emit('start_tournament'); // Start only if alias is accepted
+		} else {
+			alert("Alias already taken. Try a different one.");
+			promptAliasRegistration(); // Retry
+		}
+	});
 }
 
 export function renderGame(containerId: string = 'app') {
@@ -239,7 +267,7 @@ export function renderGame(containerId: string = 'app') {
 		console.error('WebSocket connection error:', err.message);
 	});
 
-	// socket.on('connect', () => console.log('✅ Connected:', socket!.id));
+	// Socket connect block
 	socket.on('connect', () => {
 		console.log('✅ Connected:', socket!.id);
 	
@@ -247,6 +275,13 @@ export function renderGame(containerId: string = 'app') {
 		socket!.emit('restart_game');
 		gameEnded = false; // reset flag on reconnect
 		movePlayers(); //starting the paddle movement after connection is ready
+
+		// Detect if tournament mode is enabled via URL query
+		const urlParams = new URLSearchParams(window.location.search);
+		const tournamentMode = urlParams.get('tournament') === 'true';
+		if (tournamentMode) {
+			promptAliasRegistration(); // Trigger alias prompt and start
+		}
 	});
 
 	socket.on('disconnect', () => {
@@ -266,12 +301,23 @@ export function renderGame(containerId: string = 'app') {
 
 		if (canvas?.parentElement) handleResize(canvas.parentElement);
 		requestAnimationFrame(() => drawGame(state));
-
+		
 		//Game over logic
 		if (!gameEnded && (state.score.player1 >= 5 || state.score.player2 >= 5)) {
 			const winner = state.score.player1 >= 5 ? 'Player 1' : 'Player 2';
 			showGameOverScreen(winner);
 			gameEnded = true;
+
+			//Notify backend to move to next match
+			socket?.emit('match_ended');
 		}
 	});
-}
+
+	socket.on('match_announcement', (match) => {
+		alert(`Next Match: ${match[0]} vs ${match[1]}`);
+	});
+
+	socket.on('tournament_over', () => {
+		alert("Tournament finished!");
+	});
+	}
