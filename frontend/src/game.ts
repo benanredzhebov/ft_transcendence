@@ -16,6 +16,7 @@ import { io, Socket } from 'socket.io-client';
 let gameEnded = false;
 let pressedKeys = new Set<string>(); // Set to track currently pressed keys and handle movement using a game loop
 let inTournament = false;
+let currentMatch: [string, string] | null = null;
 
 interface PaddleState {
 	y: number;
@@ -39,14 +40,41 @@ const SERVER_HEIGHT = 600;
 let socket: Socket | null = null;
 let canvas: HTMLCanvasElement | null = null;
 let ctx: CanvasRenderingContext2D | null = null;
-let resizeObserver: ResizeObserver | null = null; // ✅ NEW
+let resizeObserver: ResizeObserver | null = null;
+
+function showMatchInfo(player1: string, player2: string, score1: number, score2: number) {
+	const existing = document.getElementById('match-info-box');
+	if (existing) {
+		existing.innerHTML = `
+			<div><strong>${player1}</strong> vs <strong>${player2}</strong></div>
+			<div style="text-align: center; margin-top: 4px; font-size: 20px;">
+				${score1} : ${score2}
+			</div>
+		`;
+		return;
+	}
+
+	const box = document.createElement('div');
+	box.id = 'match-info-box';
+	box.className = 'match-info-box';
+
+	box.innerHTML = `
+		<div><strong>${player1}</strong> vs <strong>${player2}</strong></div>
+		<div style="text-align: center; margin-top: 4px; font-size: 20px;">
+			${score1} : ${score2}
+		</div>
+	`;
+
+	document.body.appendChild(box);
+
+	// Optional: auto-hide after X seconds
+	// setTimeout(() => {
+	// 	box.remove();
+	// }, 5000);
+}
 
 function drawGame(state: GameState) {
-	if (!ctx || !canvas) return;
-
-	if (gameEnded) return;
-	
-	if (inTournament) return;
+	if (!ctx || !canvas || gameEnded) return;	
 
 	const scaleX = canvas.width / SERVER_WIDTH;
 	const scaleY = canvas.height / SERVER_HEIGHT;
@@ -123,7 +151,6 @@ function handleKeyUp(e: KeyboardEvent) {
 	pressedKeys.delete(e.key.toLowerCase());
 }
 
-
 function cleanupGame() {
 	if (socket) {
 		socket.disconnect();
@@ -137,6 +164,9 @@ function cleanupGame() {
 	resizeObserver?.disconnect(); // ✅ CLEANUP ResizeObserver
 	resizeObserver = null;
 	pressedKeys.clear(); // clear key state
+
+	const matchBox = document.getElementById('match-info-box');
+	if (matchBox) matchBox.remove();
 }
 
 function onResize() {
@@ -160,12 +190,15 @@ function showGameOverScreen(winner: string) {
 	const buttons = document.createElement('div');
 	buttons.className = 'game-buttons';
 
-	const startBtn = document.createElement('button');
-	startBtn.textContent = "Start Tournament";
-	startBtn.onclick = () => {
-		promptAliasRegistration();
+	if (!inTournament) {
+		const startBtn = document.createElement('button');
+		startBtn.textContent = "Start Tournament";
+		startBtn.onclick = () => {
+			promptAliasRegistration();
+		};
+		buttons.appendChild(startBtn);
 	}
-
+	
 	const restartBtn = document.createElement('button');
 	restartBtn.textContent = "Restart game";
 	restartBtn.onclick = () => {
@@ -175,7 +208,7 @@ function showGameOverScreen(winner: string) {
 			overlay.remove(); //Remove overlay from UI
 			canvas?.focus();
 		}
-};
+	};
 
 	const dashboardBtn = document.createElement('button');
 	dashboardBtn.textContent = 'Back to Dashboard';
@@ -185,7 +218,6 @@ function showGameOverScreen(winner: string) {
 
 	buttons.appendChild(restartBtn);
 	buttons.appendChild(dashboardBtn);
-
 	overlay.appendChild(message);
 	overlay.appendChild(buttons);
 	canvas.parentElement.appendChild(overlay);
@@ -202,11 +234,16 @@ function promptAliasRegistration() {
 		if (success) {
 			inTournament = true;
 			alert("Alias registered successfully!");
-			socket?.emit('start_tournament'); // Start only if alias is accepted
+			socket?.emit('start_tournament'); // Backend checks players
 		} else {
 			alert("Alias already taken. Try a different one.");
 			promptAliasRegistration(); // Retry
 		}
+	});
+
+	//Listen for waiting message
+	socket?.on('tournament_waiting', ({message}) => {
+		alert(message); // You could improve this with a UI instead of alert
 	});
 }
 
@@ -284,6 +321,12 @@ export function renderGame(containerId: string = 'app') {
 		}
 	});
 
+	// ✅ ADD THIS RIGHT HERE 👇
+	socket.on('player_list_updated', (players: string[]) => {
+		console.log('Current tournament players:', players);
+		// Optional: render in UI
+	});
+
 	socket.on('disconnect', () => {
 		console.warn('🔌 Disconnected from server');
 		if (ctx && canvas) {
@@ -301,6 +344,12 @@ export function renderGame(containerId: string = 'app') {
 
 		if (canvas?.parentElement) handleResize(canvas.parentElement);
 		requestAnimationFrame(() => drawGame(state));
+
+		// Update score dynamically
+		if (inTournament && currentMatch) {
+			showMatchInfo(currentMatch[0], currentMatch[1], state.score.player1, state.score.player2);
+		}
+
 		
 		//Game over logic
 		if (!gameEnded && (state.score.player1 >= 5 || state.score.player2 >= 5)) {
@@ -314,10 +363,14 @@ export function renderGame(containerId: string = 'app') {
 	});
 
 	socket.on('match_announcement', (match) => {
+		currentMatch = [match[0], match[1]];
 		alert(`Next Match: ${match[0]} vs ${match[1]}`);
+		if (inTournament) {
+			showMatchInfo(match[0], match[1], 0, 0);
+		}
 	});
 
 	socket.on('tournament_over', () => {
-		alert("Tournament finished!");
+	alert("Tournament finished!");
 	});
-	}
+}

@@ -6,7 +6,7 @@
 /*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/19 17:44:17 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/05/21 22:03:06 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -93,12 +93,24 @@ io.on('connection', (socket) => {
 	socket.on('register_alias', (alias) => {
 		const success = tournament.registerPlayer(alias);
 		socket.emit('alias_registered', {success});
+
+		if (success) {
+			io.emit('player_list_updated', tournament.players);
+		}
 	});
 	
 	socket.on('start_tournament', () => {
+		if (tournament.players.length < 2) {
+			socket.emit('tournament waiting', {
+				message: 'Waiting for more players to join the tournament...'
+			});
+			return;
+		}
 		tournament.generateMatches();
 		const current = tournament.currentMatch;
-		io.emit('match_announcement', current);
+		if (current) {
+			io.emit('match_announcement', current);
+		}
 	});
 
 	socket.on('match_ended', () => {

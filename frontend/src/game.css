@@ -1,3 +1,18 @@
+.match-info-box {
+	position: absolute;
+	top: 10px;
+	left: 50%;
+	transform: translateX(-50%);
+	background: rgba(0, 0, 0, 0.75);
+	color: white;
+	padding: 10px 20px;
+	border-radius: 8px;
+	font-size: 18px;
+	z-index: 1000;
+	font-family: Arial, sans-serif;
+	pointer-events: none;
+}
+
 .game-loading {
 	position: absolute;
 	top: 50%;
