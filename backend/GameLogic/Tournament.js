@@ -3,25 +3,34 @@
 /*                                                        :::      ::::::::   */
 /*   Tournament.js                                      :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
+/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/19 17:09:45 by benanredzhe       #+#    #+#             */
-/*   Updated: 2025/05/19 17:10:14 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/05/22 14:45:07 by beredzhe         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 class Tournament {
 	constructor() {
-		this.players = [];         // Registered players (alias)
+		this.players = new Set();   // Registered players (alias)
 		this.matches = [];         // Match schedule (array of [player1, player2])
 		this.currentMatchIndex = 0;
 		this.currentMatch = null;  // e.g., { player1: 'Ali', player2: 'Bob' }
 	}
 
-	registerPlayer(alias) {
-		if (this.players.includes(alias)) return false; // prevent duplicates
-		this.players.push(alias);
+	registerPlayer(alias, socketId) {
+		if (this.players.has(alias)) return false;
+		this.players.add(alias, socketId);
 		return true;
+	}
+
+	removePlayerBySocketId(socketId) {
+		for (let [alias, id] of this.players.entries()) {
+			if (id === socketId) {
+				this.players.delete(alias);
+				break;
+			}
+		}
 	}
 
 	/*  Creates all unique player matchups
@@ -30,13 +39,15 @@ class Tournament {
 		3.Each match is stored as a pair [player1, player2] in the matches array.*/
 	generateMatches() {
 		this.matches = [];
-		for (let i = 0; i < this.players.length; i++) {
-			for (let j = i + 1; j < this.players.length; j++) {
-				this.matches.push([this.players[i], this.players[j]]);
+		
+		const playerArray = Array.from(this.players);
+		for (let i = 0; i < playerArray.length; i++) {
+			for (let j = i + 1; j < playerArray.length; j++) {
+				this.matches.push([playerArray[i], playerArray[j]]);
 			}
 		}
 		this.currentMatchIndex = 0;
-		this.currentMatch = this.matches[this.currentMatchIndex];
+		this.currentMatch = this.matches > 0 ? this.matches[0] : null; //avoid seeting 
 	}
 	
 	/*Advances through the match schedule, one match at a time, until finished.
@@ -55,7 +66,7 @@ class Tournament {
 	}
 
 	resetTournament() {
-		this.players = [];
+		this.players = new Set();
 		this.matches = [];
 		this.currentMatchIndex = 0;
 		this.currentMatch = null;

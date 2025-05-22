@@ -234,7 +234,7 @@ function promptAliasRegistration() {
 		if (success) {
 			inTournament = true;
 			alert("Alias registered successfully!");
-			socket?.emit('start_tournament'); // Backend checks players
+			// socket?.emit('start_tournament'); // Backend checks players
 		} else {
 			alert("Alias already taken. Try a different one.");
 			promptAliasRegistration(); // Retry
@@ -358,7 +358,9 @@ export function renderGame(containerId: string = 'app') {
 			gameEnded = true;
 
 			//Notify backend to move to next match
-			socket?.emit('match_ended');
+			if (inTournament && currentMatch) {
+				socket?.emit('match_ended');
+			}
 		}
 	});
 
