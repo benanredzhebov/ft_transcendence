@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   server.js                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
+/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/22 14:57:46 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/05/22 22:44:10 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -73,8 +73,9 @@ const io = new Server(server, {
 });
 
 // ***** Game Logic (WebSocket + Game Loop)*******
+let tournament = null;
 const game = new GameEngine();
-const tournament = new Tournament();
+
 
 io.on('connection', (socket) => {
 	console.log('Client connected:', socket.id);
@@ -89,22 +90,23 @@ io.on('connection', (socket) => {
 		io.emit('state_update', game.getState()); // Push to all clients
 	});
 
-	// *** Tournament Logic *** //
+	// Tournament Logic 
 	socket.on('register_alias', (alias) => {
+		if (!tournament) tournament = new Tournament();
+		
 		const success = tournament.registerPlayer(alias, socket.id);
 		socket.emit('alias_registered', {success});
 
 		if (success) {
-			io.emit('player_list_updated', tournament.players.keys());
-			
-			// Auto-start tournament once at least 2 players
+			io.emit('player_list_updated', Array.from(tournament.players.values()));
+
 			if (tournament.players.size >= 2 && tournament.matches.length === 0) {
 				tournament.generateMatches();
 				const current = tournament.currentMatch;
 				if (current) {
-					io.emit('match_announcement', current);
+					io.emit('match_announcement', [current[0][1], current[1][1]]);
 				}
-			} else if (tournament.players.size < 2) {
+			} else {
 				socket.emit('tournament_waiting', {
 					message: 'Waiting for more players to join the tournament...',
 				});
@@ -115,27 +117,38 @@ io.on('connection', (socket) => {
 	socket.on('match_ended', () => {
 		if (!tournament.currentMatch) {
 			// Prevent advancing if no match was started
-			console.log('match_ended received but no currentmatch exist');
+			console.warn('match_ended received but no currentmatch exists');
 			return;
 		}
 		
 		const next = tournament.nextMatch();
 		if (next) {
-			io.emit('match_announcement', next);
+			io.emit('match_announcement', next[0][1], next[1][1]);
 		} else {
 			io.emit('tournament_over');
 			tournament.resetTournament(); // Clear tournament after it's done
+			tournament = null;
 		}
 	});
 
-		socket.on('disconnect', () => {
+	socket.on('disconnect', () => {
 		console.log('Client disconnected:', socket.id);
-		tournament.removePlayerBySocketId(socket.id);
-		io.emit('player_list_updated', Array.from(tournament.players.keys()));
-		// Handle player disconnection in the game engine if necessary
-		// game.removePlayer(socket.id);
+		
+		if (tournament) {
+			tournament.removePlayer(socket.id);
+			
+			io.emit('player_list_updated', Array.from(tournament.players.entries()).map(([socketId, alias]) => ({
+				socketId,
+				alias
+			})));
+			
+			if (tournament.players.size < 2) {
+				tournament.resetTournament();
+				tournament = null;
+			}
+		}
+		game.removePlayer(socket.id);
 	});
-
 });
 
 // Game loop
