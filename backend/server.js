@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   server.js                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
+/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/21 22:03:06 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/05/22 14:57:46 by beredzhe         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -91,39 +91,47 @@ io.on('connection', (socket) => {
 
 	// *** Tournament Logic *** //
 	socket.on('register_alias', (alias) => {
-		const success = tournament.registerPlayer(alias);
+		const success = tournament.registerPlayer(alias, socket.id);
 		socket.emit('alias_registered', {success});
 
 		if (success) {
-			io.emit('player_list_updated', tournament.players);
+			io.emit('player_list_updated', tournament.players.keys());
+			
+			// Auto-start tournament once at least 2 players
+			if (tournament.players.size >= 2 && tournament.matches.length === 0) {
+				tournament.generateMatches();
+				const current = tournament.currentMatch;
+				if (current) {
+					io.emit('match_announcement', current);
+				}
+			} else if (tournament.players.size < 2) {
+				socket.emit('tournament_waiting', {
+					message: 'Waiting for more players to join the tournament...',
+				});
+			}
 		}
 	});
 	
-	socket.on('start_tournament', () => {
-		if (tournament.players.length < 2) {
-			socket.emit('tournament waiting', {
-				message: 'Waiting for more players to join the tournament...'
-			});
+	socket.on('match_ended', () => {
+		if (!tournament.currentMatch) {
+			// Prevent advancing if no match was started
+			console.log('match_ended received but no currentmatch exist');
 			return;
 		}
-		tournament.generateMatches();
-		const current = tournament.currentMatch;
-		if (current) {
-			io.emit('match_announcement', current);
-		}
-	});
-
-	socket.on('match_ended', () => {
+		
 		const next = tournament.nextMatch();
 		if (next) {
 			io.emit('match_announcement', next);
 		} else {
 			io.emit('tournament_over');
+			tournament.resetTournament(); // Clear tournament after it's done
 		}
 	});
 
 		socket.on('disconnect', () => {
 		console.log('Client disconnected:', socket.id);
+		tournament.removePlayerBySocketId(socket.id);
+		io.emit('player_list_updated', Array.from(tournament.players.keys()));
 		// Handle player disconnection in the game engine if necessary
 		// game.removePlayer(socket.id);
 	});
