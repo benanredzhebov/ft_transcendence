@@ -16,7 +16,8 @@ import { io, Socket } from 'socket.io-client';
 let gameEnded = false;
 let pressedKeys = new Set<string>(); // Set to track currently pressed keys and handle movement using a game loop
 let inTournament = false;
-let currentMatch: [string, string] | null = null;
+let currentMatch: [string, string] | null = null; // Track current match with alias mapping
+let aliasMap: Record<string, string> = {};
 
 interface PaddleState {
 	y: number;
@@ -321,11 +322,14 @@ export function renderGame(containerId: string = 'app') {
 		}
 	});
 
-	// ✅ ADD THIS RIGHT HERE 👇
-	socket.on('player_list_updated', (players: string[]) => {
-		console.log('Current tournament players:', players);
-		// Optional: render in UI
+	socket.on('player_list_updated', (players: { socketId: string, alias: string }[]) => {
+		aliasMap = {}; // Clear and repopulate
+		for (const player of players) {
+			aliasMap[player.socketId] = player.alias;
+		}
+		console.log("Alias map updated:", aliasMap);
 	});
+
 
 	socket.on('disconnect', () => {
 		console.warn('🔌 Disconnected from server');
@@ -347,7 +351,8 @@ export function renderGame(containerId: string = 'app') {
 
 		// Update score dynamically
 		if (inTournament && currentMatch) {
-			showMatchInfo(currentMatch[0], currentMatch[1], state.score.player1, state.score.player2);
+			const [alias1, alias2] = currentMatch;
+			showMatchInfo(alias1, alias2, state.score.player1, state.score.player2);
 		}
 
 		
@@ -364,13 +369,23 @@ export function renderGame(containerId: string = 'app') {
 		}
 	});
 
-	socket.on('match_announcement', (match) => {
-		currentMatch = [match[0], match[1]];
-		alert(`Next Match: ${match[0]} vs ${match[1]}`);
+	socket.on('match_announcement', (match: [[string, string], [string, string]]) => {
+		const [player1, player2] = match;
+		const [socketId1, alias1] = player1;
+		const [socketId2, alias2] = player2;
+
+		currentMatch = [alias1, alias2];
+		aliasMap = {
+			[socketId1]: alias1,
+			[socketId2]: alias2
+		};
+
+		alert(`Next Match: ${alias1} vs ${alias2}`);
 		if (inTournament) {
-			showMatchInfo(match[0], match[1], 0, 0);
+			showMatchInfo(alias1, alias2, 0, 0);
 		}
 	});
+
 
 	socket.on('tournament_over', () => {
 	alert("Tournament finished!");
