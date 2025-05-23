@@ -3,23 +3,23 @@
 /*                                                        :::      ::::::::   */
 /*   Tournament.js                                      :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
+/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/19 17:09:45 by benanredzhe       #+#    #+#             */
-/*   Updated: 2025/05/22 23:05:19 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/05/23 16:04:30 by beredzhe         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 class Tournament {
 	constructor() {
-		this.players = new Map();   // Registered players (alias)
-		this.matches = [];         // Match schedule (array of [player1, player2])
+		this.players = new Map();   // sockedId -> alias
+		this.matches = [];          // array of [[socketId, alias], [socketId, alias]]
 		this.currentMatchIndex = 0;
 		this.currentMatch = null;  // e.g., { player1: 'Ali', player2: 'Bob' }
 	}
 
 	registerPlayer(socketId, alias) {
-		if ([...this.players.values()].includes(alias)) return false;
+		if ([...this.players.values()].includes(alias)) return false; // prevent duplicates
 		this.players.set(socketId, alias);
 		return true;
 	}
@@ -27,7 +27,7 @@ class Tournament {
 	removePlayer(socketId) {
 	if (this.players.has(socketId)) {
 		this.players.delete(socketId);
-		console.log(`✅ Player with socket ${socketId} removed from tournament.`);
+		console.log(`Player with socket ${socketId} removed from tournament.`);
 	}
 }
 
@@ -38,6 +38,7 @@ class Tournament {
 	generateMatches() {
 	this.matches = [];
 	const entries = Array.from(this.players.entries()); // [[socketId, alias], ...]
+	
 	for (let i = 0; i < entries.length; i++) {
 		for (let j = i + 1; j < entries.length; j++) {
 			this.matches.push([entries[i], entries[j]]);
@@ -63,7 +64,7 @@ class Tournament {
 	}
 
 	resetTournament() {
-		this.players = new Set();
+		this.players = new Map();
 		this.matches = [];
 		this.currentMatchIndex = 0;
 		this.currentMatch = null;
