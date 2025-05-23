@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   server.js                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
+/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/22 22:44:10 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/05/23 16:21:23 by beredzhe         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -94,28 +94,50 @@ io.on('connection', (socket) => {
 	socket.on('register_alias', (alias) => {
 		if (!tournament) tournament = new Tournament();
 		
-		const success = tournament.registerPlayer(alias, socket.id);
+		const success = tournament.registerPlayer(socket.id, alias);
 		socket.emit('alias_registered', {success});
 
 		if (success) {
-			io.emit('player_list_updated', Array.from(tournament.players.values()));
+			// Notify all clients of the updated player list
+			// io.emit('player_list_updated', Array.from(tournament.players.values()));
+
+			// Send alias map to frontend 1111 del
+			const playerList = Array.from(tournament.players.entries()).map(([socketId, alias]) => ({
+				socketId,
+				alias
+			}));
+
+			io.emit('player_list_updated', playerList); // 1111 del
 
 			if (tournament.players.size >= 2 && tournament.matches.length === 0) {
 				tournament.generateMatches();
-				const current = tournament.currentMatch;
-				if (current) {
-					io.emit('match_announcement', [current[0][1], current[1][1]]);
+				if (tournament.currentMatch) {
+					game.state.resetGame();
+					io.emit('match_announcement', tournament.currentMatch);
+					io.emit('state_update', game.getState())
 				}
 			} else {
 				socket.emit('tournament_waiting', {
 					message: 'Waiting for more players to join the tournament...',
 				});
 			}
+
+			// if (tournament.players.size >= 2 && tournament.matches.length === 0) {
+			// 	tournament.generateMatches();
+			// 	const current = tournament.currentMatch;
+			// 	if (current) {
+			// 		io.emit('match_announcement', current.map(([, alias]) => alias));
+			// 	}
+			// } else {
+			// 	socket.emit('tournament_waiting', {
+			// 		message: 'Waiting for more players to join the tournament...',
+			// 	});
+			// }
 		}
 	});
 	
 	socket.on('match_ended', () => {
-		if (!tournament.currentMatch) {
+		if (!tournament || !tournament.currentMatch) {
 			// Prevent advancing if no match was started
 			console.warn('match_ended received but no currentmatch exists');
 			return;
@@ -123,7 +145,10 @@ io.on('connection', (socket) => {
 		
 		const next = tournament.nextMatch();
 		if (next) {
-			io.emit('match_announcement', next[0][1], next[1][1]);
+			game.state.resetGame(); // reset scores and ball 
+			//io.emit('match_announcement', next.map(([, alias]) => alias));
+			io.emit('match_announcement', next);
+			io.emit('state_update', game.getState()); 
 		} else {
 			io.emit('tournament_over');
 			tournament.resetTournament(); // Clear tournament after it's done
@@ -136,11 +161,12 @@ io.on('connection', (socket) => {
 		
 		if (tournament) {
 			tournament.removePlayer(socket.id);
-			
-			io.emit('player_list_updated', Array.from(tournament.players.entries()).map(([socketId, alias]) => ({
+			const updatedList = Array.from(tournament.players.entries()).map(([socketId, alias]) => ({
 				socketId,
 				alias
-			})));
+			}));
+			// const remaining = Array.from(tournament.players.values());
+			// io.emit('player_list_updated', remaining);
 			
 			if (tournament.players.size < 2) {
 				tournament.resetTournament();

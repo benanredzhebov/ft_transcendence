@@ -310,13 +310,21 @@ export function renderGame(containerId: string = 'app') {
 		console.log('✅ Connected:', socket!.id);
 	
 		//  Trigger a fresh game session
-		socket!.emit('restart_game');
-		gameEnded = false; // reset flag on reconnect
+		// socket!.emit('restart_game');
+		// gameEnded = false; // reset flag on reconnect
 		movePlayers(); //starting the paddle movement after connection is ready
 
 		// Detect if tournament mode is enabled via URL query
 		const urlParams = new URLSearchParams(window.location.search);
 		const tournamentMode = urlParams.get('tournament') === 'true';
+
+		if (!tournamentMode) {
+			socket!.emit('restart_game');
+		}
+
+		gameEnded = false;
+		movePlayers;
+
 		if (tournamentMode) {
 			promptAliasRegistration(); // Trigger alias prompt and start
 		}
@@ -349,6 +357,10 @@ export function renderGame(containerId: string = 'app') {
 		if (canvas?.parentElement) handleResize(canvas.parentElement);
 		requestAnimationFrame(() => drawGame(state));
 
+		if (inTournament && (state.score.player1 === 0 && state.score.player2 === 0)) {
+			gameEnded = false;
+		}
+
 		// Update score dynamically
 		if (inTournament && currentMatch) {
 			const [alias1, alias2] = currentMatch;
@@ -379,6 +391,10 @@ export function renderGame(containerId: string = 'app') {
 			[socketId1]: alias1,
 			[socketId2]: alias2
 		};
+
+		gameEnded = false; //match just started
+		const matchBox = document.getElementById('match-info-box');
+		if (matchBox) matchBox.remove();
 
 		alert(`Next Match: ${alias1} vs ${alias2}`);
 		if (inTournament) {
