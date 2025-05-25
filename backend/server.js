@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   server.js                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
+/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/23 16:21:23 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/05/25 22:36:22 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -24,6 +24,8 @@ import GameEngine from './GameLogic/GameEngine.js';
 import Tournament from './GameLogic/Tournament.js';
 import hashPassword from './crypto/crypto.js';
 import DB from './data_controller/dbConfig.js';
+
+// let gamePaused = false; delete it
 
 // Fix __dirname in ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -86,7 +88,7 @@ io.on('connection', (socket) => {
 	});
 
 	socket.on('restart_game', () => {
-		game.state.resetGame(); // Resets the score , ball paddles	
+		game.resetGame(); // Resets the score , ball paddles	
 		io.emit('state_update', game.getState()); // Push to all clients
 	});
 
@@ -112,27 +114,30 @@ io.on('connection', (socket) => {
 			if (tournament.players.size >= 2 && tournament.matches.length === 0) {
 				tournament.generateMatches();
 				if (tournament.currentMatch) {
-					game.state.resetGame();
-					io.emit('match_announcement', tournament.currentMatch);
-					io.emit('state_update', game.getState())
+					const [player1, player2] = tournament.currentMatch;
+					const [player1Socket] = player1;
+					const [player2Socket] = player2;
+					
+					const matchData = tournament.currentMatch;
+					game.resetGame();
+					game.pause();
+					
+					io.emit('match_announcement', matchData); // still shows alias to everyone
+					
+
+					setTimeout(() => {
+						game.resume();
+						io.to(player1Socket).emit('assign_controls', 'player1');
+						io.to(player2Socket).emit('assign_controls', 'player2');
+						io.emit('state_update', game.getState());
+					}, 10000);
+					
 				}
 			} else {
 				socket.emit('tournament_waiting', {
 					message: 'Waiting for more players to join the tournament...',
 				});
 			}
-
-			// if (tournament.players.size >= 2 && tournament.matches.length === 0) {
-			// 	tournament.generateMatches();
-			// 	const current = tournament.currentMatch;
-			// 	if (current) {
-			// 		io.emit('match_announcement', current.map(([, alias]) => alias));
-			// 	}
-			// } else {
-			// 	socket.emit('tournament_waiting', {
-			// 		message: 'Waiting for more players to join the tournament...',
-			// 	});
-			// }
 		}
 	});
 	
@@ -145,7 +150,7 @@ io.on('connection', (socket) => {
 		
 		const next = tournament.nextMatch();
 		if (next) {
-			game.state.resetGame(); // reset scores and ball 
+			game.resetGame(); // reset scores and ball 
 			//io.emit('match_announcement', next.map(([, alias]) => alias));
 			io.emit('match_announcement', next);
 			io.emit('state_update', game.getState()); 
@@ -179,8 +184,10 @@ io.on('connection', (socket) => {
 
 // Game loop
 setInterval(() => {
-	game.update(1 / 60);
-	io.emit('state_update', game.getState());
+	if (!game.resume) {
+		game.update(1 / 60);
+		io.emit('state_update', game.getState());
+	}
 }, 1000 / 60); // 60 times per second
 
 // --- Middlewares ---

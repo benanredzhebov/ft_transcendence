@@ -18,6 +18,9 @@ let pressedKeys = new Set<string>(); // Set to track currently pressed keys and 
 let inTournament = false;
 let currentMatch: [string, string] | null = null; // Track current match with alias mapping
 let aliasMap: Record<string, string> = {};
+let assignedPlayerId: 'player1' | 'player2' | null = null;
+let movePlayersFrame: number | null = null;
+let countDownActive = false;
 
 interface PaddleState {
 	y: number;
@@ -33,6 +36,7 @@ interface GameState {
 	paddles: { player1: PaddleState; player2: PaddleState };
 	ball: BallState;
 	score: { player1: number; player2: number };
+	gameOver: boolean;
 }
 
 const SERVER_WIDTH = 900;
@@ -135,12 +139,25 @@ function handleResize(container: HTMLElement) {
 
 function movePlayers() {
 	if (!socket || gameEnded) return;
-	if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
-	if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
-	if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
-	if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
 
-	requestAnimationFrame(movePlayers); //Movement is updated in sync with the game loop 
+	if (inTournament) {
+		if (assignedPlayerId === 'player1') {
+			if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
+			if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
+		}
+		if (assignedPlayerId === 'player2') {
+			if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
+			if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
+		}
+	} else {
+		// Local match allowed both players
+		if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
+		if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
+		if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
+		if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
+	}
+
+	movePlayersFrame = requestAnimationFrame(movePlayers); //Movement is updated in sync with the game loop 
 }
 
 function handleKeyDown(e: KeyboardEvent) {
@@ -153,6 +170,10 @@ function handleKeyUp(e: KeyboardEvent) {
 }
 
 function cleanupGame() {
+	if (movePlayersFrame !== null) {
+		cancelAnimationFrame(movePlayersFrame);
+		movePlayersFrame = null;
+	}
 	if (socket) {
 		socket.disconnect();
 		socket = null;
@@ -241,11 +262,6 @@ function promptAliasRegistration() {
 			promptAliasRegistration(); // Retry
 		}
 	});
-
-	//Listen for waiting message
-	socket?.on('tournament_waiting', ({message}) => {
-		alert(message); // You could improve this with a UI instead of alert
-	});
 }
 
 export function renderGame(containerId: string = 'app') {
@@ -301,29 +317,34 @@ export function renderGame(containerId: string = 'app') {
 	});
 	console.log("Connecting to the WebSocket server...");
 
+	//Listen for waiting message
+	socket?.on('tournament_waiting', ({message}) => {
+		alert(message); // can improve this with a UI instead of alert
+	});
+
 	socket.on('connect_error', (err) => {
 		console.error('WebSocket connection error:', err.message);
+	});
+
+	socket.on('assign_controls', (playerId) => {
+		assignedPlayerId = playerId;
+		if (movePlayersFrame === null) movePlayers();
 	});
 
 	// Socket connect block
 	socket.on('connect', () => {
 		console.log('✅ Connected:', socket!.id);
 	
-		//  Trigger a fresh game session
-		// socket!.emit('restart_game');
-		// gameEnded = false; // reset flag on reconnect
-		movePlayers(); //starting the paddle movement after connection is ready
-
 		// Detect if tournament mode is enabled via URL query
 		const urlParams = new URLSearchParams(window.location.search);
 		const tournamentMode = urlParams.get('tournament') === 'true';
 
 		if (!tournamentMode) {
 			socket!.emit('restart_game');
+			if (movePlayersFrame === null) movePlayers();
 		}
 
 		gameEnded = false;
-		movePlayers;
 
 		if (tournamentMode) {
 			promptAliasRegistration(); // Trigger alias prompt and start
@@ -341,6 +362,7 @@ export function renderGame(containerId: string = 'app') {
 
 	socket.on('disconnect', () => {
 		console.warn('🔌 Disconnected from server');
+		assignedPlayerId = null;
 		if (ctx && canvas) {
 			ctx.fillStyle = 'red';
 			ctx.font = '20px Arial';
@@ -350,7 +372,9 @@ export function renderGame(containerId: string = 'app') {
 	});
 
 	// ✅ Ensure canvas is resized before every render
-	socket.on('state_update', (state: GameState) => {
+	socket.on('state_update', (state: GameState & { gameOver: boolean }) => {
+		if (countDownActive) return;
+		
 		const loading = document.querySelector(".game-loading");
 		if (loading) loading.remove();
 
@@ -369,12 +393,17 @@ export function renderGame(containerId: string = 'app') {
 
 		
 		//Game over logic
-		if (!gameEnded && (state.score.player1 >= 5 || state.score.player2 >= 5)) {
-			const winner = state.score.player1 >= 5 ? 'Player 1' : 'Player 2';
+		if (!gameEnded && state.gameOver) {
+			let winner = 'Unknown';
+
+			if (state.score.player1 >= 5) {
+				winner = inTournament && currentMatch ? currentMatch[0] : 'Player 1';
+			} else if (state.score.player2 >= 5) {
+				winner = inTournament && currentMatch ? currentMatch[0] : 'Player 2';
+			}
 			showGameOverScreen(winner);
 			gameEnded = true;
 
-			//Notify backend to move to next match
 			if (inTournament && currentMatch) {
 				socket?.emit('match_ended');
 			}
@@ -391,19 +420,43 @@ export function renderGame(containerId: string = 'app') {
 			[socketId1]: alias1,
 			[socketId2]: alias2
 		};
+		
+		const overlay = document.querySelector('.game-overlay');
+		if (overlay) overlay.remove();
 
 		gameEnded = false; //match just started
-		const matchBox = document.getElementById('match-info-box');
-		if (matchBox) matchBox.remove();
+		countDownActive = true; // Block updates during coundown
+
+		showMatchInfo(alias1, alias2, 0, 0);
 
 		alert(`Next Match: ${alias1} vs ${alias2}`);
+
 		if (inTournament) {
 			showMatchInfo(alias1, alias2, 0, 0);
 		}
-	});
 
+		// showMatchInfo(alias1, alias2, 0, 0); // try it !!!!
+		const countdownBox = document.createElement('div');
+		countdownBox.className = 'countdown-box';
+		countdownBox.textContent = 'Match starting in 10...';
+		document.body.appendChild(countdownBox);
+
+		let timeLeft = 10;
+		const interval = setInterval(() => {
+			timeLeft--;
+			countdownBox.textContent = `Match starting in ${timeLeft}...`;
+			if (timeLeft <= 0) {
+				clearInterval(interval);
+				countdownBox.remove();
+				countDownActive = false; // now allow game to play
+			}
+		}, 1000);
+		});
 
 	socket.on('tournament_over', () => {
 	alert("Tournament finished!");
+	inTournament = false;
+	currentMatch = null;
+	assignedPlayerId = null;
 	});
 }
