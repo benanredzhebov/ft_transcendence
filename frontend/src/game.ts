@@ -14,6 +14,7 @@ import './game.css';
 import { io, Socket } from 'socket.io-client';
 
 let gameEnded = false;
+let matchStarted = false;
 let pressedKeys = new Set<string>(); // Set to track currently pressed keys and handle movement using a game loop
 let inTournament = false;
 let currentMatch: [string, string] | null = null; // Track current match with alias mapping
@@ -138,7 +139,7 @@ function handleResize(container: HTMLElement) {
 }
 
 function movePlayers() {
-	if (!socket || gameEnded) return;
+	if (!socket || gameEnded || !matchStarted && inTournament) return;
 
 	if (inTournament) {
 		if (assignedPlayerId === 'player1') {
@@ -275,6 +276,11 @@ export function renderGame(containerId: string = 'app') {
 	const loading = document.createElement('div');
 	loading.textContent = 'Loading game...';
 	loading.className = 'game-loading';
+
+	const spinner = document.createElement('div');
+	spinner.className = 'spinner';
+	loading.appendChild(spinner);
+
 	container.appendChild(loading);
 
 	// Apply the container styling
@@ -371,6 +377,34 @@ export function renderGame(containerId: string = 'app') {
 		}
 	});
 
+	socket.on('start_match', () => {
+		countDownActive = true;
+
+		const countdownBox = document.createElement('div');
+		countdownBox.className = 'countdown-box';
+		countdownBox.textContent = 'Match starting in 10...';
+		document.body.appendChild(countdownBox);
+
+		const countdownTick = new Audio('/sounds/tick.mp3');
+		const matchStartSound = new Audio('/sound/start.mp3');
+
+		let timeLeft = 10;
+		const interval = setInterval(() => {
+			timeLeft--;
+			countdownBox.textContent = `Match starting in ${timeLeft}...`;
+			countdownTick.play();
+
+			if (timeLeft <= 0) {
+				clearInterval(interval);
+				countdownBox.remove();
+				matchStartSound.play();
+				countDownActive = false; // Allow game updates now
+				matchStarted = true;
+				if (movePlayersFrame === null) movePlayers(); //resume movement
+			}
+		}, 1000);
+	});
+
 	// ✅ Ensure canvas is resized before every render
 	socket.on('state_update', (state: GameState & { gameOver: boolean }) => {
 		if (countDownActive) return;
@@ -403,6 +437,7 @@ export function renderGame(containerId: string = 'app') {
 			}
 			showGameOverScreen(winner);
 			gameEnded = true;
+			matchStarted = false;
 
 			if (inTournament && currentMatch) {
 				socket?.emit('match_ended');
@@ -410,6 +445,7 @@ export function renderGame(containerId: string = 'app') {
 		}
 	});
 
+	// MATCH ANNOUNCEMENT //
 	socket.on('match_announcement', (match: [[string, string], [string, string]]) => {
 		const [player1, player2] = match;
 		const [socketId1, alias1] = player1;
@@ -436,21 +472,22 @@ export function renderGame(containerId: string = 'app') {
 		}
 
 		// showMatchInfo(alias1, alias2, 0, 0); // try it !!!!
-		const countdownBox = document.createElement('div');
-		countdownBox.className = 'countdown-box';
-		countdownBox.textContent = 'Match starting in 10...';
-		document.body.appendChild(countdownBox);
 
-		let timeLeft = 10;
-		const interval = setInterval(() => {
-			timeLeft--;
-			countdownBox.textContent = `Match starting in ${timeLeft}...`;
-			if (timeLeft <= 0) {
-				clearInterval(interval);
-				countdownBox.remove();
-				countDownActive = false; // now allow game to play
-			}
-		}, 1000);
+		// const countdownBox = document.createElement('div');
+		// countdownBox.className = 'countdown-box';
+		// countdownBox.textContent = 'Match starting in 10...';
+		// document.body.appendChild(countdownBox);
+
+		// let timeLeft = 10;
+		// const interval = setInterval(() => {
+		// 	timeLeft--;
+		// 	countdownBox.textContent = `Match starting in ${timeLeft}...`;
+		// 	if (timeLeft <= 0) {
+		// 		clearInterval(interval);
+		// 		countdownBox.remove();
+		// 		countDownActive = false; // now allow game to play
+		// 	}
+		// }, 1000);
 		});
 
 	socket.on('tournament_over', () => {
@@ -458,5 +495,6 @@ export function renderGame(containerId: string = 'app') {
 	inTournament = false;
 	currentMatch = null;
 	assignedPlayerId = null;
+	matchStarted = false;
 	});
 }
