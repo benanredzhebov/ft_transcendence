@@ -426,7 +426,7 @@ export function renderGame(containerId: string = 'app') {
 		}
 
 		
-		//Game over logic
+		//GAME OVER LOGIC
 		if (!gameEnded && state.gameOver) {
 			let winner = 'Unknown';
 

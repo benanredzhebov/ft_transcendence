@@ -6,7 +6,7 @@
 /*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/26 17:04:35 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/05/26 17:15:01 by beredzhe         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -123,6 +123,7 @@ io.on('connection', (socket) => {
 					
 
 					setTimeout(() => {
+						game.resetGame();
 						game.resume();
 						io.to(player1Socket).emit('assign_controls', 'player1');
 						io.to(player2Socket).emit('assign_controls', 'player2');
