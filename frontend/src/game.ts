@@ -1,5 +1,6 @@
 
 import './game.css';
+import { getUserIdFromToken } from './dashboard';
 import { io, Socket } from 'socket.io-client';
 
 // --- Interfaces (matching backend GameState) ---
@@ -165,15 +166,7 @@ function handleResize() {
 
 }
 
-// --- Keyboard Input Handler ---
-function handleKeyDown(e: KeyboardEvent) {
-    if (!socket) return;
-    const key = e.key.toLowerCase();
-    if (key === 'arrowup') socket.emit('player_move', { playerId: 'player2', direction: 'up' });
-    if (key === 'arrowdown') socket.emit('player_move', { playerId: 'player2', direction: 'down' });
-    if (key === 'w') socket.emit('player_move', { playerId: 'player1', direction: 'up' });
-    if (key === 's') socket.emit('player_move', { playerId: 'player1', direction: 'down' });
-}
+let myPlayerId: 'player1' | 'player2' | null = null;
 
 // --- Cleanup function ---
 function cleanupGame() {
@@ -227,6 +220,7 @@ export function renderGame() {
     // --- Append Elements ---
     container.appendChild(canvas);
     appElement.appendChild(container);
+	window.addEventListener('keydown', handleKeyDown);
 
     // --- Initialize ---
     // Call resize once immediately
@@ -235,15 +229,38 @@ export function renderGame() {
     requestAnimationFrame(handleResize);
 
 
-    socket = io('https://127.0.0.1:3000', {
-        transports: ['websocket'],
-        secure: true
-    });
+    // Connect to the socket
+socket = io('https://127.0.0.1:3000', {
+  transports: ['websocket'],
+  secure: true
+});
+
+// Register user to backend (after connect)
+socket.on('connect', () => {
+  console.log('Connected to game server:', socket?.id);
+  const currentUserId = getUserIdFromToken();
+  if (currentUserId) {
+    socket?.emit('register', currentUserId);
+  }
+});
+socket?.on('connect_error', (err) => {
+console.error('Connection error:', err.message);
 
 
-    socket.on('connect', () => {
-        console.log('Connected to game server:', socket?.id);
-    });
+  // If this was a friend-invoked game, initiate it
+  const urlParams = new URLSearchParams(window.location.search);
+  const friendId = urlParams.get('friendId');
+  if (friendId) {
+    socket?.emit('start_game_with_friend', { friendId: Number(friendId) });
+  }
+});
+
+	// Receive role + join game room
+	socket.on('game_start', ({ roomId, playerId }) => {
+	myPlayerId = playerId;
+	console.log('Assigned playerId:', myPlayerId);
+	socket?.emit('join_room', roomId);
+});
 
     socket.on('disconnect', () => {
         console.log('Disconnected from game server');
@@ -265,7 +282,6 @@ export function renderGame() {
 
     // Add event listeners
     window.addEventListener('resize', handleResize);
-    window.addEventListener('keydown', handleKeyDown);
 
     // Add a listener for hash changes to trigger cleanup
     // Note: This assumes the router in main.ts handles navigation
@@ -277,4 +293,20 @@ export function renderGame() {
         }
     };
     window.addEventListener('hashchange', handleHashChangeForCleanup);
+}
+
+// --- Keyboard Input Handler ---
+function handleKeyDown(e: KeyboardEvent) {
+  if (!socket || !myPlayerId) {
+	console.log('error when key pressed');
+	return;}
+  const key = e.key.toLowerCase();
+
+  const direction = (key === 'arrowup' || key === 'w') ? 'up' :
+                    (key === 'arrowdown' || key === 's') ? 'down' : null;
+
+  if (direction) {
+	console.log('key was pressed ===', direction);
+    socket.emit('player_move', { playerId: myPlayerId, direction });
+  }
 }

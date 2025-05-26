@@ -254,4 +254,189 @@ const credentialsRoutes = (app) =>{
   });
 }
 
-module.exports = {developerRoutes, credentialsRoutes, noHandlerRoute};
+const friendRoutes = (app) => {
+
+  // ➕ Send a friend request
+  app.post('/friend/add', async (req, reply) => {
+    const { userId, friendId } = req.body;
+
+    if (!userId || !friendId || userId === friendId) {
+      return reply.status(400).send({ error: 'Invalid friend request' });
+    }
+
+    try {
+      const exists = await DB('friends')
+        .where(function () {
+          this.where({ user_id: userId, friend_id: friendId })
+              .orWhere({ user_id: friendId, friend_id: userId });
+        })
+        .first();
+
+      if (exists) {
+        return reply.status(409).send({ message: 'Friend request already exists or pending' });
+      }
+
+      await DB('friends').insert({
+        user_id: userId,
+        friend_id: friendId,
+        status: 'pending'
+      });
+
+      reply.send({ success: true, message: 'Friend request sent' });
+
+    } catch (e) {
+      console.error(e);
+      reply.status(500).send({ error: 'Failed to send friend request' });
+    }
+  });
+
+  // ✅ Accept a friend request
+  app.post('/friend/accept', async (req, reply) => {
+    const { fromUserId, toUserId } = req.body;
+
+    if (!fromUserId || !toUserId) {
+      return reply.status(400).send({ error: 'Missing user IDs' });
+    }
+
+    try {
+      const updated = await DB('friends')
+        .where({ user_id: fromUserId, friend_id: toUserId, status: 'pending' })
+        .update({ status: 'accepted' });
+
+      if (updated === 0) {
+        return reply.status(404).send({ error: 'No pending request found' });
+      }
+
+      await DB('friends').insert({
+        user_id: toUserId,
+        friend_id: fromUserId,
+        status: 'accepted'
+      });
+
+      reply.send({ success: true, message: 'Friend request accepted' });
+
+    } catch (e) {
+      console.error(e);
+      reply.status(500).send({ error: 'Failed to accept friend request' });
+    }
+  });
+
+ app.get('/friend/pending/:userId', async (req, reply) => {
+  const userId = parseInt(req.params.userId);
+  if (!userId) return reply.status(400).send({ error: 'Invalid user ID' });
+
+  try {
+    const requests = await DB('friends')
+      .join('credentialsTable', 'friends.user_id', '=', 'credentialsTable.id')
+      .where({ friend_id: userId, status: 'pending' })
+      .select('friends.user_id', 'credentialsTable.username', 'credentialsTable.email');
+
+    reply.send(requests);
+  } catch (err) {
+    console.error(err);
+    reply.status(500).send({ error: 'Failed to fetch pending requests' });
+  }
+});
+
+
+  // 📃 Get accepted friends list
+  app.get('/friend/list/:userId', async (req, reply) => {
+    const userId = parseInt(req.params.userId);
+
+    if (!userId) {
+      return reply.status(400).send({ error: 'Invalid user ID' });
+    }
+
+    try {
+      const acceptedFriends = await DB('friends')
+        .where({ user_id: userId, status: 'accepted' })
+        .join('credentialsTable', 'credentialsTable.id', '=', 'friends.friend_id')
+        .select('credentialsTable.id', 'credentialsTable.username', 'credentialsTable.email');
+
+      reply.send(acceptedFriends);
+    } catch (e) {
+      console.error(e);
+      reply.status(500).send({ error: 'Failed to fetch friend list' });
+    }
+  });
+
+  app.get('/api/user/search', async (req, reply) => {
+  const q = req.query.q;
+  if (!q) return reply.status(400).send({ error: 'Query required' });
+
+  try {
+    const results = await DB('credentialsTable')
+      .where('username', 'like', `%${q}%`)
+      .orWhere('email', 'like', `%${q}%`)
+      .select('id', 'username', 'email');
+
+    reply.send(results);
+  } catch (e) {
+    console.error(e);
+    reply.status(500).send({ error: 'Search failed' });
+  }
+});
+};
+
+const messageRoutes = (app) => {
+
+	// Send a message
+	app.post('/api/message/send', async (req, reply) => {
+	const { senderId, receiverId, content } = req.body;
+
+	if (!senderId || !receiverId || !content) {
+		return reply.status(400).send({ error: 'Missing sender, receiver, or content' });
+	}
+
+	try {
+		// Check if they are friends (one-way or mutual — adjust if needed)
+		const isFriend = await DB('friends')
+		.where({ user_id: senderId, friend_id: receiverId })
+		.andWhere({ is_blocked: false }) // Optional: check they're not blocked
+		.first();
+
+		if (!isFriend) {
+		return reply.status(403).send({ error: 'You can only message friends' });
+		}
+
+		await DB('messages').insert({
+		sender_id: senderId,
+		receiver_id: receiverId,
+		content
+		});
+
+		reply.send({ success: true, message: 'Message sent' });
+
+	} catch (err) {
+		console.error(err);
+		reply.status(500).send({ error: 'Failed to send message' });
+	}
+	});
+
+
+	// Fetch chat history between two users
+	app.get('/api/message/history', async (req, reply) => {
+		const { user1, user2 } = req.query;
+
+		if (!user1 || !user2) {
+		return reply.status(400).send({ error: 'Missing user IDs' });
+		}
+
+		try {
+		const messages = await DB('messages')
+			.where(function () {
+			this.where({ sender_id: user1, receiver_id: user2 })
+				.orWhere({ sender_id: user2, receiver_id: user1 });
+			})
+			.orderBy('created_at', 'asc');
+
+		reply.send(messages);
+		} catch (err) {
+		console.error(err);
+		reply.status(500).send({ error: 'Failed to fetch messages' });
+		}
+	});
+
+};
+
+module.exports = {developerRoutes, credentialsRoutes, noHandlerRoute, friendRoutes, messageRoutes};

@@ -6,12 +6,13 @@ const fastifyFormbody = require('@fastify/formbody');
 const fastifyCors = require('@fastify/cors');
 const multipart = require('@fastify/multipart');
 const { Server } = require('socket.io');
+const DB = require('./data_controller/dbConfig');
+
 
 const GameEngine = require('./gamelogic/GameEngine.js');
 
-// routes
-const {developerRoutes, credentialsRoutes,noHandlerRoute} = require('./routes/routes'); // Import the routes
-
+// included the friend and message  over here routes
+const {developerRoutes, credentialsRoutes,noHandlerRoute, friendRoutes, messageRoutes} = require('./routes/routes'); // Import the routes
 
 // Load SSL certificates
 const keyPath = path.join(__dirname, 'https_keys/private-key.pem');
@@ -38,28 +39,204 @@ const io = new Server(server, {
   cors: { origin: '*' }, // Allow all origins for Socket.IO
 });
 
-// ***** Game Logic (WebSocket + Game Loop)*******
-const game = new GameEngine();
+const games = {};  
+const onlineUsers = {};
 
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
+	const roomId = socket.id;
+	console.log('Client connected?: ', socket.id);
+	socket.join(roomId);
+	games[roomId] = new GameEngine();
 
-  socket.on('player_move', ({ playerId, direction }) => {
-    game.handlePlayerInput(playerId, direction);
+	socket.on('player_move', ({ playerId, direction }) => {
+	const game = games[roomId];
+	if (game) {
+		game.handlePlayerInput(playerId, direction);
+	}
+	});
+
+	socket.on('start_game_with_friend', ({ friendId }) => {
+	const friendSocketId = onlineUsers[friendId];
+	if (!friendSocketId) {
+		return socket.emit('error', { message: 'Friend is offline' });
+	}
+	const roomId = `game-${socket.id}-${friendId}`;
+	games[roomId] = new GameEngine();
+
+	// Assign player roles and send them
+	io.to(socket.id).emit('game_start', { roomId, playerId: 'player1' });
+	io.to(friendSocketId).emit('game_start', { roomId, playerId: 'player2' });
+	socket.join(roomId);
+	io.sockets.sockets.get(friendSocketId)?.join(roomId);
+	});
+
+	// chat messaging 
+	socket.on('register', (userId) => {
+	onlineUsers[userId] = socket.id;
+	console.log(`User ${userId} is now online with socket ${socket.id}`);
+	});
+	socket.on('friend_block', async ({ blockerId, blockedId }) => {
+    try {
+		const updated = await DB('friends')
+		.where({ user_id: blockerId, friend_id: blockedId })
+		.update({ is_blocked: true });
+		if (!updated) {
+			socket.emit('error', { message: 'Failed to block user' });
+			return;
+		}
+		socket.emit('friend_blocked', { blockedId });
+		const blockedSocket = onlineUsers[blockedId];
+		if (blockedSocket) {
+			io.to(blockedSocket).emit('blocked_by', { by: blockerId });
+		}
+	} catch (err) {
+		console.error('Error in friend_block:', err);
+		socket.emit('error', { message: 'Block failed' });
+	}
+	});
+
+  // Friend Unfriend
+	socket.on('friend_unfriend', async ({ userId, friendId }) => {
+	try {
+		await DB('friends')
+		.where(function () {
+			this.where({ user_id: userId, friend_id: friendId })
+            .orWhere({ user_id: friendId, friend_id: userId });
+		})
+		.del();
+		socket.emit('friend_unfriended', { friendId });
+
+	const friendSocket = onlineUsers[friendId];
+	if (friendSocket) {
+		io.to(friendSocket).emit('unfriended_by', { by: userId });
+	}
+	} catch (err) {
+		console.error('Error in friend_unfriend:', err);
+		socket.emit('error', { message: 'Unfriend failed' });
+	}
   });
 
+	// ----- Chat: Private Messaging -----
+	socket.on('private_message', async ({ from, to, content }) => {
+  try {
+    // Optional: Check for block or friendship if you want
+    const isBlocked = await DB('friends')
+      .where(function () {
+        this.where({ user_id: from, friend_id: to, is_blocked: true })
+            .orWhere({ user_id: to, friend_id: from, is_blocked: true });
+      })
+      .first();
+
+    if (isBlocked) {
+      socket.emit('error', { message: 'You are blocked or have blocked this user' });
+      return;
+    }
+
+    // Store message in DB
+    await DB('messages').insert({
+      sender_id: from,
+      receiver_id: to,
+      content
+    });
+
+    const messagePayload = {
+      from,
+      to,
+      content,
+      timestamp: new Date().toISOString()
+    };
+
+    // Always send to sender immediately
+    socket.emit('message_received', messagePayload);
+
+    // If receiver is online, send real-time
+    const receiverSocket = onlineUsers[to];
+    if (receiverSocket) {
+      io.to(receiverSocket).emit('message_received', messagePayload);
+    }
+
+  } catch (error) {
+    console.error('Error in private_message:', error);
+    socket.emit('error', { message: 'Message failed to send' });
+  }
+});
+
+
+  socket.on('friend_accept', async ({ fromUserId, toUserId }) => {
+  try {
+    const existing = await DB('friends')
+      .where({ user_id: fromUserId, friend_id: toUserId })
+      .first();
+
+    if (!existing || existing.status !== 'pending') {
+      socket.emit('error', { message: 'No pending request found' });
+      return;
+    }
+
+    // Update the original request
+    await DB('friends')
+      .where({ user_id: fromUserId, friend_id: toUserId })
+      .update({ status: 'accepted' });
+
+    // Ensure reciprocal friend entry exists
+    const reverseExists = await DB('friends')
+      .where({ user_id: toUserId, friend_id: fromUserId })
+      .first();
+
+    if (reverseExists) {
+      await DB('friends')
+        .where({ user_id: toUserId, friend_id: fromUserId })
+        .update({ status: 'accepted' });
+    } else {
+      await DB('friends').insert({
+        user_id: toUserId,
+        friend_id: fromUserId,
+        status: 'accepted',
+        is_blocked: false
+      });
+    }
+
+	const senderSocket = onlineUsers[fromUserId];
+	const receiverSocket = onlineUsers[toUserId];
+	if (senderSocket) {
+	  io.to(senderSocket).emit('friend_accepted', { by: toUserId });
+	}
+	if (receiverSocket) {
+	  io.to(receiverSocket).emit('friend_accepted', { by: fromUserId }); 
+	}
+
+	} catch (err) {
+	    console.error(err);
+	    socket.emit('error', { message: 'Failed to accept friend request' });
+	  }
+});
+
+
+  // ----- Handle Disconnection -----
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
-    // Handle player disconnection in the game engine if necessary
-    // game.removePlayer(socket.id);
+
+    // Remove game instance
+    delete games[roomId];
+
+    // Remove user from onlineUsers map
+    for (const [userId, sockId] of Object.entries(onlineUsers)) {
+      if (sockId === socket.id) {
+        delete onlineUsers[userId];
+        break;
+      }
+    }
   });
 });
 
-// Game loop
+
 setInterval(() => {
-  game.update(1 / 60);
-  io.emit('state_update', game.getState());
-}, 1000 / 60); // 60 times per second
+  for (const [roomId, game] of Object.entries(games)) {
+    game.update(1 / 60); // Update game logic
+    io.to(roomId).emit('state_update', game.getState()); // Emit only to this room
+  }
+}, 1000 / 60); // 60 FPS
+
 
 // --- Middlewares ---
 app.register(fastifyCors, { origin: true, credentials: true });
@@ -100,11 +277,10 @@ app.register(fastifyStatic, {
 //--------Routes------------
 developerRoutes(app);
 credentialsRoutes(app);
-
 noHandlerRoute(app);
+messageRoutes(app);
+friendRoutes(app);
 //-------------------------
-
-
 
 const PORT = 3000;
 const HOST = '0.0.0.0'; // Bind to all network interfaces
