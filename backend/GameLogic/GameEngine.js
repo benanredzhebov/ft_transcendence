@@ -6,58 +6,95 @@
 /*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:28:07 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/25 22:28:32 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/05/27 21:43:40 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 // const GameState = require('./GameState.js').default.default.default; // Import GameState
-import GameState from './GameState.js'
+import GameState from './GameState.js';
 
 class GameEngine {
-	constructor() {
-		this.state = new GameState(); // Create a fresh game state (ball, paddles, scores)
-		this.players = new Map(); // Store players by sockedId
-		this.paused = false; // avoiding immediate end the tournament
-	}
+  constructor() {
+    this.state = new GameState();
+    this.connectedSockets = new Set();
+    this.paused = false;
+    this.lastUpdateTime = Date.now();
+  }
 
-	update(dt) {
-		if (this.paused || this.state.gameOver) return ; // Pause logic
-		this.state.updateBall(dt); // Move the ball based on its velocity and time passed
-		this.state.checkCollisions(); // Check if ball hits paddles or walls
-		this.state.updateScores(); // Check if someone scored a point
-	}
+  // Player management
+  addPlayer(socketId) {
+    if (this.connectedSockets.size >= 2) return false;
 
-	pause() {
-		this.paused = true;
-	}
+    const success = this.state.addPlayer(socketId);
+    if (success) {
+      this.connectedSockets.add(socketId);
+      console.log(`Player ${socketId} connected as ${this.state.getPlayerId(socketId)}`);
+    }
+    return success;
+  }
 
-	resume() {
-		this.paused = false;
-	}
+  removePlayer(socketId) {
+    if (!this.connectedSockets.has(socketId)) return;
 
-	handlePlayerInput(playerId, direction) {
-		// Let a player move their paddle up or down
-		this.state.movePaddle(playerId, direction);
-	}
+    this.connectedSockets.delete(socketId);
+    this.state.removePlayer(socketId);
+    console.log(`Player ${socketId} disconnected`);
 
-	getState() {
-		// Return the current game state to send to clients
-		return this.state;
-	}
+    if (this.connectedSockets.size < 2) {
+      this.pause();
+    }
+  }
 
-	resetGame() {
-		console.log('[GameEngine] Resetting game state.');
-		this.state.resetGame();
-	}
-	
-	removePlayer(socketId) {
-		if (this.players.has(socketId)) {
-			this.players.delete(socketId);
-			console.log(`Player with socket ${socketId} removed from GameEngine.`);
-		} else {
-			console.log(`No tracked player found for socket ${socketId}.`);
-		}
-	}
+  // Game loop
+  update() {
+    if (this.paused || this.state.gameOver) return;
+
+    const now = Date.now();
+    const dt = (now - this.lastUpdateTime) / 1000;
+    this.lastUpdateTime = now;
+
+    this.state.update(dt);
+  }
+
+  // Game control
+  handlePlayerInput(socketId, direction) {
+    const playerId = this.state.getPlayerId(socketId);
+    if (playerId && !this.paused && !this.state.gameOver) {
+      this.state.movePaddle(playerId, direction);
+    }
+  }
+
+  pause() {
+    this.paused = true;
+    this.state.pause();
+    console.log('Game paused');
+  }
+
+  resume() {
+    this.paused = false;
+    this.state.resume();
+    this.lastUpdateTime = Date.now();
+    console.log('Game resumed');
+  }
+
+  resetGame() {
+    this.state.resetGame();
+    console.log('Game reset');
+  }
+
+  getState() {
+    return this.state.getState();
+  }
+
+  // Tournament-specific
+  prepareForMatch() {
+    this.resetGame();
+    this.pause();
+  }
+
+  startMatch() {
+    this.resume();
+  }
 }
 
-export default GameEngine; // Export GameEngine
+export default GameEngine;

@@ -6,139 +6,197 @@
 /*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:27:35 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/15 16:00:48 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/05/27 21:43:25 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 class GameState {
-	constructor() {
-		this.width = 900;
-		this.height = 600;
-		this.paddleSpeed = 20;
+  constructor() {
+    // Game dimensions
+    this.width = 900;
+    this.height = 600;
+    this.paddleSpeed = 20;
+    this.initialBallSpeed = 5;
+    this.maxBallSpeed = 10;
 
-		this.paddles = {
-			player1: { y: 250, height: 100, width: 10 },
-			player2: { y: 250, height: 100, width: 10 },
-		};
+    // Game elements
+    this.paddles = {
+      player1: { y: 250, height: 100, width: 10 },
+      player2: { y: 250, height: 100, width: 10 },
+    };
 
-		this.ball = {
-			x: this.width / 2,
-			y: this.height / 2,
-			vx: 5,
-			vy: 3,
-			radius: 10,
-		};
+    this.ball = {
+      x: this.width / 2,
+      y: this.height / 2,
+      vx: 0,
+      vy: 0,
+      radius: 10,
+      speed: this.initialBallSpeed
+    };
 
-		this.score = {
-			player1: 0,
-			player2: 0,
-		};
+    this.score = {
+      player1: 0,
+      player2: 0
+    };
 
-		this.gameOver = false; // ✅ NEW: flag to track game state
-	}
+    // Game state
+    this.gameOver = false;
+    this.paused = false;
+    this.lastScorer = null;
+    
+    // Player management
+    this.connectedPlayers = new Set();
+    this.socketToPlayerMap = new Map(); // Maps socket IDs to player IDs (player1/player2)
+  }
 
-	updateBall(dt) {
-		if (this.gameOver) return; // ✅ Stop ball movement if game is over
+  // Player management methods
+  addPlayer(socketId) {
+    if (this.connectedPlayers.size >= 2) return false;
+    
+    const playerId = this.connectedPlayers.size === 0 ? 'player1' : 'player2';
+    this.connectedPlayers.add(socketId);
+    this.socketToPlayerMap.set(socketId, playerId);
+    return true;
+  }
 
-		this.ball.x += this.ball.vx * dt * 60;
-		this.ball.y += this.ball.vy * dt * 60;
+  removePlayer(socketId) {
+    if (!this.connectedPlayers.has(socketId)) return;
 
-		if (this.ball.y - this.ball.radius < 0 || this.ball.y + this.ball.radius > this.height) {
-			this.ball.vy *= -1;
-		}
+    this.connectedPlayers.delete(socketId);
+    this.socketToPlayerMap.delete(socketId);
 
-		// Left wall: player2 scores
-		if (this.ball.x - this.ball.radius < 0) {
-			this.score.player2++;
-			if (this.score.player2 >= 5) {
-				this.gameOver = true;
-				return;
-			}
-			this.resetBall();
-		}
+    // Reset game if a player disconnects during active game
+    if (!this.gameOver && this.connectedPlayers.size < 2) {
+      this.resetGame();
+    }
+  }
 
-		// Right wall: player1 scores
-		if (this.ball.x + this.ball.radius > this.width) {
-			this.score.player1++;
-			if (this.score.player1 >= 5) {
-				this.gameOver = true;
-				return;
-			}
-			this.resetBall();
-		}
-	}
+  getPlayerId(socketId) {
+    return this.socketToPlayerMap.get(socketId);
+  }
 
-	movePaddle(playerId, direction) {
-		if (this.gameOver) return; // ✅ Prevent paddle movement if game over
+  // Game logic methods
+  update(dt) {
+    if (this.gameOver || this.paused) return;
 
-		const paddle = this.paddles[playerId];
-		if (!paddle) return;
+    this.updateBall(dt);
+    this.checkCollisions();
+  }
 
-		const moveBy = this.paddleSpeed;
-		if (direction === 'up') {
-			paddle.y = Math.max(0, paddle.y - moveBy);
-		} else if (direction === 'down') {
-			paddle.y = Math.min(this.height - paddle.height, paddle.y + moveBy);
-		} else {
-			console.warn(`Invalid direction: ${direction}`);
-		}
-	}
+  updateBall(dt) {
+    const frameCorrection = dt * 60;
+    this.ball.x += this.ball.vx * frameCorrection;
+    this.ball.y += this.ball.vy * frameCorrection;
 
-	checkCollisions() {
-		if (this.gameOver) return;
+    // Wall collisions
+    if (this.ball.y - this.ball.radius < 0 || this.ball.y + this.ball.radius > this.height) {
+      this.ball.vy *= -1;
+    }
 
-		const ball = this.ball;
-		const paddle1 = this.paddles.player1;
-		const paddle2 = this.paddles.player2;
+    // Scoring
+    if (this.ball.x - this.ball.radius < 0) {
+      this.handleScore('player2');
+    } else if (this.ball.x + this.ball.radius > this.width) {
+      this.handleScore('player1');
+    }
+  }
 
-		if (
-			ball.x - ball.radius <= paddle1.width &&
-			ball.y >= paddle1.y &&
-			ball.y <= paddle1.y + paddle1.height
-		) {
-			ball.vx *= -1;
-			ball.x = paddle1.width + ball.radius;
-		}
+  handleScore(scorer) {
+    this.score[scorer]++;
+    this.lastScorer = scorer;
 
-		if (
-			ball.x + ball.radius >= this.width - paddle2.width &&
-			ball.y >= paddle2.y &&
-			ball.y <= paddle2.y + paddle2.height
-		) {
-			ball.vx *= -1;
-			ball.x = this.width - paddle2.width - ball.radius;
-		}
-	}
+    if (this.score[scorer] >= 5) {
+      this.gameOver = true;
+    } else {
+      this.resetBall();
+    }
+  }
 
-	updateScores() {
-		// Optional UI/audio hooks
-	}
+  movePaddle(playerId, direction) {
+    if (this.gameOver || this.paused) return;
 
-	resetBall() {
-		this.ball.x = this.width / 2;
-		this.ball.y = this.height / 2;
-		this.ball.vx = (Math.random() > 0.5 ? 1 : -1) * (5 + Math.random() * 2);
-		this.ball.vy = 3 * (Math.random() > 0.5 ? 1 : -1);
-	}
+    const paddle = this.paddles[playerId];
+    if (!paddle) return;
 
-	resetGame() {
-		this.score = { player1: 0, player2: 0 };
-		this.paddles.player1.y = 250;
-		this.paddles.player2.y = 250;
-		this.gameOver = false;
-		this.resetBall();
-	}
+    const moveBy = this.paddleSpeed;
+    if (direction === 'up') {
+      paddle.y = Math.max(0, paddle.y - moveBy);
+    } else if (direction === 'down') {
+      paddle.y = Math.min(this.height - paddle.height, paddle.y + moveBy);
+    }
+  }
 
-	getState() {
-		return {
-			width: this.width,
-			height: this.height,
-			paddles: this.paddles,
-			ball: this.ball,
-			score: this.score,
-			gameOver: this.gameOver, // ✅ Expose game over flag
-		};
-	}
+  checkCollisions() {
+    const ball = this.ball;
+    const paddle1 = this.paddles.player1;
+    const paddle2 = this.paddles.player2;
+
+    // Player 1 collision
+    if (ball.x - ball.radius <= paddle1.width &&
+        ball.y >= paddle1.y &&
+        ball.y <= paddle1.y + paddle1.height) {
+      this.handlePaddleCollision(paddle1, 'right');
+    }
+
+    // Player 2 collision
+    if (ball.x + ball.radius >= this.width - paddle2.width &&
+        ball.y >= paddle2.y &&
+        ball.y <= paddle2.y + paddle2.height) {
+      this.handlePaddleCollision(paddle2, 'left');
+    }
+  }
+
+  handlePaddleCollision(paddle, side) {
+    const relativeIntersect = (paddle.y + (paddle.height / 2)) - this.ball.y;
+    const normalizedRelative = relativeIntersect / (paddle.height / 2);
+    const bounceAngle = normalizedRelative * (Math.PI / 4);
+    
+    this.ball.speed = Math.min(this.ball.speed * 1.05, this.maxBallSpeed);
+    this.ball.vx = this.ball.speed * (side === 'right' ? 1 : -1);
+    this.ball.vy = -this.ball.speed * Math.sin(bounceAngle);
+  }
+
+  resetBall() {
+    this.ball.x = this.width / 2;
+    this.ball.y = this.height / 2;
+    this.ball.speed = this.initialBallSpeed;
+    
+    const serveDirection = this.lastScorer === 'player1' ? -1 : 1;
+    const randomAngle = (Math.random() * Math.PI / 3) - (Math.PI / 6);
+    
+    this.ball.vx = this.ball.speed * serveDirection * Math.cos(randomAngle);
+    this.ball.vy = this.ball.speed * Math.sin(randomAngle);
+  }
+
+  resetGame() {
+    this.score = { player1: 0, player2: 0 };
+    this.paddles.player1.y = 250;
+    this.paddles.player2.y = 250;
+    this.gameOver = false;
+    this.paused = false;
+    this.lastScorer = null;
+    this.resetBall();
+  }
+
+  pause() {
+    this.paused = true;
+  }
+
+  resume() {
+    this.paused = false;
+  }
+
+  getState() {
+    return {
+      width: this.width,
+      height: this.height,
+      paddles: { ...this.paddles },
+      ball: { ...this.ball },
+      score: { ...this.score },
+      gameOver: this.gameOver,
+      paused: this.paused
+    };
+  }
 }
 
 export default GameState;

@@ -6,7 +6,7 @@
 /*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/27 17:29:04 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/05/27 21:46:26 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -76,126 +76,163 @@ const io = new Server(server, {
 let tournament = null;
 const game = new GameEngine();
 
+// Improved countdown function with cleanup
+function startSynchronizedCountdown(io, duration = 10) {
+  let remaining = duration;
+  
+  const countdownInterval = setInterval(() => {
+    io.emit('countdown_update', remaining);
+    remaining--;
+    
+    if (remaining < 0) {
+      clearInterval(countdownInterval);
+      game.startMatch(); // Use GameEngine's method
+      io.emit('start_match');
+    }
+  }, 1000);
+
+  return countdownInterval;
+}
+
+// Improved game loop with delta timing
+let lastUpdate = Date.now();
+setInterval(() => {
+  const now = Date.now();
+  const dt = (now - lastUpdate) / 1000; // Convert to seconds
+  lastUpdate = now;
+  
+  if (!game.paused) {
+    game.update();
+    io.emit('state_update', game.getState());
+  }
+}, 1000 / 60); // 60 FPS
 
 io.on('connection', (socket) => {
-	console.log('Client connected:', socket.id);
+  console.log('Client connected:', socket.id);
+  
+  // Add player with error handling
+  if (!game.addPlayer(socket.id)) {
+    socket.emit('error', { message: 'Game is full' });
+    socket.disconnect();
+    return;
+  }
 
-	socket.on('player_move', ({ playerId, direction }) => {
-		console.log(`Player ${playerId} moved ${direction}`);
-		game.handlePlayerInput(playerId, direction);
-	});
+  socket.on('player_move', ({ direction }) => {
+    game.handlePlayerInput(socket.id, direction);
+  });
 
-	socket.on('restart_game', () => {
-		game.resetGame(); // Resets the score , ball paddles	
-		io.emit('state_update', game.getState()); // Push to all clients
-	});
+  socket.on('restart_game', () => {
+    game.resetGame();
+    io.emit('state_update', game.getState());
+  });
 
-	// Tournament Registration 
-	socket.on('register_alias', (alias) => {
-		if (!tournament) tournament = new Tournament();
-		
-		const success = tournament.registerPlayer(socket.id, alias);
-		socket.emit('alias_registered', {success});
+  // Tournament Registration 
+  socket.on('register_alias', (alias) => {
+    if (!tournament) tournament = new Tournament();
+    
+    const success = tournament.registerPlayer(socket.id, alias);
+    socket.emit('alias_registered', { success });
 
-		if (success) {
-			const playerList = Array.from(tournament.players.entries()).map(([socketId, alias]) => ({
-				socketId,
-				alias
-			}));
-			io.emit('player_list_updated', playerList);
+    if (success) {
+      const playerList = Array.from(tournament.players.entries()).map(([socketId, {alias}]) => ({
+        socketId,
+        alias
+      }));
+      io.emit('player_list_updated', playerList);
 
-			if (tournament.players.size >= 2 && tournament.rounds.length === 0) {
-				tournament.generateInitialBracket();
-				
-				if (tournament.currentMatch) {
-					const [player1, player2] = tournament.currentMatch;
-					const [player1Socket] = player1;
-					const [player2Socket] = player2;
-					
-					game.resetGame();
-					game.pause();
-					
-					io.emit('match_announcement', tournament.currentMatch); // still shows alias to everyone
-					
+      if (tournament.canStartTournament() && tournament.rounds.length === 0) {
+        tournament.generateInitialBracket();
+        const currentMatch = tournament.getCurrentMatchPlayers();
+        
+        game.prepareForMatch(); // Use GameEngine's tournament method
+        io.emit('match_announcement', {
+          player1: currentMatch.player1,
+          player2: currentMatch.player2
+        });
 
-					setTimeout(() => {
-						game.resetGame();
-						game.resume();
-						io.to(player1Socket).emit('assign_controls', 'player1');
-						if (player2Socket)
-							io.to(player2Socket).emit('assign_controls', 'player2');
-						io.emit('start_match'); //emit a new event like start_match after the countdown finishes on the server.
-						io.emit('state_update', game.getState());
-					}, 10000);
-				}
-			} else {
-				socket.emit('tournament_waiting', {
-					message: 'Waiting for more players to join the tournament...',
-				});
-			}
-		}
-	});
-	
-	socket.on('match_ended', ({winnerSocketId}) => {
-		if (!tournament || !tournament.currentMatch) {
-			// Prevent advancing if no match was started
-			console.warn('match_ended received but no currentmatch exists');
-			return;
-		}
+        socket.emit('await_player_ready');
+      } else {
+        socket.emit('tournament_waiting', {
+          message: 'Waiting for more players to join...',
+          playersNeeded: 2 - tournament.players.size
+        });
+      }
+    }
+  });
 
-		// Don't allow winner with zero score
-		if (game.getState().score.player1 === 0 && game.getState().score.player2 === 0) {
-			console.warn('Ignoring match_ended: no score change (likely false trigger)');
-			return;
-		}
-		
-		const next = tournament.recordWinner(winnerSocketId);
-		if (next) {
-			const [player1, player2] = next;
-			const [player1Socket] = player1;
-			const [player2Socket] = player2;
-			
-			game.resetGame(); // reset scores and ball 
-			game.pause(); // pause updates before match starts
-			
-			io.emit('match_announcement', next); // show aliases to all
-			
-			// Emit countdown start to both players
-			io.to(player1Socket).emit('start_match');
-			if (player2Socket)
-				io.to(player2Socket).emit('start_match');
-			
-			setTimeout(() => {
-				game.resume();
-				io.to(player1Socket).emit('assign_controls', 'player1');
-				if (player2Socket)
-					io.to(player2Socket).emit('assign_controls', 'player2');
-				io.emit('state_update', game.getState()); 
-			}, 10000);
-		} else {
-			io.emit('tournament_over');
-			tournament.resetTournament(); // Clear tournament after it's done
-			tournament = null;
-		}
-	});
+  socket.on('player_ready', () => {
+    if (!tournament) return;
+    
+    tournament.markPlayerReady(socket.id);
+    
+    if (tournament.allPlayersReady()) {
+      const currentMatch = tournament.getCurrentMatchPlayers();
+      
+      // Assign controls
+      io.to(currentMatch.player1.socketId).emit('assign_controls', 'player1');
+      if (currentMatch.player2) {
+        io.to(currentMatch.player2.socketId).emit('assign_controls', 'player2');
+      }
+      
+      startSynchronizedCountdown(io);
+    }
+  });
+  
+  socket.on('match_ended', ({ winnerSocketId }) => {
+    if (!tournament?.currentMatch) {
+      console.warn('match_ended received but no current match');
+      return;
+    }
 
-	socket.on('disconnect', () => {
-		console.log('Client disconnected:', socket.id);
-		
-		if (tournament) {
-			tournament.removePlayer(socket.id);
-			const updatedList = Array.from(tournament.players.entries()).map(([socketId, alias]) => ({
-				socketId,
-				alias
-			}));
-			
-			if (tournament.players.size < 2) {
-				tournament.resetTournament();
-				tournament = null;
-			}
-		}
-		game.removePlayer(socket.id);
-	});
+    const state = game.getState();
+    if (state.score.player1 === 0 && state.score.player2 === 0) {
+      console.warn('Ignoring match_ended: no score change');
+      return;
+    }
+    
+    const nextMatch = tournament.recordWinner(winnerSocketId);
+    
+    if (nextMatch) {
+      const { player1, player2 } = tournament.getCurrentMatchPlayers();
+      game.prepareForMatch();
+      
+      io.emit('match_announcement', { player1, player2 });
+      
+      // Reset ready states
+      tournament.players.forEach(player => player.isReady = false);
+      
+      io.to(player1.socketId).emit('await_player_ready');
+      if (player2) io.to(player2.socketId).emit('await_player_ready');
+    } else {
+      const winner = tournament.winners[0][1];
+      io.emit('tournament_over', { winner });
+      tournament = null;
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+    game.removePlayer(socket.id);
+    
+    if (tournament) {
+      tournament.removePlayer(socket.id);
+      
+      // Check if current match player disconnected
+      if (tournament.currentMatch) {
+        const [p1, p2] = tournament.currentMatch;
+        if (socket.id === p1[0] || socket.id === p2?.[0]) {
+          game.resetGame();
+          io.emit('match_cancelled');
+        }
+      }
+      
+      // End tournament if not enough players
+      if (tournament.players.size < 2) {
+        tournament = null;
+        io.emit('tournament_cancelled');
+      }
+    }
+  });
 });
 
 // Game loop
@@ -213,7 +250,7 @@ app.register(fastifyCors, { origin: true, credentials: true });
 app.register(multipart, { // Now 'multipart' is defined
   // attachFieldsToBody: true,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 5MB
+	fileSize: 10 * 1024 * 1024, // 5MB
   }
 });
 
