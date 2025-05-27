@@ -3,478 +3,516 @@
 /*                                                        :::      ::::::::   */
 /*   game.ts                                            :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
+/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2025/05/09 10:37:25 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/09 10:37:25 by beredzhe         ###   ########.fr       */
+/*   Created: 2025/05/27 18:50:43 by benanredzhe       #+#    #+#             */
+/*   Updated: 2025/05/27 18:50:43 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import './game.css';
 import { io, Socket } from 'socket.io-client';
 
+// Game State Variables
 let gameEnded = false;
 let matchStarted = false;
-let pressedKeys = new Set<string>(); // Set to track currently pressed keys and handle movement using a game loop
+let pressedKeys = new Set<string>();
 let inTournament = false;
-let currentMatch: [string, string] | null = null; // Track current match with alias mapping
+let currentMatch: [string, string] | null = null;
 let aliasMap: Record<string, string> = {};
 let assignedPlayerId: 'player1' | 'player2' | null = null;
 let movePlayersFrame: number | null = null;
 let countDownActive = false;
 
+// Game State Interfaces
 interface PaddleState {
-	y: number;
-	height: number;
-	width: number;
-}
-interface BallState {
-	x: number;
-	y: number;
-	radius: number;
-}
-interface GameState {
-	paddles: { player1: PaddleState; player2: PaddleState };
-	ball: BallState;
-	score: { player1: number; player2: number };
-	gameOver: boolean;
+  y: number;
+  height: number;
+  width: number;
 }
 
+interface BallState {
+  x: number;
+  y: number;
+  radius: number;
+}
+
+interface GameState {
+  paddles: { player1: PaddleState; player2: PaddleState };
+  ball: BallState;
+  score: { player1: number; player2: number };
+  gameOver: boolean;
+}
+
+// Constants
 const SERVER_WIDTH = 900;
 const SERVER_HEIGHT = 600;
 
+// DOM Elements
 let socket: Socket | null = null;
 let canvas: HTMLCanvasElement | null = null;
 let ctx: CanvasRenderingContext2D | null = null;
 let resizeObserver: ResizeObserver | null = null;
 
-function showMatchInfo(player1: string, player2: string, score1: number, score2: number) {
-	const existing = document.getElementById('match-info-box');
-	if (existing) {
-		existing.innerHTML = `
-			<div><strong>${player1}</strong> vs <strong>${player2}</strong></div>
-			<div style="text-align: center; margin-top: 4px; font-size: 20px;">
-				${score1} : ${score2}
-			</div>
-		`;
-		return;
-	}
-
-	const box = document.createElement('div');
-	box.id = 'match-info-box';
-	box.className = 'match-info-box';
-
-	box.innerHTML = `
-		<div><strong>${player1}</strong> vs <strong>${player2}</strong></div>
-		<div style="text-align: center; margin-top: 4px; font-size: 20px;">
-			${score1} : ${score2}
-		</div>
-	`;
-
-	document.body.appendChild(box);
-
-	// Optional: auto-hide after X seconds
-	// setTimeout(() => {
-	// 	box.remove();
-	// }, 5000);
-}
-
-function drawGame(state: GameState) {
-	if (!ctx || !canvas || gameEnded) return;	
-
-	const scaleX = canvas.width / SERVER_WIDTH;
-	const scaleY = canvas.height / SERVER_HEIGHT;
-
-	ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-	// Background
-	ctx.fillStyle = 'black';
-	ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-	// Paddles
-	ctx.fillStyle = 'white';
-	ctx.fillRect(0, state.paddles.player1.y * scaleY, 10 * scaleX, state.paddles.player1.height * scaleY);
-	ctx.fillRect(
-		canvas.width - 10 * scaleX,
-		state.paddles.player2.y * scaleY,
-		10 * scaleX,
-		state.paddles.player2.height * scaleY
-	);
-
-	// Ball
-	ctx.fillStyle = 'yellow';
-	ctx.beginPath();
-	ctx.arc(
-		state.ball.x * scaleX,
-		state.ball.y * scaleY,
-		state.ball.radius * Math.min(scaleX, scaleY),
-		0,
-		Math.PI * 2
-	);
-	ctx.fill();
-
-	// Draw score
-	ctx.fillStyle = 'green';
-	ctx.font = `${40 * Math.min(scaleX, scaleY)}px Arial`;
-	ctx.textAlign = 'center';
-	ctx.fillText(
-		`${state.score.player1} : ${state.score.player2}`,
-		canvas.width / 2,
-		50 * scaleY
-	);
-}
-
-function handleResize(container: HTMLElement) {
-	if (!canvas) return;
-
-	const aspectRatio = SERVER_WIDTH / SERVER_HEIGHT;
-	let newWidth = container.clientWidth;
-	let newHeight = newWidth / aspectRatio;
-	if (newHeight > container.clientHeight) {
-		newHeight = container.clientHeight;
-		newWidth = newHeight * aspectRatio;
-	}
-	canvas.width = newWidth;
-	canvas.height = newHeight;
-}
-
-function movePlayers() {
-	if (!socket || gameEnded || !matchStarted && inTournament) return;
-
-	if (inTournament) {
-		if (assignedPlayerId === 'player1') {
-			if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
-			if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
-		}
-		if (assignedPlayerId === 'player2') {
-			if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
-			if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
-		}
-	} else {
-		// Local match allowed both players
-		if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
-		if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
-		if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
-		if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
-	}
-
-	movePlayersFrame = requestAnimationFrame(movePlayers); //Movement is updated in sync with the game loop 
-}
-
-function handleKeyDown(e: KeyboardEvent) {
-	if (gameEnded) return;
-	pressedKeys.add(e.key.toLowerCase());
-}
-
-function handleKeyUp(e: KeyboardEvent) {
-	pressedKeys.delete(e.key.toLowerCase());
-}
-
-function cleanupGame() {
-	if (movePlayersFrame !== null) {
-		cancelAnimationFrame(movePlayersFrame);
-		movePlayersFrame = null;
-	}
-	if (socket) {
-		socket.disconnect();
-		socket = null;
-	}
-	window.removeEventListener('keydown', handleKeyDown);
-	window.removeEventListener('resize', onResize); // ✅ CLEANUP
-	window.removeEventListener('orientationchange', onResize); // ✅ CLEANUP
-	window.removeEventListener('focus', onResize); // ✅ CLEANUP
-	document.removeEventListener('visibilitychange', onResize); // ✅ CLEANUP
-	resizeObserver?.disconnect(); // ✅ CLEANUP ResizeObserver
-	resizeObserver = null;
-	pressedKeys.clear(); // clear key state
-
-	const matchBox = document.getElementById('match-info-box');
-	if (matchBox) matchBox.remove();
-}
-
-function onResize() {
-	if (canvas?.parentElement) {
-		handleResize(canvas.parentElement);
-	}
-}
-
-function showGameOverScreen(winner: string) {
-	if (!canvas?.parentElement) return;
-
-	gameEnded = true; // stop drawing and movement
-
-	const	overlay = document.createElement('div');
-	overlay.className = 'game-overlay';
-
-	const message = document.createElement('div');
-	message.className = 'game-message';
-	message.textContent = `${winner} wins!`;
-
-	const buttons = document.createElement('div');
-	buttons.className = 'game-buttons';
-
-	if (!inTournament) {
-		const startBtn = document.createElement('button');
-		startBtn.textContent = "Start Tournament";
-		startBtn.onclick = () => {
-			promptAliasRegistration();
-		};
-		buttons.appendChild(startBtn);
-	}
-	
-	const restartBtn = document.createElement('button');
-	restartBtn.textContent = "Restart game";
-	restartBtn.onclick = () => {
-		if (socket) {
-			socket.emit('restart_game');
-			gameEnded = false; //Allow movement and drawing again
-			overlay.remove(); //Remove overlay from UI
-			canvas?.focus();
-		}
-	};
-
-	const dashboardBtn = document.createElement('button');
-	dashboardBtn.textContent = 'Back to Dashboard';
-	dashboardBtn.onclick = () => {
-		window.location.href = '/dashboard'; // route of the dashboard
-	};
-
-	buttons.appendChild(restartBtn);
-	buttons.appendChild(dashboardBtn);
-	overlay.appendChild(message);
-	overlay.appendChild(buttons);
-	canvas.parentElement.appendChild(overlay);
-}
-
-//Alias registration and listening for the tournaments
+// Tournament Functions
 function promptAliasRegistration() {
-	const alias = prompt("Enter your tournament alias:");
-	if (!alias) return;
-
-	socket?.emit('register_alias', alias);
-
-	socket?.once('alias_registered', ({ success }) => {
-		if (success) {
-			inTournament = true;
-			alert("Alias registered successfully!");
-			// socket?.emit('start_tournament'); // Backend checks players
-		} else {
-			alert("Alias already taken. Try a different one.");
-			promptAliasRegistration(); // Retry
-		}
-	});
+  const alias = prompt("Enter your tournament alias:");
+  if (alias) socket?.emit('register_alias', alias);
 }
 
-export function renderGame(containerId: string = 'app') {
-	const container = document.getElementById(containerId);
-	if (!container) return;
+function showTournamentDialog(message: string, options?: { confirmText?: string, timer?: number }) {
+  const existing = document.querySelector('.tournament-dialog');
+  if (existing) existing.remove();
 
-	container.innerHTML = '';
-	gameEnded = false;
+  const dialog = document.createElement('div');
+  dialog.className = 'tournament-dialog';
 
-	// Show loading
-	const loading = document.createElement('div');
-	loading.textContent = 'Loading game...';
-	loading.className = 'game-loading';
+  dialog.innerHTML = `
+	<div class="dialog-content">
+	  <p>${message}</p>
+	  ${options?.confirmText ? 
+		`<button class="confirm-btn">${options.confirmText}</button>` : 
+		''}
+	  ${options?.timer ? 
+		`<div class="countdown">Starting in ${options.timer}...</div>` : 
+		''}
+	</div>
+  `;
 
-	const spinner = document.createElement('div');
-	spinner.className = 'spinner';
-	loading.appendChild(spinner);
+  if (options?.confirmText) {
+	dialog.querySelector('button')!.onclick = () => {
+	  socket?.emit('player_ready');
+	  dialog.remove();
+	};
+  }
 
-	container.appendChild(loading);
+  document.body.appendChild(dialog);
+  return dialog;
+}
 
-	// Apply the container styling
-	container.className = 'game-container'
+function updateCountdownDisplay(seconds: number) {
+  let dialog = document.querySelector('.tournament-dialog');
+  if (!dialog) {
+	dialog = showTournamentDialog('Match starting soon...', { timer: seconds });
+  }
+  
+  const countdownEl = dialog.querySelector('.countdown');
+  if (countdownEl) {
+	countdownEl.textContent = `Starting in ${seconds}...`;
+  }
+  
+  if (seconds <= 0) {
+	setTimeout(() => dialog?.remove(), 1000);
+  }
+}
 
-	// Create and style canvas
-	canvas = document.createElement('canvas');
-	canvas.className = 'game-canvas'; //Apply the CSS class for styling
-	ctx = canvas.getContext('2d');
-	container.appendChild(canvas);
+function setupTournamentHandlers() {
+  if (!socket) return;
 
-	// Initial resize
-	handleResize(container);
-	// window.addEventListener('resize', () => handleResize(container));
-
-
-	// ✅ RESIZE LISTENERS
-	window.addEventListener('resize', onResize);
-	window.addEventListener('orientationchange', onResize);
-	window.addEventListener('focus', onResize);
-	document.addEventListener('visibilitychange', () => {
-		if (document.visibilityState === 'visible') onResize();
-	});
-
-	// ✅ ResizeObserver for precision
-	if (canvas?.parentElement) {
-		resizeObserver = new ResizeObserver(() => {
-		handleResize(container);
-	});
-	resizeObserver.observe(container);
+  socket.on('alias_registered', ({ success }) => {
+	if (success) {
+	  inTournament = true;
+	  showTournamentDialog('Registered! Waiting for tournament to start...');
+	} else {
+	  showTournamentDialog('Alias already taken. Please try another name.', {
+		confirmText: 'Try Again'
+	  }).querySelector('button')!.onclick = () => {
+		promptAliasRegistration();
+	  };
 	}
+  });
 
-	window.addEventListener('keydown', handleKeyDown);
-	window.addEventListener('keyup', handleKeyUp);
-	window.addEventListener('beforeunload', cleanupGame);
-
-	socket = io('https://127.0.0.1:3000', {
-		transports: ['websocket'],
-		secure: true
+  socket.on('await_player_ready', () => {
+	showTournamentDialog('Match ready!', {
+	  confirmText: 'I\'m Ready'
 	});
-	console.log("Connecting to the WebSocket server...");
+  });
 
-	//Listen for waiting message
-	socket?.on('tournament_waiting', ({message}) => {
-		alert(message); // can improve this with a UI instead of alert
-	});
+  socket.on('countdown_update', (remaining: number) => {
+	updateCountdownDisplay(remaining);
+  });
 
-	socket.on('connect_error', (err) => {
-		console.error('WebSocket connection error:', err.message);
-	});
-
-	socket.on('assign_controls', (playerId) => {
-		assignedPlayerId = playerId;
-		if (movePlayersFrame === null) movePlayers();
-	});
-
-	// Socket connect block
-	socket.on('connect', () => {
-		console.log('✅ Connected:', socket!.id);
+  socket.on('match_announcement', (match: { 
+	player1: { socketId: string, alias: string },
+	player2: { socketId: string, alias: string } | null 
+  }) => {
+	currentMatch = [
+	  match.player1.alias,
+	  match.player2?.alias || 'Bye'
+	];
 	
-		// Detect if tournament mode is enabled via URL query
-		const urlParams = new URLSearchParams(window.location.search);
-		const tournamentMode = urlParams.get('tournament') === 'true';
+	aliasMap = {
+	  [match.player1.socketId]: match.player1.alias,
+	  ...(match.player2 ? { [match.player2.socketId]: match.player2.alias } : {})
+	};
 
-		if (!tournamentMode) {
-			socket!.emit('restart_game');
-			if (movePlayersFrame === null) movePlayers();
-		}
+	showMatchInfo(match.player1.alias, match.player2?.alias || 'Bye', 0, 0);
+	
+  if (socket && socket.id === match.player1.socketId) {
+    assignedPlayerId = 'player1';
+  } else if (match.player2 && socket && socket.id === match.player2.socketId) {
+    assignedPlayerId = 'player2';
+  } else {
+    assignedPlayerId = null;
+  }
+  });
 
-		gameEnded = false;
+  socket.on('start_match', () => {
+	matchStarted = true;
+	gameEnded = false;
+	if (movePlayersFrame === null) movePlayers();
+  });
 
-		if (tournamentMode) {
-			promptAliasRegistration(); // Trigger alias prompt and start
-		}
-	});
-
-	socket.on('player_list_updated', (players: { socketId: string, alias: string }[]) => {
-		aliasMap = {}; // Clear and repopulate
-		for (const player of players) {
-			aliasMap[player.socketId] = player.alias;
-		}
-		console.log("Alias map updated:", aliasMap);
-	});
-
-
-	socket.on('disconnect', () => {
-		console.warn('🔌 Disconnected from server');
-		assignedPlayerId = null;
-		if (ctx && canvas) {
-			ctx.fillStyle = 'red';
-			ctx.font = '20px Arial';
-			ctx.textAlign = 'center';
-			ctx.fillText('Disconnected', canvas.width / 2, canvas.height / 2);
-		}
-	});
-
-	socket.on('start_match', () => {
-		countDownActive = true;
-
-		const countdownBox = document.createElement('div');
-		countdownBox.className = 'countdown-box';
-		countdownBox.textContent = 'Match starting in 10...';
-		document.body.appendChild(countdownBox);
-
-		const countdownTick = new Audio('/sounds/tick.mp3');
-		const matchStartSound = new Audio('/sound/start.mp3');
-
-		let timeLeft = 10;
-		const interval = setInterval(() => {
-			timeLeft--;
-			countdownBox.textContent = `Match starting in ${timeLeft}...`;
-			countdownTick.play();
-
-			if (timeLeft <= 0) {
-				clearInterval(interval);
-				countdownBox.remove();
-				matchStartSound.play();
-				countDownActive = false; // Allow game updates now
-				matchStarted = true;
-				if (movePlayersFrame === null) movePlayers(); //resume movement
-			}
-		}, 1000);
-	});
-
-	// ✅ Ensure canvas is resized before every render
-	socket.on('state_update', (state: GameState & { gameOver: boolean }) => {
-		if (countDownActive) return;
-		
-		const loading = document.querySelector(".game-loading");
-		if (loading) loading.remove();
-
-		if (canvas?.parentElement) handleResize(canvas.parentElement);
-		requestAnimationFrame(() => drawGame(state));
-
-		if (inTournament && (state.score.player1 === 0 && state.score.player2 === 0)) {
-			gameEnded = false;
-		}
-
-		// Update score dynamically
-		if (inTournament && currentMatch) {
-			const [alias1, alias2] = currentMatch;
-			showMatchInfo(alias1, alias2, state.score.player1, state.score.player2);
-		}
-
-		
-		//GAME OVER LOGIC
-		if (!gameEnded && state.gameOver) {
-			if (state.score.player1 === 0 && state.score.player2 === 0) return;
-
-			let winner = 'Unknown';
-
-			if (state.score.player1 >= 5) {
-				winner = inTournament && currentMatch ? currentMatch[0] : 'Player 1';
-			} else if (state.score.player2 >= 5) {
-				winner = inTournament && currentMatch ? currentMatch[1] : 'Player 2';
-			}
-			showGameOverScreen(winner);
-			gameEnded = true;
-			matchStarted = false;
-
-			if (inTournament && currentMatch) {
-				socket?.emit('match_ended', {winnerSocketId: socket.id});
-			}
-		}
-	});
-
-	// MATCH ANNOUNCEMENT //
-	socket.on('match_announcement', (match: [[string, string], [string, string]]) => {
-		const [player1, player2] = match;
-		const [socketId1, alias1] = player1;
-		const [socketId2, alias2] = player2;
-
-		currentMatch = [alias1, alias2];
-		aliasMap = {
-			[socketId1]: alias1,
-			[socketId2]: alias2
-		};
-		
-		const overlay = document.querySelector('.game-overlay');
-		if (overlay) overlay.remove();
-
-		gameEnded = false; //match just started
-		countDownActive = true; // Block updates during coundown
-
-		showMatchInfo(alias1, alias2, 0, 0);
-
-		alert(`Next Match: ${alias1} vs ${alias2}`);
-	});
-
-	socket.on('tournament_over', () => {
-	alert("Tournament finished!");
+  socket.on('tournament_over', ({ winner }: { winner: string }) => {
+	showTournamentDialog(`Tournament winner: ${winner}!`, {
+	  confirmText: 'Return to Lobby'
+	}).querySelector('button')!.onclick = () => {
+	  window.location.href = '/';
+	};
+	
 	inTournament = false;
 	currentMatch = null;
 	assignedPlayerId = null;
-	matchStarted = false;
+  });
+}
+
+// Game UI Functions
+function showMatchInfo(player1: string, player2: string, score1: number, score2: number) {
+  const existing = document.getElementById('match-info-box');
+  if (existing) {
+	existing.innerHTML = `
+	  <div><strong>${player1}</strong> vs <strong>${player2}</strong></div>
+	  <div style="text-align: center; margin-top: 4px; font-size: 20px;">
+		${score1} : ${score2}
+	  </div>
+	`;
+	return;
+  }
+
+  const box = document.createElement('div');
+  box.id = 'match-info-box';
+  box.className = 'match-info-box';
+
+  box.innerHTML = `
+	<div><strong>${player1}</strong> vs <strong>${player2}</strong></div>
+	<div style="text-align: center; margin-top: 4px; font-size: 20px;">
+	  ${score1} : ${score2}
+	</div>
+  `;
+
+  document.body.appendChild(box);
+}
+
+function showGameOverScreen(winner: string) {
+  if (!canvas?.parentElement) return;
+
+  gameEnded = true;
+  matchStarted = false;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'game-overlay';
+
+  const message = document.createElement('div');
+  message.className = 'game-message';
+  message.textContent = `${winner} wins!`;
+
+  const buttons = document.createElement('div');
+  buttons.className = 'game-buttons';
+
+  if (!inTournament) {
+	const startBtn = document.createElement('button');
+	startBtn.textContent = "Start Tournament";
+	startBtn.onclick = () => promptAliasRegistration();
+	buttons.appendChild(startBtn);
+  }
+  
+  const restartBtn = document.createElement('button');
+  restartBtn.textContent = "Restart game";
+  restartBtn.onclick = () => {
+	if (socket) {
+	  socket.emit('restart_game');
+	  gameEnded = false;
+	  overlay.remove();
+	  canvas?.focus();
+	}
+  };
+
+  const dashboardBtn = document.createElement('button');
+  dashboardBtn.textContent = 'Back to Dashboard';
+  dashboardBtn.onclick = () => {
+	window.location.href = '/dashboard';
+  };
+
+  buttons.appendChild(restartBtn);
+  buttons.appendChild(dashboardBtn);
+  overlay.appendChild(message);
+  overlay.appendChild(buttons);
+  canvas.parentElement.appendChild(overlay);
+}
+
+// Game Rendering Functions
+function drawGame(state: GameState) {
+  if (!ctx || !canvas || gameEnded) return;
+
+  const scaleX = canvas.width / SERVER_WIDTH;
+  const scaleY = canvas.height / SERVER_HEIGHT;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Background
+  ctx.fillStyle = 'black';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Paddles
+  ctx.fillStyle = 'white';
+  ctx.fillRect(
+	0, 
+	state.paddles.player1.y * scaleY, 
+	10 * scaleX, 
+	state.paddles.player1.height * scaleY
+  );
+  ctx.fillRect(
+	canvas.width - 10 * scaleX,
+	state.paddles.player2.y * scaleY,
+	10 * scaleX,
+	state.paddles.player2.height * scaleY
+  );
+
+  // Ball
+  ctx.fillStyle = 'yellow';
+  ctx.beginPath();
+  ctx.arc(
+	state.ball.x * scaleX,
+	state.ball.y * scaleY,
+	state.ball.radius * Math.min(scaleX, scaleY),
+	0,
+	Math.PI * 2
+  );
+  ctx.fill();
+
+  // Score
+  ctx.fillStyle = 'green';
+  ctx.font = `${40 * Math.min(scaleX, scaleY)}px Arial`;
+  ctx.textAlign = 'center';
+  ctx.fillText(
+	`${state.score.player1} : ${state.score.player2}`,
+	canvas.width / 2,
+	50 * scaleY
+  );
+}
+
+function handleResize(container: HTMLElement) {
+  if (!canvas) return;
+
+  const aspectRatio = SERVER_WIDTH / SERVER_HEIGHT;
+  let newWidth = container.clientWidth;
+  let newHeight = newWidth / aspectRatio;
+  
+  if (newHeight > container.clientHeight) {
+	newHeight = container.clientHeight;
+	newWidth = newHeight * aspectRatio;
+  }
+
+  canvas.width = newWidth;
+  canvas.height = newHeight;
+}
+
+// Game Control Functions
+function movePlayers() {
+  if (!socket || gameEnded || (!matchStarted && inTournament)) return;
+
+  if (inTournament) {
+	if (assignedPlayerId === 'player1') {
+	  if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
+	  if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
+	}
+	if (assignedPlayerId === 'player2') {
+	  if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
+	  if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
+	}
+  } else {
+	// Local match controls
+	if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
+	if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
+	if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
+	if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
+  }
+
+  movePlayersFrame = requestAnimationFrame(movePlayers);
+}
+
+function handleKeyDown(e: KeyboardEvent) {
+  if (gameEnded) return;
+  pressedKeys.add(e.key.toLowerCase());
+}
+
+function handleKeyUp(e: KeyboardEvent) {
+  pressedKeys.delete(e.key.toLowerCase());
+}
+
+// Cleanup Functions
+function cleanupGame() {
+  if (movePlayersFrame !== null) {
+	cancelAnimationFrame(movePlayersFrame);
+	movePlayersFrame = null;
+  }
+
+  if (socket) {
+	socket.disconnect();
+	socket = null;
+  }
+
+  window.removeEventListener('keydown', handleKeyDown);
+  window.removeEventListener('keyup', handleKeyUp);
+  window.removeEventListener('resize', onResize);
+  window.removeEventListener('orientationchange', onResize);
+  window.removeEventListener('focus', onResize);
+  document.removeEventListener('visibilitychange', onResize);
+  
+  resizeObserver?.disconnect();
+  resizeObserver = null;
+  
+  pressedKeys.clear();
+
+  const matchBox = document.getElementById('match-info-box');
+  if (matchBox) matchBox.remove();
+}
+
+function onResize() {
+  if (canvas?.parentElement) {
+	handleResize(canvas.parentElement);
+  }
+}
+
+// Main Game Function
+export function renderGame(containerId: string = 'app') {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  // Cleanup previous game if exists
+  cleanupGame();
+  container.innerHTML = '';
+  gameEnded = false;
+
+  // Loading screen
+  const loading = document.createElement('div');
+  loading.className = 'game-loading';
+  loading.innerHTML = `
+	<div>Loading game...</div>
+	<div class="spinner"></div>
+  `;
+  container.appendChild(loading);
+
+  // Game container setup
+  container.className = 'game-container';
+
+  // Canvas setup
+  canvas = document.createElement('canvas');
+  canvas.className = 'game-canvas';
+  ctx = canvas.getContext('2d');
+  container.appendChild(canvas);
+
+  // Event listeners
+  window.addEventListener('keydown', handleKeyDown);
+  window.addEventListener('keyup', handleKeyUp);
+  window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', onResize);
+  window.addEventListener('focus', onResize);
+  document.addEventListener('visibilitychange', () => {
+	if (document.visibilityState === 'visible') onResize();
+  });
+  window.addEventListener('beforeunload', cleanupGame);
+
+  // Resize observer
+  if (canvas.parentElement) {
+	resizeObserver = new ResizeObserver(() => handleResize(container));
+	resizeObserver.observe(container);
+  }
+
+  // Initial resize
+  handleResize(container);
+
+  // Socket connection
+  socket = io('https://127.0.0.1:3000', {
+	transports: ['websocket'],
+	secure: true
+  });
+
+  // Setup tournament handlers
+  setupTournamentHandlers();
+
+  // Socket event handlers
+  socket.on('connect', () => {
+	console.log('✅ Connected:', socket!.id);
+	
+	const urlParams = new URLSearchParams(window.location.search);
+	const tournamentMode = urlParams.get('tournament') === 'true';
+
+	if (!tournamentMode) {
+	  socket!.emit('restart_game');
+	  if (movePlayersFrame === null) movePlayers();
+	} else {
+	  promptAliasRegistration();
+	}
+  });
+
+  socket.on('connect_error', (err) => {
+	console.error('Connection error:', err.message);
+  });
+
+  socket.on('assign_controls', (playerId) => {
+	assignedPlayerId = playerId;
+	if (movePlayersFrame === null) movePlayers();
+  });
+
+  socket.on('player_list_updated', (players: { socketId: string, alias: string }[]) => {
+	aliasMap = {};
+	players.forEach(player => {
+	  aliasMap[player.socketId] = player.alias;
 	});
+  });
+
+  socket.on('disconnect', () => {
+	console.warn('🔌 Disconnected');
+	assignedPlayerId = null;
+	
+	if (ctx && canvas) {
+	  ctx.fillStyle = 'red';
+	  ctx.font = '20px Arial';
+	  ctx.textAlign = 'center';
+	  ctx.fillText('Disconnected', canvas.width / 2, canvas.height / 2);
+	}
+  });
+
+  socket.on('state_update', (state: GameState & { gameOver: boolean }) => {
+	if (countDownActive) return;
+	
+	document.querySelector('.game-loading')?.remove();
+
+	if (canvas?.parentElement) handleResize(canvas.parentElement);
+	requestAnimationFrame(() => drawGame(state));
+
+	if (inTournament && currentMatch) {
+	  const [alias1, alias2] = currentMatch;
+	  showMatchInfo(alias1, alias2, state.score.player1, state.score.player2);
+	}
+
+	if (!gameEnded && state.gameOver) {
+	  if (state.score.player1 === 0 && state.score.player2 === 0) return;
+
+	  let winner = 'Unknown';
+	  if (state.score.player1 >= 5) {
+		winner = inTournament && currentMatch ? currentMatch[0] : 'Player 1';
+	  } else if (state.score.player2 >= 5) {
+		winner = inTournament && currentMatch ? currentMatch[1] : 'Player 2';
+	  }
+
+	  showGameOverScreen(winner);
+	  gameEnded = true;
+
+	  if (inTournament && currentMatch) {
+		socket?.emit('match_ended', { winnerSocketId: socket.id });
+	  }
+	}
+  });
 }

@@ -1,107 +1,163 @@
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   Tournament.js                                      :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2025/05/19 17:09:45 by benanredzhe       #+#    #+#             */
-/*   Updated: 2025/05/27 16:20:43 by benanredzhe      ###   ########.fr       */
-/*                                                                            */
-/* ************************************************************************** */
-
 class Tournament {
-	constructor() {
-		this.players = new Map(); // socketId -> alias
-		this.rounds = [];         // Array of rounds: each round = array of matches
-		this.currentRound = 0;
-		this.currentMatchIndex = 0;
-		this.currentMatch = null;
-		this.winners = [];
+  constructor() {
+	this.players = new Map();       // socketId -> { alias, isReady }
+	this.rounds = [];               // Array of rounds
+	this.currentRound = 0;
+	this.currentMatchIndex = 0;
+	this.currentMatch = null;
+	this.winners = [];
+	this.byes = new Set();          // Track players who got byes
+  }
+
+  registerPlayer(socketId, alias) {
+	// Validate alias uniqueness
+	const aliases = [...this.players.values()].map(p => p.alias);
+	if (aliases.includes(alias)) return false;
+
+	this.players.set(socketId, {
+	  alias,
+	  isReady: false
+	});
+	return true;
+  }
+
+  markPlayerReady(socketId) {
+	if (this.players.has(socketId)) {
+	  this.players.get(socketId).isReady = true;
+	}
+  }
+
+  allPlayersReady() {
+	const activePlayers = [...this.players.keys()].filter(
+	  id => !this.byes.has(id)
+	);
+	return activePlayers.every(id => this.players.get(id).isReady);
+  }
+
+  removePlayer(socketId) {
+	if (this.players.has(socketId)) {
+	  this.players.delete(socketId);
+	  this.byes.delete(socketId);
+	}
+  }
+
+  canStartTournament() {
+	return this.players.size >= 2;
+  }
+
+  generateInitialBracket() {
+	if (!this.canStartTournament()) {
+	  throw new Error("Not enough players to start tournament");
 	}
 
-	registerPlayer(socketId, alias) {
-		if ([...this.players.values()].includes(alias)) return false;
-		this.players.set(socketId, alias);
-		return true;
+	const players = Array.from(this.players.entries());
+	const shuffled = [...players].sort(() => Math.random() - 0.5);
+
+	const firstRound = [];
+	while (shuffled.length >= 2) {
+	  firstRound.push([shuffled.pop(), shuffled.pop()]);
 	}
 
-	removePlayer(socketId) {
-		if (this.players.has(socketId)) {
-			this.players.delete(socketId);
-			console.log(`Player with socket ${socketId} removed from tournament.`);
-		}
+	// Handle odd player count
+	if (shuffled.length === 1) {
+	  const [byePlayer] = shuffled.pop();
+	  firstRound.push([byePlayer, null]);
+	  this.byes.add(byePlayer[0]); // Mark player as having a bye
 	}
 
-	// Generates initial matches only (round 1)
-	generateInitialBracket() {
-		const players = Array.from(this.players.entries());
-		const shuffled = players.sort(() => Math.random() - 0.5);
+	this.rounds = [firstRound];
+	this.currentRound = 0;
+	this.currentMatchIndex = 0;
+	this.currentMatch = firstRound[0];
+  }
 
-		const firstRound = [];
-		while (shuffled.length >= 2) {
-			firstRound.push([shuffled.pop(), shuffled.pop()]);
-		}
-		if (shuffled.length === 1) {
-			firstRound.push([shuffled.pop(), null]); // Bye
-		}
+  recordWinner(winnerSocketId) {
+	if (!this.currentMatch) return null;
 
-		this.rounds = [firstRound];
-		this.currentRound = 0;
-		this.currentMatchIndex = 0;
-		this.winners = [];
-		this.currentMatch = firstRound[0];
+	// Validate winner is part of current match
+	const [p1, p2] = this.currentMatch;
+	const validWinner = [p1?.[0], p2?.[0]].includes(winnerSocketId);
+	if (!validWinner) {
+	  throw new Error("Winner is not part of current match");
 	}
 
-	recordWinner(winnerSocketId) {
-		if (!this.currentMatch) return null;
-
-		this.winners.push([
-			winnerSocketId,
-			this.players.get(winnerSocketId),
-		]);
-
-		// Move to next match in current round
-		this.currentMatchIndex++;
-
-		if (this.currentMatchIndex < this.rounds[this.currentRound].length) {
-			this.currentMatch = this.rounds[this.currentRound][this.currentMatchIndex];
-			return this.currentMatch;
-		}
-
-		// End of current round
-		if (this.winners.length === 1) {
-			// Tournament is over
-			this.currentMatch = null;
-			return null;
-		}
-
-		// Generate next round
-		const nextRound = [];
-		const winnersShuffled = [...this.winners]; // Don't shuffle, keep order
-		while (winnersShuffled.length >= 2) {
-			nextRound.push([winnersShuffled.pop(), winnersShuffled.pop()]);
-		}
-		if (winnersShuffled.length === 1) {
-			nextRound.push([winnersShuffled.pop(), null]); // Bye
-		}
-
-		this.rounds.push(nextRound);
-		this.currentRound++;
-		this.currentMatchIndex = 0;
-		this.winners = [];
-		this.currentMatch = nextRound[0];
-		return this.currentMatch;
+	// Handle bye automatically
+	if (this.byes.has(winnerSocketId)) {
+	  this.winners.push([winnerSocketId, this.players.get(winnerSocketId).alias]);
+	  return this.advanceToNextMatch();
 	}
 
-	resetTournament() {
-		this.players = new Map();
-		this.rounds = [];
-		this.currentRound = 0;
-		this.currentMatchIndex = 0;
-		this.currentMatch = null;
-		this.winners = [];
+	// Normal match winner
+	this.winners.push([
+	  winnerSocketId,
+	  this.players.get(winnerSocketId).alias
+	]);
+
+	return this.advanceToNextMatch();
+  }
+
+  advanceToNextMatch() {
+	this.currentMatchIndex++;
+
+	// More matches in current round
+	if (this.currentMatchIndex < this.rounds[this.currentRound].length) {
+	  this.currentMatch = this.rounds[this.currentRound][this.currentMatchIndex];
+	  return this.currentMatch;
 	}
+
+	// Tournament finished
+	if (this.winners.length === 1) {
+	  this.currentMatch = null;
+	  return null;
+	}
+
+	// Generate next round
+	return this.generateNextRound();
+  }
+
+  generateNextRound() {
+	const nextRound = [];
+	const winnersCopy = [...this.winners];
+
+	while (winnersCopy.length >= 2) {
+	  nextRound.push([winnersCopy.pop(), winnersCopy.pop()]);
+	}
+
+	// Handle odd number of winners
+	if (winnersCopy.length === 1) {
+	  const [byeWinner] = winnersCopy.pop();
+	  nextRound.push([byeWinner, null]);
+	  this.byes.add(byeWinner[0]);
+	}
+
+	this.rounds.push(nextRound);
+	this.currentRound++;
+	this.currentMatchIndex = 0;
+	this.winners = [];
+	this.currentMatch = nextRound[0];
+	
+	return this.currentMatch;
+  }
+
+  getCurrentMatchPlayers() {
+	if (!this.currentMatch) return null;
+	
+	const [p1, p2] = this.currentMatch;
+	return {
+	  player1: p1 ? { socketId: p1[0], alias: p1[1] } : null,
+	  player2: p2 ? { socketId: p2[0], alias: p2[1] } : null
+	};
+  }
+
+  resetTournament() {
+	this.players = new Map();
+	this.rounds = [];
+	this.currentRound = 0;
+	this.currentMatchIndex = 0;
+	this.currentMatch = null;
+	this.winners = [];
+	this.byes = new Set();
+  }
 }
 
 export default Tournament;
