@@ -428,19 +428,21 @@ export function renderGame(containerId: string = 'app') {
 		
 		//GAME OVER LOGIC
 		if (!gameEnded && state.gameOver) {
+			if (state.score.player1 === 0 && state.score.player2 === 0) return;
+
 			let winner = 'Unknown';
 
 			if (state.score.player1 >= 5) {
 				winner = inTournament && currentMatch ? currentMatch[0] : 'Player 1';
 			} else if (state.score.player2 >= 5) {
-				winner = inTournament && currentMatch ? currentMatch[0] : 'Player 2';
+				winner = inTournament && currentMatch ? currentMatch[1] : 'Player 2';
 			}
 			showGameOverScreen(winner);
 			gameEnded = true;
 			matchStarted = false;
 
 			if (inTournament && currentMatch) {
-				socket?.emit('match_ended');
+				socket?.emit('match_ended', {winnerSocketId: socket.id});
 			}
 		}
 	});
@@ -466,29 +468,7 @@ export function renderGame(containerId: string = 'app') {
 		showMatchInfo(alias1, alias2, 0, 0);
 
 		alert(`Next Match: ${alias1} vs ${alias2}`);
-
-		if (inTournament) {
-			showMatchInfo(alias1, alias2, 0, 0);
-		}
-
-		// showMatchInfo(alias1, alias2, 0, 0); // try it !!!!
-
-		// const countdownBox = document.createElement('div');
-		// countdownBox.className = 'countdown-box';
-		// countdownBox.textContent = 'Match starting in 10...';
-		// document.body.appendChild(countdownBox);
-
-		// let timeLeft = 10;
-		// const interval = setInterval(() => {
-		// 	timeLeft--;
-		// 	countdownBox.textContent = `Match starting in ${timeLeft}...`;
-		// 	if (timeLeft <= 0) {
-		// 		clearInterval(interval);
-		// 		countdownBox.remove();
-		// 		countDownActive = false; // now allow game to play
-		// 	}
-		// }, 1000);
-		});
+	});
 
 	socket.on('tournament_over', () => {
 	alert("Tournament finished!");

@@ -3,71 +3,104 @@
 /*                                                        :::      ::::::::   */
 /*   Tournament.js                                      :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
+/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/19 17:09:45 by benanredzhe       #+#    #+#             */
-/*   Updated: 2025/05/23 16:04:30 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/05/27 16:20:43 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 class Tournament {
 	constructor() {
-		this.players = new Map();   // sockedId -> alias
-		this.matches = [];          // array of [[socketId, alias], [socketId, alias]]
+		this.players = new Map(); // socketId -> alias
+		this.rounds = [];         // Array of rounds: each round = array of matches
+		this.currentRound = 0;
 		this.currentMatchIndex = 0;
-		this.currentMatch = null;  // e.g., { player1: 'Ali', player2: 'Bob' }
+		this.currentMatch = null;
+		this.winners = [];
 	}
 
 	registerPlayer(socketId, alias) {
-		if ([...this.players.values()].includes(alias)) return false; // prevent duplicates
+		if ([...this.players.values()].includes(alias)) return false;
 		this.players.set(socketId, alias);
 		return true;
 	}
 
 	removePlayer(socketId) {
-	if (this.players.has(socketId)) {
-		this.players.delete(socketId);
-		console.log(`Player with socket ${socketId} removed from tournament.`);
+		if (this.players.has(socketId)) {
+			this.players.delete(socketId);
+			console.log(`Player with socket ${socketId} removed from tournament.`);
+		}
 	}
-}
 
-	/*  Creates all unique player matchups
-		1.Clears any existing matches.
-		2.Uses two nested loops to pair each player with every other player once(no repeats, no self matches)
-		3.Each match is stored as a pair [player1, player2] in the matches array.*/
-	generateMatches() {
-	this.matches = [];
-	const entries = Array.from(this.players.entries()); // [[socketId, alias], ...]
-	
-	for (let i = 0; i < entries.length; i++) {
-		for (let j = i + 1; j < entries.length; j++) {
-			this.matches.push([entries[i], entries[j]]);
+	// Generates initial matches only (round 1)
+	generateInitialBracket() {
+		const players = Array.from(this.players.entries());
+		const shuffled = players.sort(() => Math.random() - 0.5);
+
+		const firstRound = [];
+		while (shuffled.length >= 2) {
+			firstRound.push([shuffled.pop(), shuffled.pop()]);
 		}
+		if (shuffled.length === 1) {
+			firstRound.push([shuffled.pop(), null]); // Bye
+		}
+
+		this.rounds = [firstRound];
+		this.currentRound = 0;
+		this.currentMatchIndex = 0;
+		this.winners = [];
+		this.currentMatch = firstRound[0];
 	}
-	this.currentMatchIndex = 0;
-	this.currentMatch = this.matches.length > 0 ? this.matches[0] : null;
-}
-	
-	/*Advances through the match schedule, one match at a time, until finished.
-	  1.Increments currentMatchIndex
-	  2.If there are more matches left, updates currentMatch to the next match and returns it.
-	  3.If there no more matches, sets current to null and return null (tournament is over) */
-	nextMatch() {
+
+	recordWinner(winnerSocketId) {
+		if (!this.currentMatch) return null;
+
+		this.winners.push([
+			winnerSocketId,
+			this.players.get(winnerSocketId),
+		]);
+
+		// Move to next match in current round
 		this.currentMatchIndex++;
-		if (this.currentMatchIndex < this.matches.length) {
-			this.currentMatch = this.matches[this.currentMatchIndex];
+
+		if (this.currentMatchIndex < this.rounds[this.currentRound].length) {
+			this.currentMatch = this.rounds[this.currentRound][this.currentMatchIndex];
 			return this.currentMatch;
-		} else {
-			this.currentMatch = null;
-			return null; // tournament over
 		}
+
+		// End of current round
+		if (this.winners.length === 1) {
+			// Tournament is over
+			this.currentMatch = null;
+			return null;
+		}
+
+		// Generate next round
+		const nextRound = [];
+		const winnersShuffled = [...this.winners]; // Don't shuffle, keep order
+		while (winnersShuffled.length >= 2) {
+			nextRound.push([winnersShuffled.pop(), winnersShuffled.pop()]);
+		}
+		if (winnersShuffled.length === 1) {
+			nextRound.push([winnersShuffled.pop(), null]); // Bye
+		}
+
+		this.rounds.push(nextRound);
+		this.currentRound++;
+		this.currentMatchIndex = 0;
+		this.winners = [];
+		this.currentMatch = nextRound[0];
+		return this.currentMatch;
 	}
 
 	resetTournament() {
 		this.players = new Map();
-		this.matches = [];
+		this.rounds = [];
+		this.currentRound = 0;
 		this.currentMatchIndex = 0;
 		this.currentMatch = null;
+		this.winners = [];
 	}
 }
 
