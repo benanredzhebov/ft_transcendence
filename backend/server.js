@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   server.js                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
+/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/26 17:15:01 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/05/27 17:29:04 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -24,8 +24,6 @@ import GameEngine from './GameLogic/GameEngine.js';
 import Tournament from './GameLogic/Tournament.js';
 import hashPassword from './crypto/crypto.js';
 import DB from './data_controller/dbConfig.js';
-
-// let gamePaused = false; delete it
 
 // Fix __dirname in ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -92,7 +90,7 @@ io.on('connection', (socket) => {
 		io.emit('state_update', game.getState()); // Push to all clients
 	});
 
-	// Tournament Logic 
+	// Tournament Registration 
 	socket.on('register_alias', (alias) => {
 		if (!tournament) tournament = new Tournament();
 		
@@ -104,33 +102,31 @@ io.on('connection', (socket) => {
 				socketId,
 				alias
 			}));
-
 			io.emit('player_list_updated', playerList);
 
-			if (tournament.players.size >= 2 && tournament.matches.length === 0) {
-				tournament.generateMatches();
+			if (tournament.players.size >= 2 && tournament.rounds.length === 0) {
+				tournament.generateInitialBracket();
 				
 				if (tournament.currentMatch) {
 					const [player1, player2] = tournament.currentMatch;
 					const [player1Socket] = player1;
 					const [player2Socket] = player2;
 					
-					const matchData = tournament.currentMatch;
 					game.resetGame();
 					game.pause();
 					
-					io.emit('match_announcement', matchData); // still shows alias to everyone
+					io.emit('match_announcement', tournament.currentMatch); // still shows alias to everyone
 					
 
 					setTimeout(() => {
 						game.resetGame();
 						game.resume();
 						io.to(player1Socket).emit('assign_controls', 'player1');
-						io.to(player2Socket).emit('assign_controls', 'player2');
+						if (player2Socket)
+							io.to(player2Socket).emit('assign_controls', 'player2');
 						io.emit('start_match'); //emit a new event like start_match after the countdown finishes on the server.
 						io.emit('state_update', game.getState());
 					}, 10000);
-					
 				}
 			} else {
 				socket.emit('tournament_waiting', {
@@ -140,14 +136,20 @@ io.on('connection', (socket) => {
 		}
 	});
 	
-	socket.on('match_ended', () => {
+	socket.on('match_ended', ({winnerSocketId}) => {
 		if (!tournament || !tournament.currentMatch) {
 			// Prevent advancing if no match was started
 			console.warn('match_ended received but no currentmatch exists');
 			return;
 		}
+
+		// Don't allow winner with zero score
+		if (game.getState().score.player1 === 0 && game.getState().score.player2 === 0) {
+			console.warn('Ignoring match_ended: no score change (likely false trigger)');
+			return;
+		}
 		
-		const next = tournament.nextMatch();
+		const next = tournament.recordWinner(winnerSocketId);
 		if (next) {
 			const [player1, player2] = next;
 			const [player1Socket] = player1;
@@ -160,12 +162,14 @@ io.on('connection', (socket) => {
 			
 			// Emit countdown start to both players
 			io.to(player1Socket).emit('start_match');
-			io.to(player2Socket).emit('start_match');
+			if (player2Socket)
+				io.to(player2Socket).emit('start_match');
 			
 			setTimeout(() => {
 				game.resume();
 				io.to(player1Socket).emit('assign_controls', 'player1');
-				io.to(player2Socket).emit('assign_controls', 'player2');
+				if (player2Socket)
+					io.to(player2Socket).emit('assign_controls', 'player2');
 				io.emit('state_update', game.getState()); 
 			}, 10000);
 		} else {
@@ -184,8 +188,6 @@ io.on('connection', (socket) => {
 				socketId,
 				alias
 			}));
-			// const remaining = Array.from(tournament.players.values());
-			// io.emit('player_list_updated', remaining);
 			
 			if (tournament.players.size < 2) {
 				tournament.resetTournament();
