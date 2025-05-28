@@ -158,6 +158,7 @@ function setupTournamentHandlers() {
   });
 
   socket.on('start_match', () => {
+	countDownActive = false; // added to start the match. Allow state updates to be rendered
 	matchStarted = true;
 	gameEnded = false;
 	if (movePlayersFrame === null) movePlayers();
@@ -319,14 +320,17 @@ function handleResize(container: HTMLElement) {
 
 // Game Control Functions
 function movePlayers() {
-  if (!socket || gameEnded || (!matchStarted && inTournament)) return;
+  console.log('movePlayers running', Array.from(pressedKeys));
+  if (!socket || gameEnded || (inTournament && !matchStarted)) return;
+
+  //For tournament mode, check if match has started
+  if (inTournament && !matchStarted) return;
 
   if (inTournament) {
 	if (assignedPlayerId === 'player1') {
 	  if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
 	  if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
-	}
-	if (assignedPlayerId === 'player2') {
+	} else if (assignedPlayerId === 'player2') {
 	  if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
 	  if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
 	}
@@ -344,10 +348,12 @@ function movePlayers() {
 function handleKeyDown(e: KeyboardEvent) {
   if (gameEnded) return;
   pressedKeys.add(e.key.toLowerCase());
+  console.log('keydown:', e.key.toLowerCase());
 }
 
 function handleKeyUp(e: KeyboardEvent) {
   pressedKeys.delete(e.key.toLowerCase());
+  console.log('keyup:', e.key.toLowerCase());
 }
 
 // Cleanup Functions
@@ -450,6 +456,8 @@ export function renderGame(containerId: string = 'app') {
 
 	if (!tournamentMode) {
 	  socket!.emit('restart_game');
+	  gameEnded = false;
+	  matchStarted = true;
 	  if (movePlayersFrame === null) movePlayers();
 	} else {
 	  promptAliasRegistration();
