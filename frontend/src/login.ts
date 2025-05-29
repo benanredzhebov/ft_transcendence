@@ -459,7 +459,7 @@ function addLoginFormListeners() {
 
 			// Store token if received (example)
 			if (data.token) {
-			  localStorage.setItem('authToken', data.token);
+			  sessionStorage.setItem('authToken', data.token);
         console.log('Token sent after Login!', data);
         connectSocket(data.token); // Connect the socket
 			} else {

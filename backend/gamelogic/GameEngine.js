@@ -10,33 +10,54 @@ const MAX_SCORE = 5;
 
 class GameEngine {
     constructor() {
-        this.state = this.resetGame();
+        this.state = {
+            paddles: {
+                player1: { y: SERVER_HEIGHT / 2 - PADDLE_HEIGHT / 2, height: PADDLE_HEIGHT, width: PADDLE_WIDTH, speed: PADDLE_SPEED },
+                player2: { y: SERVER_HEIGHT / 2 - PADDLE_HEIGHT / 2, height: PADDLE_HEIGHT, width: PADDLE_WIDTH, speed: PADDLE_SPEED }
+            },
+            ball: { x: SERVER_WIDTH / 2, y: SERVER_HEIGHT / 2, radius: BALL_RADIUS, dx: 0, dy: 0 },
+            score: { player1: 0, player2: 0 },
+            gameOver: false // Keep gameOver for internal logic if needed
+        };
+        this.status = 'waiting'; // 'waiting', 'active', 'ended'
+        this.resetGame(); // Initialize state
     }
 
     resetGame() {
-        return {
-            paddles: {
-                player1: { y: SERVER_HEIGHT / 2 - PADDLE_HEIGHT / 2, height: PADDLE_HEIGHT, width: PADDLE_WIDTH, speed: PADDLE_SPEED },
-                player2: { y: SERVER_HEIGHT / 2 - PADDLE_HEIGHT / 2, height: PADDLE_HEIGHT, width: PADDLE_WIDTH, speed: PADDLE_SPEED },
-            },
-            ball: {
-                x: SERVER_WIDTH / 2,
-                y: SERVER_HEIGHT / 2,
-                radius: BALL_RADIUS,
-                dx: INITIAL_BALL_SPEED_X * (Math.random() > 0.5 ? 1 : -1),
-                dy: INITIAL_BALL_SPEED_Y * (Math.random() > 0.5 ? 1 : -1),
-            },
-            score: { player1: 0, player2: 0 },
-            gameOver: false,
-        };
+        this.state.paddles.player1.y = SERVER_HEIGHT / 2 - PADDLE_HEIGHT / 2;
+        this.state.paddles.player2.y = SERVER_HEIGHT / 2 - PADDLE_HEIGHT / 2;
+        this.state.score = { player1: 0, player2: 0 };
+        this.state.gameOver = false;
+        this.status = 'waiting'; // Reset status
+        this.resetBall(true); // Pass a flag to ensure it doesn't immediately start moving if dx/dy were random
     }
 
-    update(dt) { //"delta time": amount of time that has passed since the last time the update function was called
-        if (this.state.gameOver) {
+    startGame() {
+        if (this.status === 'waiting') {
+            this.status = 'active';
+            this.state.gameOver = false;
+            this.resetBall(); // Serve the ball
+            console.log("GameEngine: Status set to active.");
+        }
+    }
+
+    endGame() {
+        this.status = 'ended';
+        this.state.gameOver = true; // Mark game as over
+        console.log("GameEngine: Status set to ended.");
+    }
+
+    update(dt) {
+        if (this.status !== 'active' || this.state.gameOver) {
             return;
         }
         this.updateBall();
         this.checkCollisions();
+
+        // Check for game over by score
+        if (!this.state.gameOver && (this.state.score.player1 >= MAX_SCORE || this.state.score.player2 >= MAX_SCORE)) {
+            this.endGame();
+        }
     }
 
     updateBall() {
@@ -96,11 +117,16 @@ class GameEngine {
         }
     }
 
-    resetBall() {
+    resetBall(initialReset = false) {
         this.state.ball.x = SERVER_WIDTH / 2;
         this.state.ball.y = SERVER_HEIGHT / 2;
-        this.state.ball.dx = INITIAL_BALL_SPEED_X * (Math.random() > 0.5 ? 1 : -1);
-        this.state.ball.dy = INITIAL_BALL_SPEED_Y * (Math.random() > 0.5 ? 1 : -1);
+        if (initialReset || this.status !== 'active') { // Don't give speed if it's an initial reset before game starts
+            this.state.ball.dx = 0;
+            this.state.ball.dy = 0;
+        } else {
+            this.state.ball.dx = INITIAL_BALL_SPEED_X * (Math.random() > 0.5 ? 1 : -1);
+            this.state.ball.dy = INITIAL_BALL_SPEED_Y * (Math.random() > 0.5 ? 1 : -1);
+        }
     }
 
     handlePlayerInput(playerId, direction) {

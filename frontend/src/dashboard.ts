@@ -1,283 +1,288 @@
 import './dashboard.css';
 import { navigateTo } from './main';
-import { disconnectSocket, getSocket } from './socketManager'; // Import getSocket
+import { disconnectSocket, getSocket } from './socketManager'; 
+import { Socket } from 'socket.io-client'; // For type hinting
 
-// Define predefined avatars (can be at module scope if preferred)
-const PREDEFINED_AVATARS = [
-  '/avatars/girl.png',
-  '/avatars/boy.png',
-  '/avatars/gojo.png',
-  '/avatars/luffy.png'
-];
+// --- Interfaces ---
+interface OnlineUser {
+  userId: string;
+  username: string;
+  status: 'online' | 'in-game' | 'in-challenge'; // Add status
+}
 
-// Module-level variable to hold the listener function and UI element for online users
-let onlineUsersUpdateListener: ((users: { username: string }[]) => void) | null = null;
+interface ChallengeReceivedPayload {
+  challengerUserId: string;
+  challengerUsername: string;
+}
+
+interface GameStartingPayload {
+  gameId: string;
+  opponentUsername: string;
+  opponentUserId: string;
+  role: 'player1' | 'player2';
+}
+
+// Define an interface for the socket object that includes custom properties
+interface SocketWithUserData extends Socket {
+  userId?: string;
+  username?: string;
+}
+
+// --- Module-level variables ---
+let onlineUsersUpdateListener: ((users: OnlineUser[]) => void) | null = null;
+let onSocketConnectForDashboardListener: (() => void) | null = null;
 let onlineUsersListContainer: HTMLDivElement | null = null;
-let onSocketConnectForDashboardListener: (() => void) | null = null; // New variable
+let challengeModal: HTMLDivElement | null = null; // For displaying incoming challenges
+
+// --- New Listeners for Challenge Flow ---
+let challengeReceivedListener: ((payload: ChallengeReceivedPayload) => void) | null = null;
+let challengeOutcomeListener: ((payload: { opponentUsername: string, message?: string }) => void) | null = null; // For declined/error/initiated
+let challengeExpiredListener: ((payload: { opponentUsername: string }) => void) | null = null;
+let gameStartingListener: ((payload: GameStartingPayload) => void) | null = null;
+let challengeErrorListener: ((payload: { message: string }) => void) | null = null;
+
+// Placeholder for the missing function. You'll need to implement or import this.
+function openAvatarSelectionModal(token: string, _profileAvatarImg: HTMLImageElement, avatarUploadStatus: HTMLParagraphElement) {
+  console.warn('openAvatarSelectionModal function is not implemented. Token:', token);
+  // Example implementation:
+  if (avatarUploadStatus) {
+    avatarUploadStatus.textContent = 'Avatar selection modal would open here.';
+  }
+  // alert('Avatar selection functionality not yet implemented.');
+}
+
+function cleanupDashboardSocketListeners(socket: Socket | null) {
+    if (!socket) socket = getSocket();
+    if (!socket) return;
+
+    if (onlineUsersUpdateListener) socket.off('online_users_update', onlineUsersUpdateListener);
+    if (onSocketConnectForDashboardListener) socket.off('connect', onSocketConnectForDashboardListener);
+    if (challengeReceivedListener) socket.off('challenge_received', challengeReceivedListener);
+    if (challengeOutcomeListener) {
+        socket.off('challenge_initiated', challengeOutcomeListener);
+        socket.off('challenge_declined', challengeOutcomeListener);
+    }
+    if (challengeExpiredListener) socket.off('challenge_expired', challengeExpiredListener);
+    if (gameStartingListener) socket.off('game_starting', gameStartingListener);
+    if (challengeErrorListener) socket.off('challenge_error', challengeErrorListener);
+    
+    onlineUsersUpdateListener = null;
+    onSocketConnectForDashboardListener = null;
+    challengeReceivedListener = null;
+    challengeOutcomeListener = null;
+    challengeExpiredListener = null;
+    gameStartingListener = null;
+    challengeErrorListener = null;
+}
+
 
 export function renderDashboard() {
   const appElement = document.querySelector<HTMLDivElement>('#app');
-  if (!appElement) {
-    throw new Error('App root element (#app) not found!');
-  }
-
-  // Clear previous content
+  if (!appElement) throw new Error('App root element (#app) not found!');
   appElement.innerHTML = '';
 
-  // --- Create Elements ---
-
-  // Global Container
   const globalContainer = document.createElement('div');
-  globalContainer.className = "dashboard-global-container";
-
-  // Card Container
   const cardContainer = document.createElement('div');
-  cardContainer.className = "dashboard-card-container";
-
-  // Left Sidebar
   const sidebar = document.createElement('div');
-  sidebar.className = "dashboard-sidebar";
-
   const sidebarHeading = document.createElement('h2');
+  const nav = document.createElement('nav');
+  const profileButton = document.createElement('button');
+  const gameButton = document.createElement('button');
+  const chatButton = document.createElement('button');
+  const logoutButton = document.createElement('button');
+  const contentArea = document.createElement('div');
+
+  // Basic structure, assuming class names are set as before
+  globalContainer.className = "dashboard-global-container";
+  cardContainer.className = "dashboard-card-container";
+  sidebar.className = "dashboard-sidebar";
   sidebarHeading.className = "dashboard-heading";
   sidebarHeading.textContent = "Dashboard";
-
-  const nav = document.createElement('nav');
   nav.className = "dashboard-nav";
-
-  // Navigation Buttons
-  const profileButton = document.createElement('button');
   profileButton.className = "dashboard-nav-button";
   profileButton.textContent = "Profile";
-  profileButton.dataset.view = "profile"; // Custom data attribute to identify view
-
-  const gameButton = document.createElement('button');
+  profileButton.dataset.view = "profile";
   gameButton.className = "dashboard-nav-button";
   gameButton.textContent = "Game";
   gameButton.dataset.view = "game";
-
-  const chatButton = document.createElement('button');
   chatButton.className = "dashboard-nav-button";
   chatButton.textContent = "Chat";
   chatButton.dataset.view = "chat";
-
-  // Logout Button
-  const logoutButton = document.createElement('button');
   logoutButton.className = "dashboard-logout-button";
   logoutButton.textContent = "Logout";
-
-  // Right Content Area
-  const contentArea = document.createElement('div');
   contentArea.className = "dashboard-content-area";
-  contentArea.id = "dashboard-content"; // ID to easily update content
+  contentArea.id = "dashboard-content";
 
-  // --- Assemble Sidebar ---
   nav.appendChild(profileButton);
   nav.appendChild(gameButton);
   nav.appendChild(chatButton);
   sidebar.appendChild(sidebarHeading);
   sidebar.appendChild(nav);
-  nav.appendChild(logoutButton);
-
-  // --- Assemble Card ---
+  sidebar.appendChild(logoutButton); // Moved logout to be part of sidebar consistently
   cardContainer.appendChild(sidebar);
   cardContainer.appendChild(contentArea);
-
-  // --- Assemble Global Container ---
   globalContainer.appendChild(cardContainer);
-
-  // --- Append to App ---
   appElement.appendChild(globalContainer);
 
-  // --- Add Event Listeners ---
 
-  // Sidebar navigation
   const navButtons = [profileButton, gameButton, chatButton];
   navButtons.forEach(button => {
     button.addEventListener('click', () => {
       const view = button.dataset.view;
-      if (view) {
-        setActiveView(view, navButtons, contentArea);
-      }
+      if (view) setActiveView(view, navButtons, contentArea);
     });
   });
 
-  // Logout button
   logoutButton.addEventListener('click', () => {
-    localStorage.removeItem('authToken');
-    disconnectSocket(); // Disconnect the socket on logout
-    // Clean up dashboard-specific listeners if any were global to the dashboard itself
-    const currentSocket = getSocket();
-    if (currentSocket && onlineUsersUpdateListener) {
-      currentSocket.off('online_users_update', onlineUsersUpdateListener);
-      onlineUsersUpdateListener = null;
-    }
-    if (currentSocket && onSocketConnectForDashboardListener) {
-      currentSocket.off('connect', onSocketConnectForDashboardListener);
-      onSocketConnectForDashboardListener = null;
-    }
-    if (onlineUsersListContainer) {
-      onlineUsersListContainer.remove();
-      onlineUsersListContainer = null;
-    }
+    sessionStorage.removeItem('authToken');
+    cleanupDashboardSocketListeners(null); // Clean up all dashboard listeners
+    disconnectSocket(); // Disconnect the main socket
+    if (onlineUsersListContainer) onlineUsersListContainer.remove();
+    onlineUsersListContainer = null;
+    if (challengeModal) challengeModal.remove();
+    challengeModal = null;
     navigateTo('/');
   });
 
-  // --- Initial View ---
-  // Cleanup any listeners from a potential previous full render of the dashboard.
-  const currentSocketOnInitialLoad = getSocket();
-  if (currentSocketOnInitialLoad && onlineUsersUpdateListener) {
-    currentSocketOnInitialLoad.off('online_users_update', onlineUsersUpdateListener);
-    onlineUsersUpdateListener = null;
-  }
-  if (currentSocketOnInitialLoad && onSocketConnectForDashboardListener) {
-    currentSocketOnInitialLoad.off('connect', onSocketConnectForDashboardListener);
-    onSocketConnectForDashboardListener = null;
-  }
-  if (onlineUsersListContainer) {
-    onlineUsersListContainer.remove();
-    onlineUsersListContainer = null;
-  }
-  setActiveView('profile', navButtons, contentArea); // Set initial view to profile
+  // --- Initial View & Cleanup ---
+  cleanupDashboardSocketListeners(null); // Clean up from any previous render
+  if (onlineUsersListContainer) onlineUsersListContainer.remove();
+  onlineUsersListContainer = null;
+  if (challengeModal) challengeModal.remove();
+  challengeModal = null;
+
+  setActiveView('profile', navButtons, contentArea); 
+  setupGlobalChallengeListeners(); // Setup listeners that should persist across dashboard views
 }
 
-// --- Helper Function to Open Avatar Selection Modal ---
-async function openAvatarSelectionModal(
-  token: string,
-  currentProfileAvatarImg: HTMLImageElement,
-  avatarStatusElement: HTMLParagraphElement
-) {
-  // Modal overlay
-  const modalOverlay = document.createElement('div');
-  modalOverlay.className = 'avatar-modal-overlay';
-  
-  // Modal content
-  const modalContent = document.createElement('div');
-  modalContent.className = 'avatar-modal-content';
 
-  const modalTitle = document.createElement('h4');
-  modalTitle.textContent = 'Choose Your Avatar';
-  modalTitle.style.textAlign = 'center';
-  modalTitle.style.marginBottom = '20px';
+// --- Setup listeners for challenges and game events --
+function setupGlobalChallengeListeners() {
+    const socket = getSocket() as SocketWithUserData | null;
+    if (!socket) return;
 
-  const avatarsGrid = document.createElement('div');
-  avatarsGrid.className = 'avatar-modal-grid';
+    // Listener for receiving a challenge
+    challengeReceivedListener = ({ challengerUserId, challengerUsername }: ChallengeReceivedPayload) => {
+        showChallengeModal(challengerUserId, challengerUsername);
+    };
+    socket.on('challenge_received', challengeReceivedListener);
 
-  PREDEFINED_AVATARS.forEach(avatarSrc => {
-    const imgWrapper = document.createElement('div');
-    imgWrapper.className = 'avatar-modal-option';
-    const imgEl = document.createElement('img');
-    imgEl.src = avatarSrc;
-    imgEl.alt = `Avatar ${avatarSrc.split('/').pop()}`;
-    imgEl.style.width = '80px';
-    imgEl.style.height = '80px';
-    imgEl.style.borderRadius = '50%';
-    imgEl.style.objectFit = 'cover';
-    imgEl.style.cursor = 'pointer';
+    // Listener for game starting
+    gameStartingListener = (payload: GameStartingPayload) => {
+        console.log('Game starting event received:', payload); // Existing log
+        sessionStorage.setItem('currentGameInfo', JSON.stringify(payload));
+        console.log('currentGameInfo set in sessionStorage');
+        closeChallengeModal();
+        console.log('Challenge modal closed');
+        navigateTo('/game'); 
+        console.log('navigateTo("/game") called'); // New log
+    };
+    socket.on('game_starting', gameStartingListener);
 
-    imgWrapper.appendChild(imgEl);
-    imgWrapper.addEventListener('click', async () => {
-      avatarStatusElement.textContent = 'Processing...';
-      modalContent.style.pointerEvents = 'none'; // Disable further clicks during processing
-      try {
-        const imageResponse = await fetch(avatarSrc);
-        if (!imageResponse.ok) {
-          throw new Error(`Failed to fetch avatar: ${imageResponse.statusText}`);
+    // Listener for various challenge outcomes (initiated, declined, error, expired)
+    challengeOutcomeListener = ({ opponentUsername, message}) => {
+        // Display this info in a less intrusive way, e.g. a toast notification
+        alert(message || `Challenge update regarding ${opponentUsername}.`);
+        // Could also update UI if a challenge was pending from this client
+    };
+    socket.on('challenge_initiated', (data) => {
+        if (challengeOutcomeListener) {
+            challengeOutcomeListener({...data, message: `Challenge sent to ${data.opponentUsername}. Waiting for response...`});
         }
-        const imageBlob = await imageResponse.blob();
-        const fileName = avatarSrc.split('/').pop() || 'avatar.png';
-        const imageFile = new File([imageBlob], fileName, { type: imageBlob.type });
-
-        const formData = new FormData();
-        formData.append('avatar', imageFile);
-
-        const uploadResponse = await fetch('/api/profile/avatar', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: formData,
-        });
-
-        const result = await uploadResponse.json();
-
-        if (uploadResponse.ok && result.success) {
-          avatarStatusElement.textContent = 'Avatar updated successfully!';
-          if (result.avatarPath) { // Check for avatarPath
-            currentProfileAvatarImg.src = result.avatarPath; // Use the path directly
-          }
-        } else {
-          avatarStatusElement.textContent = result.error || 'Failed to update avatar.';
-          console.error('Avatar update error:', result);
-        }
-      } catch (error) {
-        console.error('Error selecting/uploading predefined avatar:', error);
-        avatarStatusElement.textContent = 'Error updating avatar. See console.';
-      } finally {
-        closeModal();
-      }
     });
-    avatarsGrid.appendChild(imgWrapper);
-  });
+    socket.on('challenge_declined', (data) => {
+        if (challengeOutcomeListener) {
+            challengeOutcomeListener({...data, message: `${data.opponentUsername} declined your challenge.`});
+        }
+    });
+    
+    challengeExpiredListener = ({ opponentUsername }) => {
+        alert(`Your challenge to ${opponentUsername} has expired.`);
+    };
+    socket.on('challenge_expired', challengeExpiredListener);
+    
+    socket.on('challenge_request_expired', () => { // When a challenge TO ME expires
+        alert('A game challenge you received has expired.');
+        closeChallengeModal();
+    });
+    socket.on('challenge_request_cancelled', () => {
+        alert('A game challenge you received was cancelled by the challenger.');
+        closeChallengeModal();
+    });
 
-  const closeButton = document.createElement('button');
-  closeButton.textContent = 'Close';
-  closeButton.className = 'avatar-modal-close-button';
-  closeButton.addEventListener('click', closeModal);
 
-  modalContent.appendChild(modalTitle);
-  modalContent.appendChild(avatarsGrid);
-  modalContent.appendChild(closeButton);
-  modalOverlay.appendChild(modalContent);
-  document.body.appendChild(modalOverlay);
-
-  function closeModal() {
-    if (document.body.contains(modalOverlay)) {
-      document.body.removeChild(modalOverlay);
-    }
-  }
-  // Close modal if overlay is clicked
-  modalOverlay.addEventListener('click', (event) => {
-    if (event.target === modalOverlay) {
-        closeModal();
-    }
-  });
+    challengeErrorListener = ({ message }) => {
+        alert(`Challenge Error: ${message}`);
+    };
+    socket.on('challenge_error', challengeErrorListener);
 }
 
-// --- Helper Function to Set Active View ---
-async function setActiveView(view: string, buttons: HTMLButtonElement[], contentArea: HTMLDivElement) {
-  // Update button styles
-  buttons.forEach(btn => {
-    if (btn.dataset.view === view) {
-      btn.classList.add('active');
-    } else {
-      btn.classList.remove('active');
-    }
-  });
+function showChallengeModal(challengerUserId: string, challengerUsername: string) {
+    closeChallengeModal(); // Close any existing modal
 
-  // --- Cleanup listener and UI from previous 'game' view ---
-  const currentSocket = getSocket();
-  if (onlineUsersUpdateListener && currentSocket) {
-    currentSocket.off('online_users_update', onlineUsersUpdateListener);
+    challengeModal = document.createElement('div');
+    challengeModal.className = 'challenge-modal-overlay';
+    challengeModal.innerHTML = `
+        <div class="challenge-modal-content">
+            <h4>Incoming Challenge!</h4>
+            <p>${challengerUsername} wants to play a game with you.</p>
+            <div class="challenge-modal-actions">
+                <button id="acceptChallengeBtn">Accept</button>
+                <button id="declineChallengeBtn">Decline</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(challengeModal);
+
+    challengeModal.querySelector('#acceptChallengeBtn')?.addEventListener('click', () => {
+        getSocket()?.emit('challenge_response', { challengerUserId, accepted: true });
+        // Optionally show "Connecting to game..." in modal
+        if (challengeModal) {
+            const content = challengeModal.querySelector('.challenge-modal-content p');
+            if (content) content.textContent = "Accepted! Waiting for game to start...";
+            challengeModal.querySelector('.challenge-modal-actions')?.remove();
+        }
+    });
+    challengeModal.querySelector('#declineChallengeBtn')?.addEventListener('click', () => {
+        getSocket()?.emit('challenge_response', { challengerUserId, accepted: false });
+        closeChallengeModal();
+    });
+}
+
+function closeChallengeModal() {
+    if (challengeModal) {
+        challengeModal.remove();
+        challengeModal = null;
+    }
+}
+
+
+async function setActiveView(view: string, buttons: HTMLButtonElement[], contentArea: HTMLDivElement) {
+  buttons.forEach(btn => btn.classList.toggle('active', btn.dataset.view === view));
+
+  // Cleanup specific listeners if they were view-dependent (onlineUsersUpdateListener is)
+  const socket = getSocket() as SocketWithUserData | null;
+  if (onlineUsersUpdateListener && socket) {
+    socket.off('online_users_update', onlineUsersUpdateListener);
     onlineUsersUpdateListener = null;
-    console.log("Removed previous online_users_update listener from dashboard.");
   }
-  if (onSocketConnectForDashboardListener && currentSocket) { // Cleanup the new listener
-    currentSocket.off('connect', onSocketConnectForDashboardListener);
+  if (onSocketConnectForDashboardListener && socket) {
+    socket.off('connect', onSocketConnectForDashboardListener);
     onSocketConnectForDashboardListener = null;
-    console.log("Removed previous onSocketConnectForDashboardListener from dashboard.");
   }
   if (onlineUsersListContainer) {
     onlineUsersListContainer.remove();
     onlineUsersListContainer = null;
   }
+  
+  contentArea.innerHTML = ''; 
 
-  // Update content area
-  contentArea.innerHTML = ''; // Clear previous content
   switch (view) {
     case 'profile':
       contentArea.innerHTML = `<h3 class="dashboard-content-heading">Profile</h3><p class="dashboard-content-paragraph">Loading profile...</p>`; // Show loading state
       try {
         // Get the token from local storage
-        const token = localStorage.getItem('authToken');
+        const token = sessionStorage.getItem('authToken');
         if (!token) {
           contentArea.innerHTML = `
             <h3 class="dashboard-content-heading">Profile</h3>
@@ -346,46 +351,56 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
     case 'game':
       const gameContent = document.createElement('div');
       gameContent.innerHTML = `
-        <h3 class="dashboard-content-heading">Game</h3>
-        <p class="dashboard-content-paragraph">Ready to play or see who is online.</p>
+        <h3 class="dashboard-content-heading">Game Options</h3>
+        <p class="dashboard-content-paragraph">Challenge another player or start a local match.</p>
       `;
-      // Online Match Button
-      const onlineButton = document.createElement('button');
-      onlineButton.className = "dashboard-game-button";
-      onlineButton.innerHTML = `<span>Play Online Match</span>`;
-      onlineButton.addEventListener('click', () => navigateTo('/game'));
-      gameContent.appendChild(onlineButton);
-
-      // Local Match Button
+      
       const localButton = document.createElement('button');
       localButton.className = "dashboard-game-button";
-      localButton.innerHTML = `<span>Play Local Match</span>`;
-      localButton.addEventListener('click', () => navigateTo('/game')); // Adjust if local game has a different route
+      localButton.textContent = "Play Local Match";
+      localButton.addEventListener('click', () => navigateTo('/game?mode=local')); // Differentiate local game
       gameContent.appendChild(localButton);
 
       onlineUsersListContainer = document.createElement('div');
       onlineUsersListContainer.className = 'dashboard-online-users';
-      onlineUsersListContainer.innerHTML = '<h4>Online Users:</h4><ul><li>Loading...</li></ul>';
+      onlineUsersListContainer.innerHTML = '<h4>Online Players:</h4><ul><li>Loading...</li></ul>';
       gameContent.appendChild(onlineUsersListContainer);
       contentArea.appendChild(gameContent);
 
-      const socket = getSocket(); // Get socket instance
-
       if (socket) {
-        console.log(`Dashboard 'game' view: Socket ID: ${socket.id}, Connected: ${socket.connected}`);
-
-        onlineUsersUpdateListener = (users: { username: string }[]) => {
+        onlineUsersUpdateListener = (users: OnlineUser[]) => {
           if (!onlineUsersListContainer) return;
-          console.log('Dashboard received online_users_update:', users);
           const ul = document.createElement('ul');
-          if (users.length === 0) {
-            const li = document.createElement('li');
-            li.textContent = 'No users currently online.';
-            ul.appendChild(li);
+          // const currentUser = onlineUsers.get(socket.userId || ''); // Removed: onlineUsers is server-side, currentUser not used
+
+          if (users.length === 0 || (users.length === 1 && users[0].userId === socket.userId)) {
+            ul.innerHTML = '<li>No other players currently online.</li>';
           } else {
             users.forEach(user => {
+              if (user.userId === socket.userId) return; // Don't list self for challenging
+
               const li = document.createElement('li');
-              li.textContent = user.username;
+              li.innerHTML = `
+                <span>${user.username} (Status: ${user.status})</span>
+              `;
+              if (user.status === 'online') {
+                const challengeButton = document.createElement('button');
+                challengeButton.textContent = 'Challenge';
+                challengeButton.className = 'challenge-btn';
+                challengeButton.onclick = () => {
+                  socket.emit('initiate_challenge', { opponentUserId: user.userId });
+                  // Optionally disable button or show "Challenge sent"
+                  challengeButton.disabled = true;
+                  challengeButton.textContent = 'Challenge Sent';
+                  setTimeout(() => { // Re-enable after a bit or on challenge failure/expiry
+                    if(document.body.contains(challengeButton)) { // Check if button still exists
+                        challengeButton.disabled = false;
+                        challengeButton.textContent = 'Challenge';
+                    }
+                  }, 10000); // Example timeout
+                };
+                li.appendChild(challengeButton);
+              }
               ul.appendChild(li);
             });
           }
@@ -395,28 +410,20 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
           onlineUsersListContainer.appendChild(ul);
         };
 
-        const setupOnlineUsersListener = () => {
-          if (socket && onlineUsersUpdateListener && !socket.hasListeners('online_users_update')) {
-            socket.on('online_users_update', onlineUsersUpdateListener);
-            console.log("Attached online_users_update listener for dashboard game view.");
-            // Your backend already emits the list when a new user connects,
-            // so an explicit request here might be redundant but can be added if needed:
-            // socket.emit('get_initial_online_users');
-          }
+        const setupOnlineUsersView = () => {
+            if (socket && onlineUsersUpdateListener) {
+                socket.off('online_users_update', onlineUsersUpdateListener); // Remove old before adding new
+                socket.on('online_users_update', onlineUsersUpdateListener);
+                socket.emit('dashboard_request_online_users'); // Request initial list
+            }
         };
 
         if (socket.connected) {
-          setupOnlineUsersListener();
+          setupOnlineUsersView();
         } else {
-          if (onlineUsersListContainer) {
-            onlineUsersListContainer.innerHTML = '<h4>Online Users:</h4><ul><li>Socket connecting...</li></ul>';
-          }
-          console.warn("Dashboard 'game' view: Socket not connected. Setting up listener for 'connect' event.");
-          
+          if (onlineUsersListContainer) onlineUsersListContainer.innerHTML = '<h4>Online Players:</h4><ul><li>Socket connecting...</li></ul>';
           onSocketConnectForDashboardListener = () => {
-            console.log("Dashboard 'game' view: Socket connected via onSocketConnectForDashboardListener. Setting up online users listener.");
-            setupOnlineUsersListener();
-            // Clean up this specific one-time connect listener
+            setupOnlineUsersView();
             if (socket && onSocketConnectForDashboardListener) {
               socket.off('connect', onSocketConnectForDashboardListener);
               onSocketConnectForDashboardListener = null;
@@ -425,10 +432,7 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
           socket.on('connect', onSocketConnectForDashboardListener);
         }
       } else {
-        if (onlineUsersListContainer) {
-          onlineUsersListContainer.innerHTML = '<h4>Online Users:</h4><ul><li>Socket not available.</li></ul>';
-        }
-        console.error("Dashboard 'game' view: Socket instance not available.");
+        if (onlineUsersListContainer) onlineUsersListContainer.innerHTML = '<h4>Online Players:</h4><ul><li>Socket not available.</li></ul>';
       }
       break;
     case 'chat':
@@ -440,3 +444,17 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
       break;
   }
 }
+
+// Add some CSS for the challenge modal and buttons
+const style = document.createElement('style');
+style.textContent = `
+  .challenge-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1001; }
+  .challenge-modal-content { background: #333; color: white; padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
+  .challenge-modal-actions button { margin: 10px; padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; }
+  .challenge-modal-actions button#acceptChallengeBtn { background-color: #4CAF50; color: white; }
+  .challenge-modal-actions button#declineChallengeBtn { background-color: #f44336; color: white; }
+  .dashboard-online-users li { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; }
+  .dashboard-online-users .challenge-btn { padding: 3px 8px; font-size: 0.8em; margin-left: 10px; background-color: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+  .dashboard-online-users .challenge-btn:disabled { background-color: #ccc; }
+`;
+document.head.appendChild(style);

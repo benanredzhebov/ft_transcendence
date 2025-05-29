@@ -1,44 +1,64 @@
 import { io, Socket } from 'socket.io-client';
 
 let socket: Socket | null = null;
-const SOCKET_SERVER_URL = 'https://127.0.0.1:3000'; // Ensure this matches your backend server URL
+const SOCKET_SERVER_URL = 'https://127.0.0.1:3000';
 
 export function connectSocket(token: string): Socket {
   if (socket && socket.connected) {
-    // If already connected, potentially with an old token, disconnect first
-    // or update auth. For simplicity, we'll disconnect and reconnect.
-    socket.disconnect();
+    // If socket exists and is connected, but we're trying to connect again (e.g. re-login)
+    // It's often better to update auth or ensure it's the same user.
+    // For simplicity here, if token changes or forcing re-auth, disconnect and reconnect.
+    if (socket.auth && (socket.auth as any).token !== token) {
+        socket.disconnect();
+        socket = null; // Force new instance
+    } else {
+        console.log('Socket already connected and authenticated with the same token.');
+        return socket;
+    }
+  }
+  if (socket && !socket.connected) { // Exists but not connected
+    socket.auth = { token };
+    socket.connect();
+    return socket;
+  }
+  if (!socket) { // No socket instance yet
+    socket = io(SOCKET_SERVER_URL, {
+      auth: {
+        token: token
+      },
+      transports: ['websocket'], // Good to be explicit
+      // autoConnect: false, // Can be true if you want it to try connecting immediately
+    });
   }
 
-  // Connect to the server with the authentication token
-  socket = io(SOCKET_SERVER_URL, {
-    auth: {
-      token: token
-    },
-    // You might need to configure transports if you have issues connecting,
-    // especially if there are proxies or specific network configurations.
-    // transports: ['websocket', 'polling'], 
-  });
-
+  // General listeners for the shared socket
+  socket.off('connect'); // Remove previous before adding
   socket.on('connect', () => {
-    console.log('Socket connected successfully:', socket?.id);
+    console.log('SocketManager: Socket connected successfully:', socket?.id);
+    // You could emit a global event here if other modules need to know
+    // window.dispatchEvent(new CustomEvent('socketConnected'));
   });
 
+  socket.off('disconnect');
   socket.on('disconnect', (reason) => {
-    console.log('Socket disconnected:', reason);
+    console.log('SocketManager: Socket disconnected:', reason);
+    // window.dispatchEvent(new CustomEvent('socketDisconnected', { detail: reason }));
     if (reason === 'io server disconnect') {
-      // The server intentionally disconnected the socket
-      // This might happen if authentication fails or token expires server-side
-      socket?.connect(); // Optionally attempt to reconnect
+      // The server intentionally disconnected the socket (e.g. auth failure on server side)
+      // Potentially clear auth token from localStorage and navigate to login
     }
-    // else the socket will automatically try to reconnect
+    // Socket.IO client will automatically try to reconnect for most other reasons
   });
 
+  socket.off('connect_error');
   socket.on('connect_error', (err) => {
-    console.error('Socket connection error:', err.message);
+    console.error('SocketManager: Socket connection error:', err.message);
+    // window.dispatchEvent(new CustomEvent('socketConnectError', { detail: err }));
   });
 
-  // You can add more global socket event listeners here if needed
+  if (!socket.connected) {
+    socket.connect(); // Explicitly connect if not already trying
+  }
 
   return socket;
 }
@@ -50,7 +70,7 @@ export function getSocket(): Socket | null {
 export function disconnectSocket(): void {
   if (socket) {
     socket.disconnect();
-    socket = null; // Clear the reference
-    console.log('Socket explicitly disconnected.');
+    // socket = null; // Keep the instance for potential re-connect, or nullify if truly done
+    console.log('SocketManager: Socket explicitly disconnected by disconnectSocket().');
   }
 }

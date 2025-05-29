@@ -36,7 +36,7 @@ function handleGoogleAuthToken(): (() => void) | void {
   }
 
   if (token) {
-    localStorage.setItem('authToken', token);
+    sessionStorage.setItem('authToken', token);
     console.log('Google Auth Token stored successfully.');
     connectSocket(token); // Connect socket after Google Auth
     navigateTo('/dashboard');
