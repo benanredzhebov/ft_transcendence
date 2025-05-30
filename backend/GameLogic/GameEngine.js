@@ -6,7 +6,7 @@
 /*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:28:07 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/29 21:15:54 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/05/30 18:20:51 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -35,19 +35,19 @@ class GameEngine {
 		// Local match: ensure both players exist for one socket
 		if (!this.isTournament) {
 			if (!this.isTournament && this.state.connectedPlayers.size === 1) {
-			this.state.addPlayer('local_player2');
-			this.connectedSockets.add('local_player2');
-			console.log('Local match: added player2 as local_player2');
-			console.log('Connected players:', Array.from(this.state.connectedPlayers));
-			// console.log('Connected sockets:', Array.from(this.connectedSockets));
-			}
-		if (!this.isTournament && this.connectedSockets.size === 2) {
-			this.startMatch();
+				this.state.addPlayer('local_player2');
+				this.connectedSockets.add('local_player2');
+				console.log('Local match: added player2 as local_player2');
+				console.log('Connected players:', Array.from(this.state.connectedPlayers));
+				// console.log('Connected sockets:', Array.from(this.connectedSockets));
+				}
+			if (!this.isTournament && this.connectedSockets.size === 2) {
+				this.startMatch();
+				}
 			}
 		}
+		return success;
 	}
-	return success;
-}
 
 	removePlayer(socketId) {
 		if (!this.connectedSockets.has(socketId)) return;
@@ -84,17 +84,8 @@ class GameEngine {
 		console.log(`handlePlayerInput called with id=${id}, direction=${direction}, isTournament=${this.isTournament}`);
 		if (this.paused || this.state.gameOver) return;
 
-		if (!this.isTournament) {
-			// id is 'player1' or 'player2'
-			if (id === 'player1' || id === 'player2') {
-			this.state.movePaddle(id, direction);
-		}
-		} else {
-			// id is socketId, need to map to playerId
-			const playerId = this.state.getPlayerId(id);
-			if (playerId && !this.paused && !this.state.gameOver) {
-				this.state.movePaddle(playerId, direction);
-			}
+		if (id === 'player1' || id === 'player2') {
+			this.state.movePaddle(id,direction);
 		}
 	}
 	

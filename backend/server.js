@@ -6,7 +6,7 @@
 /*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/30 16:17:12 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/05/30 18:28:11 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -146,10 +146,9 @@ io.on('connection', (socket) => {
 				io.emit('state_update', game.getState());
 			}
 		} else {
-			// For tournament mode, playerId comes from socket mapping
-			const targetPlayerid = playerId || game.state.getPlayerId(socket.id);
-			if (targetPlayerid) {
-				game.handlePlayerInput(targetPlayerid, direction);
+			// Tournament mode: trust playerId from frontend
+			if (playerId === 'player1' || playerId === 'player2') {
+				game.handlePlayerInput(playerId, direction);
 				io.emit('state_update', game.getState());
 				// console.log('Emitting state:', game.getState());
 			}
@@ -183,14 +182,6 @@ io.on('connection', (socket) => {
 					players: Array.from(tournament.players.values()).map(p => p.alias)
 				});
 			}
-		// const currentMatch = tournament.getCurrentMatchPlayers();
-		
-		// game.prepareForMatch(); // Use GameEngine's tournament method
-		// io.emit('match_announcement', {
-		// 	player1: currentMatch.player1,
-		// 	player2: currentMatch.player2
-
-	// socket.emit('await_player_ready');
 		} else {
 			socket.emit('tournament_waiting', {
 				message: 'Waiting for more players to join...',
