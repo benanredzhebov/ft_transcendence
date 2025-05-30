@@ -170,10 +170,18 @@ function setupTournamentHandlers() {
 	}).querySelector('button')!.onclick = () => {
 		window.location.href = '/';
 	};
-	
 	inTournament = false;
 	currentMatch = null;
 	assignedPlayerId = null;
+	});
+
+	socket.on('tournament_lobby', ({ message, players }) => {
+		showTournamentDialog(
+			`${message}<br>Players: ${players.join(', ')}`,
+			{ confirmText: 'Start Tournament' }
+		).querySelector('button')!.onclick = () => {
+			socket?.emit('start_tournament');
+		};
 	});
 }
 

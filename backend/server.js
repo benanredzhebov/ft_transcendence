@@ -6,7 +6,7 @@
 /*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/30 10:04:31 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/05/30 16:17:12 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -117,157 +117,174 @@ io.on('connection', (socket) => {
 	console.log('Client connected:', socket.id);
 	console.log('Handshake query:', socket.handshake.query);
 	
+	// Detect if it's local match
+	const isLocalMatch = 
+		socket.handshake.query.local === 'true' ||
+		socket.handshake.query.local === true;
+		
+	game.setTournamentMode(!isLocalMatch);
+	
 	// Add player with error handling
 	if (!game.addPlayer(socket.id)) {
-	socket.emit('error', { message: 'Game is full' });
-	socket.disconnect();
-	return;
-}
-// Detect if it's local match
+		socket.emit('error', { message: 'Game is full' });
+		socket.disconnect();
+		return;
+	}
+	console.log('Connected players:', Array.from(game.state.connectedPlayers));
 
-const isLocalMatch = 
-	socket.handshake.query.local === 'true' ||
-	socket.handshake.query.local === true;
-game.setTournamentMode(!isLocalMatch);
-
-//Emit state_update after both players are present
-if (
-	(!game.isTournament && game.state.connectedPlayers.size === 2) ||
-	(game.isTournament && game.state.connectedPlayers.size === 2)
-	) {
+	//Emit state_update after both players are present
+	if (!game.isTournament && game.state.connectedPlayers.size === 1) {
 		io.emit('state_update', game.getState());
 	}
 
-socket.on('player_move', ({ direction, playerId }) => {
-	// console.log('player_move received:', playerId, direction);
-	if (!game.isTournament) {
-		// Local mode: move both paddles if keys are pressed
-		if (playerId === 'player1' || playerId === 'player2') {
-			game.handlePlayerInput(playerId, direction);
-			io.emit('state_update', game.getState());
+	socket.on('player_move', ({ direction, playerId }) => {
+		// console.log('player_move received:', playerId, direction);
+		if (!game.isTournament) {
+			// Local mode: move both paddles if keys are pressed
+			if (playerId === 'player1' || playerId === 'player2') {
+				game.handlePlayerInput(playerId, direction);
+				io.emit('state_update', game.getState());
+			}
+		} else {
+			// For tournament mode, playerId comes from socket mapping
+			const targetPlayerid = playerId || game.state.getPlayerId(socket.id);
+			if (targetPlayerid) {
+				game.handlePlayerInput(targetPlayerid, direction);
+				io.emit('state_update', game.getState());
+				// console.log('Emitting state:', game.getState());
+			}
 		}
-	} else {
-		// For tournament mode, playerId comes from socket mapping
-		const targetPlayerid = playerId || game.state.getPlayerId(socket.id);
-		if (targetPlayerid) {
-			game.handlePlayerInput(targetPlayerid, direction);
-			io.emit('state_update', game.getState());
-			// console.log('Emitting state:', game.getState());
-		}
-	}
-});
-
-socket.on('restart_game', () => {
-	game.resetGame();
-	game.resume();
-	io.emit('state_update', game.getState());
-});
-
-// Tournament Registration 
-socket.on('register_alias', (alias) => {
-	if (!tournament) tournament = new Tournament();
-	
-	const success = tournament.registerPlayer(socket.id, alias);
-	socket.emit('alias_registered', { success });
-
-	if (success) {
-		const playerList = Array.from(tournament.players.entries()).map(([socketId, {alias}]) => ({
-		socketId,
-		alias
-		}));
-		io.emit('player_list_updated', playerList);
-
-		if (tournament.canStartTournament() && tournament.rounds.length === 0) {
-		tournament.generateInitialBracket();
-		const currentMatch = tournament.getCurrentMatchPlayers();
-		
-			game.prepareForMatch(); // Use GameEngine's tournament method
-		io.emit('match_announcement', {
-			player1: currentMatch.player1,
-			player2: currentMatch.player2
-});
-
-	socket.emit('await_player_ready');
-	} else {
-		socket.emit('tournament_waiting', {
-		message: 'Waiting for more players to join...',
-		playersNeeded: 2 - tournament.players.size
 	});
-	}
-	}
-});
 
-socket.on('player_ready', () => {
-	if (!tournament) return;
-	
-	tournament.markPlayerReady(socket.id);
-	
-	if (tournament.allPlayersReady()) {
-		const currentMatch = tournament.getCurrentMatchPlayers();
-		
-		// Assign controls
-		io.to(currentMatch.player1.socketId).emit('assign_controls', 'player1');
-		if (currentMatch.player2) {
-		io.to(currentMatch.player2.socketId).emit('assign_controls', 'player2');
-	}
-	startSynchronizedCountdown(io);
-	}
-});
-	
-socket.on('match_ended', ({ winnerSocketId }) => {
-	if (!tournament?.currentMatch) {
-		console.warn('match_ended received but no current match');
-		return;
-	}
+	socket.on('restart_game', () => {
+		game.resetGame();
+		game.resume();
+		io.emit('state_update', game.getState());
+	});
 
-	const state = game.getState();
-	if (state.score.player1 === 0 && state.score.player2 === 0) {
-		console.warn('Ignoring match_ended: no score change');
-		return;
-	}
+	// Tournament Registration 
+	socket.on('register_alias', (alias) => {
+		if (!tournament) tournament = new Tournament();
 	
-	const nextMatch = tournament.recordWinner(winnerSocketId);
-	
-	if (nextMatch) {
-		const { player1, player2 } = tournament.getCurrentMatchPlayers();
-		game.prepareForMatch();
-		
-		io.emit('match_announcement', { player1, player2 });
-		
-		// Reset ready states
-		tournament.players.forEach(player => player.isReady = false);
-		
-		io.to(player1.socketId).emit('await_player_ready');
-		if (player2) io.to(player2.socketId).emit('await_player_ready');
-	} else {
-		const winner = tournament.winners[0][1];
-		io.emit('tournament_over', { winner });
-		tournament = null;
-	}
-});
+		const success = tournament.registerPlayer(socket.id, alias);
+		socket.emit('alias_registered', { success });
 
-socket.on('disconnect', () => {
-	console.log('Client disconnected:', socket.id);
-	game.removePlayer(socket.id);
-	
-	if (tournament) {
-		tournament.removePlayer(socket.id);
+		if (success) {
+			const playerList = Array.from(tournament.players.entries()).map(([socketId, {alias}]) => ({
+				socketId,
+				alias
+			}));
+			io.emit('player_list_updated', playerList);
 		
-		// Check if current match player disconnected
-		if (tournament.currentMatch) {
-		const [p1, p2] = tournament.currentMatch;
-		if (socket.id === p1[0] || socket.id === p2?.[0]) {
-			game.resetGame();
-			io.emit('match_cancelled');
+			// Only show the lobby dialog, do not start the match yet
+			if (tournament.canStartTournament() && tournament.rounds.length === 0) {
+				io.emit('tournament_lobby', {
+					message: 'Ready to start tournament?',
+					players: Array.from(tournament.players.values()).map(p => p.alias)
+				});
+			}
+		// const currentMatch = tournament.getCurrentMatchPlayers();
+		
+		// game.prepareForMatch(); // Use GameEngine's tournament method
+		// io.emit('match_announcement', {
+		// 	player1: currentMatch.player1,
+		// 	player2: currentMatch.player2
+
+	// socket.emit('await_player_ready');
+		} else {
+			socket.emit('tournament_waiting', {
+				message: 'Waiting for more players to join...',
+				playersNeeded: 2 - tournament.players.size
+			});
 		}
-	}
-	// End tournament if not enough players
-	if (tournament.players.size < 2) {
-	tournament = null;
-	io.emit('tournament_cancelled');
-	}
-}
-});
+	});
+
+	// Start tournament when someone clicks "Start Tournament"
+	socket.on('start_tournament', () => {
+		if (!tournament) return;
+		if (tournament.rounds.length === 0) {
+			tournament.generateInitialBracket();
+			const currentMatch = tournament.getCurrentMatchPlayers();
+			game.prepareForMatch();
+			io.emit('match_announcement', {
+				player1: currentMatch.player1,
+				player2: currentMatch.player2
+			});
+			io.emit('await_player_ready');
+		}
+	});
+
+	socket.on('player_ready', () => {
+		if (!tournament) return;
+	
+		tournament.markPlayerReady(socket.id);
+	
+		if (tournament.allPlayersReady()) {
+			const currentMatch = tournament.getCurrentMatchPlayers();
+		
+			// Assign controls
+			io.to(currentMatch.player1.socketId).emit('assign_controls', 'player1');
+			if (currentMatch.player2) {
+				io.to(currentMatch.player2.socketId).emit('assign_controls', 'player2');
+			}
+			startSynchronizedCountdown(io);
+		}
+	});
+	
+	socket.on('match_ended', ({ winnerSocketId }) => {
+		if (!tournament?.currentMatch) {
+			console.warn('match_ended received but no current match');
+			return;
+		}
+
+		const state = game.getState();
+		if (state.score.player1 === 0 && state.score.player2 === 0) {
+			console.warn('Ignoring match_ended: no score change');
+			return;
+		}
+	
+		const nextMatch = tournament.recordWinner(winnerSocketId);
+	
+		if (nextMatch) {
+			const { player1, player2 } = tournament.getCurrentMatchPlayers();
+			game.prepareForMatch();
+		
+			io.emit('match_announcement', { player1, player2 });
+		
+			// Reset ready states
+			tournament.players.forEach(player => player.isReady = false);
+		
+			io.to(player1.socketId).emit('await_player_ready');
+			if (player2) io.to(player2.socketId).emit('await_player_ready');
+		} else {
+			const winner = tournament.winners[0][1];
+			io.emit('tournament_over', { winner });
+			tournament = null;
+		}
+	});
+
+	socket.on('disconnect', () => {
+		console.log('Client disconnected:', socket.id);
+		game.removePlayer(socket.id);
+	
+		if (tournament) {
+			tournament.removePlayer(socket.id);
+		
+			// Check if current match player disconnected
+			if (tournament.currentMatch) {
+				const [p1, p2] = tournament.currentMatch;
+				if (socket.id === p1[0] || socket.id === p2?.[0]) {
+					game.resetGame();
+					io.emit('match_cancelled');
+				}
+			}
+			// End tournament if not enough players
+			if (tournament.players.size < 2) {
+				tournament = null;
+				io.emit('tournament_cancelled');
+			}
+		}
+	});
 });
 
 // Game loop
@@ -279,6 +296,8 @@ setInterval(() => {
 		
 		if (state.gameOver) {
 			console.log('Game over! Final score:', state.score);
+			game.paused = true;
+			// game.resetGame();
 		}
 	}
 }, 1000 / 60); // 60 times per second
