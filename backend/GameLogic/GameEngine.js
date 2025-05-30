@@ -3,14 +3,13 @@
 /*                                                        :::      ::::::::   */
 /*   GameEngine.js                                      :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
+/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:28:07 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/28 13:58:13 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/05/29 21:15:54 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-// const GameState = require('./GameState.js').default.default.default; // Import GameState
 import GameState from './GameState.js';
 
 class GameEngine {
@@ -24,15 +23,31 @@ class GameEngine {
 
 	// Player management
 	addPlayer(socketId) {
-		if (this.connectedSockets.size >= 2) return false;
+	if (this.connectedSockets.size >= 2) return false;
 
-		const success = this.state.addPlayer(socketId);
-		if (success) {
-			this.connectedSockets.add(socketId);
-			console.log(`Player ${socketId} connected as ${this.state.getPlayerId(socketId)}`);
+	const success = this.state.addPlayer(socketId);
+	if (success) {
+		this.connectedSockets.add(socketId);
+		console.log(`Player ${socketId} connected as ${this.state.getPlayerId(socketId)}`);
+		console.log('Connected players:', Array.from(this.state.connectedPlayers));
+		// console.log('Connected sockets:', Array.from(this.connectedSockets));
+
+		// Local match: ensure both players exist for one socket
+		if (!this.isTournament) {
+			if (!this.isTournament && this.state.connectedPlayers.size === 1) {
+			this.state.addPlayer('local_player2');
+			this.connectedSockets.add('local_player2');
+			console.log('Local match: added player2 as local_player2');
+			console.log('Connected players:', Array.from(this.state.connectedPlayers));
+			// console.log('Connected sockets:', Array.from(this.connectedSockets));
+			}
+		if (!this.isTournament && this.connectedSockets.size === 2) {
+			this.startMatch();
+			}
 		}
-		return success;
 	}
+	return success;
+}
 
 	removePlayer(socketId) {
 		if (!this.connectedSockets.has(socketId)) return;
@@ -41,8 +56,15 @@ class GameEngine {
 		this.state.removePlayer(socketId);
 		console.log(`Player ${socketId} disconnected`);
 
+		 // Local match: remove local_player2 if present
+   		 if (!this.isTournament && this.connectedSockets.has('local_player2')) {
+			this.connectedSockets.delete('local_player2');
+			this.state.removePlayer('local_player2');
+			console.log('Local match: removed player2 (local_player2)');
+		}
+
 		if (this.connectedSockets.size < 2) {
-			this.pause();
+			this.resetGame();
 		}
 	}
 
@@ -58,17 +80,20 @@ class GameEngine {
 	}
 
 	// Game control
-	handlePlayerInput(socketId, direction) {
+	handlePlayerInput(id, direction) {
+		console.log(`handlePlayerInput called with id=${id}, direction=${direction}, isTournament=${this.isTournament}`);
 		if (this.paused || this.state.gameOver) return;
-		
+
 		if (!this.isTournament) {
-			this.state.movePaddle('Player1', direction);
-			this.state.movePaddle('Player2', direction);
+			// id is 'player1' or 'player2'
+			if (id === 'player1' || id === 'player2') {
+			this.state.movePaddle(id, direction);
 		}
-		else {
-			const playerId = this.state.getPlayerId(socketId);
+		} else {
+			// id is socketId, need to map to playerId
+			const playerId = this.state.getPlayerId(id);
 			if (playerId && !this.paused && !this.state.gameOver) {
-			this.state.movePaddle(playerId, direction);
+				this.state.movePaddle(playerId, direction);
 			}
 		}
 	}
@@ -93,7 +118,6 @@ class GameEngine {
 
 	resetGame() {
 		this.state.resetGame();
-		console.log('Game reset');
 	}
 
 	getState() {

@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   server.js                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
+/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/28 15:08:58 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/05/30 10:04:31 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,6 +22,7 @@ import fastifyCors from '@fastify/cors';
 import { Server } from 'socket.io';
 import GameEngine from './GameLogic/GameEngine.js';
 import Tournament from './GameLogic/Tournament.js';
+import GameState from './GameLogic/GameState.js';
 import hashPassword from './crypto/crypto.js';
 import DB from './data_controller/dbConfig.js';
 
@@ -32,16 +33,16 @@ const __dirname = dirname(__filename);
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+	fs.mkdirSync(uploadsDir, { recursive: true });
 }
 const avatarsDir = path.join(uploadsDir, 'avatars');
 if (!fs.existsSync(avatarsDir)) {
-  fs.mkdirSync(avatarsDir, { recursive: true });
+	fs.mkdirSync(avatarsDir, { recursive: true });
 }
 
 // Create uploads directory if it doesn't exist
 if (!fs.existsSync(avatarsDir)) {
-  fs.mkdirSync(avatarsDir, { recursive: true });
+	fs.mkdirSync(avatarsDir, { recursive: true });
 }
 
 const PORT = 3000;
@@ -78,191 +79,207 @@ const game = new GameEngine();
 
 // Improved countdown function with cleanup
 function startSynchronizedCountdown(io, duration = 10) {
-  let remaining = duration;
-  
-  const countdownInterval = setInterval(() => {
+	let remaining = duration;
+	
+	const countdownInterval = setInterval(() => {
 	io.emit('countdown_update', remaining);
 	remaining--;
 	
 	if (remaining < 0) {
-	  clearInterval(countdownInterval);
-	  game.startMatch(); // Use GameEngine's method
-	  if (tournament && tournament.currentMatch) {
+		clearInterval(countdownInterval);
+		game.startMatch(); // Use GameEngine's method
+		if (tournament && tournament.currentMatch) {
 		const [p1, p2] = tournament.currentMatch;
 		console.log(`Match started ${p1[1]} vs ${p2 ? p2[1] : 'Bye'}`);
-	  }
-	  console.log('Match started');
-	  io.emit('start_match');
+		}
+		console.log('Match started');
+		io.emit('start_match');
 	}
-  }, 1000);
+	}, 1000);
 
-  return countdownInterval;
+	return countdownInterval;
 }
 
 // Improved game loop with delta timing
 let lastUpdate = Date.now();
 setInterval(() => {
-  const now = Date.now();
-  const dt = (now - lastUpdate) / 1000; // Convert to seconds
-  lastUpdate = now;
-  
-  if (!game.paused) {
+	const now = Date.now();
+	const dt = (now - lastUpdate) / 1000; // Convert to seconds
+	lastUpdate = now;
+	
+	if (!game.paused) {
 	game.update();
 	io.emit('state_update', game.getState());
-  }
+	}
 }, 1000 / 60); // 60 FPS
 
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
-  
-  // Add player with error handling
-  if (!game.addPlayer(socket.id)) {
+	console.log('Client connected:', socket.id);
+	console.log('Handshake query:', socket.handshake.query);
+	
+	// Add player with error handling
+	if (!game.addPlayer(socket.id)) {
 	socket.emit('error', { message: 'Game is full' });
 	socket.disconnect();
 	return;
-  }
-  
-  // Detect if it's local match
-  const	urlParams = new URLSearchParams(socket.handshake.query);
-  const	isLocalMatch = urlParams.get('local') === 'true';
-  game.setTournamentMode(!isLocalMatch);
+}
+// Detect if it's local match
 
-  socket.on('player_move', ({ direction, playerId }) => {
-	console.log('player_move received:', playerId, direction);
+const isLocalMatch = 
+	socket.handshake.query.local === 'true' ||
+	socket.handshake.query.local === true;
+game.setTournamentMode(!isLocalMatch);
+
+//Emit state_update after both players are present
+if (
+	(!game.isTournament && game.state.connectedPlayers.size === 2) ||
+	(game.isTournament && game.state.connectedPlayers.size === 2)
+	) {
+		io.emit('state_update', game.getState());
+	}
+
+socket.on('player_move', ({ direction, playerId }) => {
+	// console.log('player_move received:', playerId, direction);
 	if (!game.isTournament) {
 		// Local mode: move both paddles if keys are pressed
 		if (playerId === 'player1' || playerId === 'player2') {
 			game.handlePlayerInput(playerId, direction);
+			io.emit('state_update', game.getState());
 		}
 	} else {
 		// For tournament mode, playerId comes from socket mapping
 		const targetPlayerid = playerId || game.state.getPlayerId(socket.id);
 		if (targetPlayerid) {
 			game.handlePlayerInput(targetPlayerid, direction);
+			io.emit('state_update', game.getState());
+			// console.log('Emitting state:', game.getState());
 		}
 	}
-  });
+});
 
-  socket.on('restart_game', () => {
+socket.on('restart_game', () => {
 	game.resetGame();
 	game.resume();
-	io.emit('states_update', game.getState());
-  });
+	io.emit('state_update', game.getState());
+});
 
-  // Tournament Registration 
-  socket.on('register_alias', (alias) => {
+// Tournament Registration 
+socket.on('register_alias', (alias) => {
 	if (!tournament) tournament = new Tournament();
 	
 	const success = tournament.registerPlayer(socket.id, alias);
 	socket.emit('alias_registered', { success });
 
 	if (success) {
-	  const playerList = Array.from(tournament.players.entries()).map(([socketId, {alias}]) => ({
+		const playerList = Array.from(tournament.players.entries()).map(([socketId, {alias}]) => ({
 		socketId,
 		alias
-	  }));
-	  io.emit('player_list_updated', playerList);
+		}));
+		io.emit('player_list_updated', playerList);
 
-	  if (tournament.canStartTournament() && tournament.rounds.length === 0) {
+		if (tournament.canStartTournament() && tournament.rounds.length === 0) {
 		tournament.generateInitialBracket();
 		const currentMatch = tournament.getCurrentMatchPlayers();
 		
-		game.prepareForMatch(); // Use GameEngine's tournament method
+			game.prepareForMatch(); // Use GameEngine's tournament method
 		io.emit('match_announcement', {
-		  player1: currentMatch.player1,
-		  player2: currentMatch.player2
-		});
+			player1: currentMatch.player1,
+			player2: currentMatch.player2
+});
 
-		socket.emit('await_player_ready');
-	  } else {
+	socket.emit('await_player_ready');
+	} else {
 		socket.emit('tournament_waiting', {
-		  message: 'Waiting for more players to join...',
-		  playersNeeded: 2 - tournament.players.size
-		});
-	  }
+		message: 'Waiting for more players to join...',
+		playersNeeded: 2 - tournament.players.size
+	});
 	}
-  });
+	}
+});
 
-  socket.on('player_ready', () => {
+socket.on('player_ready', () => {
 	if (!tournament) return;
 	
 	tournament.markPlayerReady(socket.id);
 	
 	if (tournament.allPlayersReady()) {
-	  const currentMatch = tournament.getCurrentMatchPlayers();
-	  
-	  // Assign controls
-	  io.to(currentMatch.player1.socketId).emit('assign_controls', 'player1');
-	  if (currentMatch.player2) {
+		const currentMatch = tournament.getCurrentMatchPlayers();
+		
+		// Assign controls
+		io.to(currentMatch.player1.socketId).emit('assign_controls', 'player1');
+		if (currentMatch.player2) {
 		io.to(currentMatch.player2.socketId).emit('assign_controls', 'player2');
-	  }
-	  
-	  startSynchronizedCountdown(io);
 	}
-  });
-  
-  socket.on('match_ended', ({ winnerSocketId }) => {
+	startSynchronizedCountdown(io);
+	}
+});
+	
+socket.on('match_ended', ({ winnerSocketId }) => {
 	if (!tournament?.currentMatch) {
-	  console.warn('match_ended received but no current match');
-	  return;
+		console.warn('match_ended received but no current match');
+		return;
 	}
 
 	const state = game.getState();
 	if (state.score.player1 === 0 && state.score.player2 === 0) {
-	  console.warn('Ignoring match_ended: no score change');
-	  return;
+		console.warn('Ignoring match_ended: no score change');
+		return;
 	}
 	
 	const nextMatch = tournament.recordWinner(winnerSocketId);
 	
 	if (nextMatch) {
-	  const { player1, player2 } = tournament.getCurrentMatchPlayers();
-	  game.prepareForMatch();
-	  
-	  io.emit('match_announcement', { player1, player2 });
-	  
-	  // Reset ready states
-	  tournament.players.forEach(player => player.isReady = false);
-	  
-	  io.to(player1.socketId).emit('await_player_ready');
-	  if (player2) io.to(player2.socketId).emit('await_player_ready');
+		const { player1, player2 } = tournament.getCurrentMatchPlayers();
+		game.prepareForMatch();
+		
+		io.emit('match_announcement', { player1, player2 });
+		
+		// Reset ready states
+		tournament.players.forEach(player => player.isReady = false);
+		
+		io.to(player1.socketId).emit('await_player_ready');
+		if (player2) io.to(player2.socketId).emit('await_player_ready');
 	} else {
-	  const winner = tournament.winners[0][1];
-	  io.emit('tournament_over', { winner });
-	  tournament = null;
+		const winner = tournament.winners[0][1];
+		io.emit('tournament_over', { winner });
+		tournament = null;
 	}
-  });
+});
 
-  socket.on('disconnect', () => {
+socket.on('disconnect', () => {
 	console.log('Client disconnected:', socket.id);
 	game.removePlayer(socket.id);
 	
 	if (tournament) {
-	  tournament.removePlayer(socket.id);
-	  
-	  // Check if current match player disconnected
-	  if (tournament.currentMatch) {
+		tournament.removePlayer(socket.id);
+		
+		// Check if current match player disconnected
+		if (tournament.currentMatch) {
 		const [p1, p2] = tournament.currentMatch;
 		if (socket.id === p1[0] || socket.id === p2?.[0]) {
-		  game.resetGame();
-		  io.emit('match_cancelled');
+			game.resetGame();
+			io.emit('match_cancelled');
 		}
-	  }
-	  
-	  // End tournament if not enough players
-	  if (tournament.players.size < 2) {
-		tournament = null;
-		io.emit('tournament_cancelled');
-	  }
 	}
-  });
+	// End tournament if not enough players
+	if (tournament.players.size < 2) {
+	tournament = null;
+	io.emit('tournament_cancelled');
+	}
+}
+});
 });
 
 // Game loop
 setInterval(() => {
 	if (!game.paused) {
 		game.update(1 / 60);
+		const state = game.getState();
 		io.emit('state_update', game.getState());
+		
+		if (state.gameOver) {
+			console.log('Game over! Final score:', state.score);
+		}
 	}
 }, 1000 / 60); // 60 times per second
 
@@ -271,19 +288,19 @@ app.register(fastifyCors, { origin: true, credentials: true });
 
 // Register Multipart plugin
 app.register(multipart, { // Now 'multipart' is defined
-  // attachFieldsToBody: true,
-  limits: {
+	// attachFieldsToBody: true,
+	limits: {
 	fileSize: 10 * 1024 * 1024, // 5MB
-  }
+	}
 });
 
 app.register(fastifyFormbody);
 
 // Serve uploaded avatars
 app.register(fastifyStatic, {
-  root: avatarsDir,
-  prefix: '/uploads/avatars/', // URL prefix to access these files
-  decorateReply: false // To avoid conflict if already decorated for other static serving
+	root: avatarsDir,
+	prefix: '/uploads/avatars/', // URL prefix to access these files
+	decorateReply: false // To avoid conflict if already decorated for other static serving
 });
 
 // Serve frontend static files
