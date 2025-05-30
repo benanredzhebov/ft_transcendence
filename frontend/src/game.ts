@@ -110,31 +110,31 @@ function setupTournamentHandlers() {
 	if (!socket) return;
 
 	socket.on('alias_registered', ({ success }) => {
-	if (success) {
-		inTournament = true;
-		showTournamentDialog('Registered! Waiting for tournament to start...');
-	} else {
-		showTournamentDialog('Alias already taken. Please try another name.', {
-		confirmText: 'Try Again'
-		}).querySelector('button')!.onclick = () => {
-		promptAliasRegistration();
-		};
-	}
+		if (success) {
+			inTournament = true;
+			showTournamentDialog('Registered! Waiting for tournament to start...');
+		} else {
+			showTournamentDialog('Alias already taken. Please try another name.', {
+				confirmText: 'Try Again'
+				}).querySelector('button')!.onclick = () => {
+					promptAliasRegistration();
+			};
+		}
 	});
 
 	socket.on('await_player_ready', () => {
-	showTournamentDialog('Match ready!', {
-		confirmText: 'I\'m Ready'
-	});
+		showTournamentDialog('Match ready!', {
+			confirmText: 'I\'m Ready'
+		});
 	});
 
 	socket.on('countdown_update', (remaining: number) => {
-	updateCountdownDisplay(remaining);
+		updateCountdownDisplay(remaining);
 	});
 
 	socket.on('match_announcement', (match: { 
-	player1: { socketId: string, alias: string },
-	player2: { socketId: string, alias: string } | null 
+		player1: { socketId: string, alias: string },
+		player2: { socketId: string, alias: string } | null 
 	}) => {
 	currentMatch = [
 		match.player1.alias,
@@ -345,23 +345,24 @@ function movePlayers() {
 	if (inTournament && !matchStarted) return;
 
 	if (inTournament) {
-	if (assignedPlayerId === 'player1') {
-		if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
-		if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
-	} else if (assignedPlayerId === 'player2') {
-		if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
-		if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
-	}
-	} else {
-	// Local match controls
-	if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
-	if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
-	if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
-	if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
-	}
-
-	movePlayersFrame = requestAnimationFrame(movePlayers);
-}
+		if (assignedPlayerId === 'player1') {
+			// console.log('1assignedPlayerId', assignedPlayerId);
+			if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
+			if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
+		} else if (assignedPlayerId === 'player2') {
+			// console.log('2assignedPlayerId', assignedPlayerId);
+			if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
+			if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
+		}
+		} else {
+			// Local match controls
+			if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
+			if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
+			if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
+			if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
+			}
+			movePlayersFrame = requestAnimationFrame(movePlayers);
+		}
 
 function handleKeyDown(e: KeyboardEvent) {
 	if (gameEnded) return;
