@@ -1,6 +1,7 @@
-
 import './game.css';
-import { io, Socket } from 'socket.io-client';
+import { getSocket, connectSocket } from './socketManager'; // Added connectSocket
+import { Socket } from 'socket.io-client'; // Keep for type annotation
+import { navigateTo } from './main'; // For redirecting if no token
 
 // --- Interfaces (matching backend GameState) ---
 interface PaddleState {
@@ -36,6 +37,7 @@ let socket: Socket | null = null;
 let canvas: HTMLCanvasElement | null = null;
 let ctx: CanvasRenderingContext2D | null = null;
 let animationFrameId: number | null = null;
+let gameConnectHandler: (() => void) | null = null; // To manage the on-connect listener
 
 // --- Drawing Logic ---
 function drawGame(state: GameState) {
@@ -175,13 +177,32 @@ function handleKeyDown(e: KeyboardEvent) {
     if (key === 's') socket.emit('player_move', { playerId: 'player1', direction: 'down' });
 }
 
+function setupGameSocketListeners() {
+    if (!socket) {
+        console.warn('[Game] Attempted to setup listeners but socket is null.');
+        return;
+    }
+
+    // Remove existing state_update listener to prevent duplicates
+    socket.off('state_update', handleStateUpdate);
+    socket.on('state_update', handleStateUpdate);
+    console.log('[Game] state_update listener attached to shared socket.');
+
+    // You can add other game-specific listeners here if needed
+    // e.g., socket.on('game_over', handleGameOver);
+}
+
 // --- Cleanup function ---
 function cleanupGame() {
-    console.log("Cleaning up game resources...");
+    console.log("Cleaning up game resources (using shared socket)...");
     if (socket) {
         socket.off('state_update', handleStateUpdate);
-        socket.disconnect();
-        socket = null;
+        if (gameConnectHandler) { // If game is cleaned up before connect event fired
+            socket.off('connect', gameConnectHandler);
+            gameConnectHandler = null;
+        }
+        // Remove other game-specific listeners if any were added
+        // e.g., socket.off('game_over', handleGameOver);
     }
     if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
@@ -189,12 +210,25 @@ function cleanupGame() {
     }
     window.removeEventListener('resize', handleResize);
     window.removeEventListener('keydown', handleKeyDown);
+    
+    // Remove hash change listener if it was added by this module
+    // (Assuming the existing hash change listener in renderGame is for this module's cleanup)
+    // window.removeEventListener('hashchange', handleHashChangeForCleanup); // You'll need to define handleHashChangeForCleanup if used
+
+    if (canvas) {
+        const parent = canvas.parentElement;
+        if (parent) {
+            parent.innerHTML = ''; // Clear the container
+        }
+    }
     canvas = null;
     ctx = null;
+    socket = null; // Clear module-level reference to the shared socket
+    console.log("Game cleanup complete.");
 }
 
 // --- Main Render Function ---
-export function renderGame() {
+export function renderGame(): (() => void) { // Ensure it returns the cleanup function
     // Ensure cleanup happens if renderGame is called again
     cleanupGame();
 
@@ -202,9 +236,7 @@ export function renderGame() {
     if (!appElement) {
         throw new Error('App root element (#app) not found!');
     }
-
-    // Clear previous content
-    appElement.innerHTML = '';
+    appElement.innerHTML = ''; // Clear previous content before creating new
 
     // --- Create Elements ---
     const container = document.createElement('div');
@@ -212,7 +244,6 @@ export function renderGame() {
 
     canvas = document.createElement('canvas');
     canvas.className = "game-canvas";
-    // Set initial aspect ratio via style to help layout
     canvas.style.setProperty('--server-width', String(SERVER_WIDTH));
     canvas.style.setProperty('--server-height', String(SERVER_HEIGHT));
 
@@ -221,60 +252,79 @@ export function renderGame() {
     if (!ctx) {
         container.innerHTML = '<p>Canvas not supported</p>';
         appElement.appendChild(container);
-        return;
+        return cleanupGame; // Return cleanup even on error
     }
-
-    // --- Append Elements ---
     container.appendChild(canvas);
     appElement.appendChild(container);
 
-    // --- Initialize ---
-    // Call resize once immediately
-    handleResize();
-    // Call resize again in the next animation frame to ensure layout is stable
-    requestAnimationFrame(handleResize);
+    // --- Initialize Socket Connection (using socketManager) ---
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+        console.warn('[Game] No auth token found. Redirecting to login.');
+        container.innerHTML = '<p>Access denied. Please login. Redirecting...</p>';
+        setTimeout(() => navigateTo('/login'), 1500);
+        return cleanupGame;
+    }
 
+    let globalSocket = getSocket();
+    if (!globalSocket || !globalSocket.connected) {
+        console.log('[Game] Global socket not connected or null. Attempting to connect via socketManager.');
+        globalSocket = connectSocket(token); // connectSocket from manager establishes/returns the global socket
+    }
+    socket = globalSocket; // Assign to the game's module-level socket variable
 
-    socket = io('https://127.0.0.1:3000', {
-        transports: ['websocket'],
-        secure: true
-    });
+    if (!socket) {
+        console.error('[Game] Failed to obtain socket instance from socketManager. Cannot start game.');
+        container.innerHTML = '<p>Error: Could not connect to game services. Please try refreshing.</p>';
+        return cleanupGame;
+    }
 
-
-    socket.on('connect', () => {
-        console.log('Connected to game server:', socket?.id);
-    });
-
-    socket.on('disconnect', () => {
-        console.log('Disconnected from game server');
-    });
-
-    socket.on('connect_error', (err) => {
-        console.error('Connection Error:', err.message);
-        // Optionally display an error message on the canvas or page
-        if (ctx) {
-            ctx.fillStyle = 'red';
-            ctx.font = '20px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Connection Error', canvas!.width / 2, canvas!.height / 2);
+    // --- Setup Game Logic based on Socket Connection State ---
+    if (socket.connected) {
+        console.log('[Game] Shared socket already connected. Setting up game listeners. ID:', socket.id);
+        setupGameSocketListeners();
+    } else {
+        console.log('[Game] Shared socket not yet connected. Setting up on-connect listener.');
+        if (gameConnectHandler && socket) { // Remove previous if any to avoid multiple executions
+            socket.off('connect', gameConnectHandler);
         }
-    });
+        gameConnectHandler = () => {
+            console.log('[Game] Shared socket connected (detected by gameConnectHandler). Setting up game listeners. ID:', socket?.id);
+            setupGameSocketListeners();
+            // Clean up this one-time connect listener
+            if (socket && gameConnectHandler) {
+                socket.off('connect', gameConnectHandler);
+                gameConnectHandler = null;
+            }
+        };
+        socket.on('connect', gameConnectHandler);
+    }
+    
+    // General disconnect and error logging for game context (optional, socketManager might do enough)
+    // socket.on('disconnect', (reason) => console.log('[Game] Shared socket disconnected:', reason));
+    // socket.on('connect_error', (err) => console.error('[Game] Shared socket connect_error:', err.message));
 
-    // Listen for state updates
-    socket.on('state_update', handleStateUpdate);
 
-    // Add event listeners
+    // --- Initialize Game Display and Controls ---
+    handleResize(); // Call resize once immediately
+    requestAnimationFrame(handleResize); // And again for stability
+
+    // Add event listeners for game controls and window resize
     window.addEventListener('resize', handleResize);
     window.addEventListener('keydown', handleKeyDown);
 
-    // Add a listener for hash changes to trigger cleanup
-    // Note: This assumes the router in main.ts handles navigation
-    // We need a way to know when we navigate *away* from /game
-    const handleHashChangeForCleanup = () => {
-        if (window.location.hash !== '/game') {
+    // The existing hash change listener for cleanup:
+    // Ensure this specific handler is correctly managed if you have multiple hash change listeners.
+    const handleHashChangeForGameCleanup = () => {
+        if (window.location.pathname !== '/game' && window.location.hash !== '#/game') { // Check path and hash
+            console.log('[Game] Navigating away from game, triggering cleanup via hash/path change.');
             cleanupGame();
-            window.removeEventListener('hashchange', handleHashChangeForCleanup); // Remove self
+            window.removeEventListener('popstate', handleHashChangeForGameCleanup); // Use popstate for router
+            window.removeEventListener('hashchange', handleHashChangeForGameCleanup); 
         }
     };
-    window.addEventListener('hashchange', handleHashChangeForCleanup);
+    window.addEventListener('popstate', handleHashChangeForGameCleanup); // For path changes via navigateTo
+    window.addEventListener('hashchange', handleHashChangeForGameCleanup); // For direct hash changes
+
+    return cleanupGame; // Return the cleanup function
 }

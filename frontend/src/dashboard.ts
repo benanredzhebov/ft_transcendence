@@ -1,6 +1,6 @@
 import './dashboard.css';
 import { navigateTo } from './main';
-import { disconnectSocket, getSocket } from './socketManager'; // Import getSocket
+import { connectSocket, disconnectSocket, getSocket } from './socketManager'; // Import connectSocket
 
 // Define predefined avatars (can be at module scope if preferred)
 const PREDEFINED_AVATARS = [
@@ -11,7 +11,7 @@ const PREDEFINED_AVATARS = [
 ];
 
 // Module-level variable to hold the listener function and UI element for online users
-let onlineUsersUpdateListener: ((users: { username: string }[]) => void) | null = null;
+let onlineUsersUpdateListener: ((users: { username: string; socketId: string }[]) => void) | null = null; // Added socketId
 let onlineUsersListContainer: HTMLDivElement | null = null;
 let onSocketConnectForDashboardListener: (() => void) | null = null; // New variable
 
@@ -20,6 +20,35 @@ export function renderDashboard() {
   if (!appElement) {
     throw new Error('App root element (#app) not found!');
   }
+
+  // Attempt to connect socket if a token exists (e.g., after page refresh)
+  const token = localStorage.getItem('authToken');
+  const currentSocket = getSocket();
+
+  if (token) {
+    if (!currentSocket || !currentSocket.connected) {
+      console.log('[DEBUG] renderDashboard: Token found, socket not connected or null. Attempting to connect socket.');
+      connectSocket(token); // connectSocket will handle if it needs to disconnect an old one
+    } else {
+      console.log('[DEBUG] renderDashboard: Token found, socket already connected.');
+      // Optionally, you could verify if the connected socket is using the current token
+      // and reconnect if it's different, but connectSocket already handles disconnecting
+      // if (currentSocket.auth.token !== token) { // This assumes socket.auth.token is accessible and set
+      //   console.log('[DEBUG] renderDashboard: Token mismatch, reconnecting socket.');
+      //   connectSocket(token);
+      // }
+    }
+  } else {
+    console.log('[DEBUG] renderDashboard: No token found. Socket will not be connected by renderDashboard.');
+    // If a user lands on /dashboard without a token, you might want to redirect them to login
+    // navigateTo('/login');
+    // return; // Important: stop further rendering of dashboard if redirecting
+  }
+
+  // Log current socket ID at the beginning of renderDashboard (after connection attempt)
+  const currentSocketForDebug = getSocket();
+  console.log('[DEBUG] renderDashboard: Current Socket ID on render:', currentSocketForDebug?.id, 'Connected:', currentSocketForDebug?.connected);
+
 
   // Clear previous content
   appElement.innerHTML = '';
@@ -126,6 +155,7 @@ export function renderDashboard() {
   // --- Initial View ---
   // Cleanup any listeners from a potential previous full render of the dashboard.
   const currentSocketOnInitialLoad = getSocket();
+  console.log('[DEBUG] renderDashboard: Socket ID before initial setActiveView:', currentSocketOnInitialLoad?.id); // <-- Add this line
   if (currentSocketOnInitialLoad && onlineUsersUpdateListener) {
     currentSocketOnInitialLoad.off('online_users_update', onlineUsersUpdateListener);
     onlineUsersUpdateListener = null;
@@ -374,9 +404,9 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
       if (socket) {
         console.log(`Dashboard 'game' view: Socket ID: ${socket.id}, Connected: ${socket.connected}`);
 
-        onlineUsersUpdateListener = (users: { username: string }[]) => {
+        onlineUsersUpdateListener = (users: { username: string; socketId: string }[]) => { // Updated type here
           if (!onlineUsersListContainer) return;
-          console.log('Dashboard received online_users_update:', users);
+          console.log('Dashboard received online_users_update:', users); // This log will now show socketId
           const ul = document.createElement('ul');
           if (users.length === 0) {
             const li = document.createElement('li');
@@ -385,7 +415,8 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
           } else {
             users.forEach(user => {
               const li = document.createElement('li');
-              li.textContent = user.username;
+              // You can choose how to display this, e.g.:
+              li.textContent = `${user.username} (Socket: ${user.socketId.substring(0, 5)}...)`; 
               ul.appendChild(li);
             });
           }

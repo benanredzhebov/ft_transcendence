@@ -42,7 +42,7 @@ const io = new Server(server, {
 });
 
 const game = new GameEngine();
-const onlineUsers = new Map(); // <userId, { username: string }>
+const onlineUsers = new Map(); // <userId, { username: string, socketId: string }>
 
 io.on('connection', (socket) => {
   console.log('Client attempting to connect:', socket.id);
@@ -59,10 +59,10 @@ io.on('connection', (socket) => {
 
       // Add user to the list of online users
       if (socket.userId && socket.username) {
-        onlineUsers.set(socket.userId, { username: socket.username });
+        onlineUsers.set(socket.userId, { username: socket.username, socketId: socket.id }); // Store socket.id
         // Emit the updated list to all connected clients
         io.emit('online_users_update', Array.from(onlineUsers.values()));
-        console.log('Online users:', Array.from(onlineUsers.values()));
+        console.log('Online users:', Array.from(onlineUsers.values())); // This will now include socketId
       }
 
     } catch (err) {
@@ -93,7 +93,7 @@ io.on('connection', (socket) => {
       onlineUsers.delete(socket.userId);
       // Emit the updated list to all connected clients
       io.emit('online_users_update', Array.from(onlineUsers.values()));
-      console.log('Online users after disconnect:', Array.from(onlineUsers.values()));
+      console.log('Online users after disconnect:', Array.from(onlineUsers.values())); // This will also include socketId if any users remain
     }
     // game.removePlayer(socket.id); // Or based on socket.userId if your game engine uses it
   });

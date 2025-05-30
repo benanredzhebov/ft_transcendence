@@ -22,6 +22,11 @@ export function connectSocket(token: string): Socket {
 
   socket.on('connect', () => {
     console.log('Socket connected successfully:', socket?.id);
+    if (socket?.id) {
+      sessionStorage.setItem('socketId', socket.id);
+      console.log('Socket ID stored in sessionStorage:', socket.id);
+      console.log('[DEBUG] socketManager: New connection established. Socket ID:', socket.id); // <-- Add this line
+    }
   });
 
   socket.on('disconnect', (reason) => {
