@@ -192,7 +192,7 @@ function addSignupFormListeners() {
       const signupData = { username, email, password };
 
       try {
-          const response = await fetch('https://127.0.0.1:3000/signUp', { // Use correct backend URL
+          const response = await fetch('https://127.0.0.1:3000/signUp', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(signupData),
@@ -202,8 +202,8 @@ function addSignupFormListeners() {
 
           if (response.ok && data.success !== false) {
               console.log('Signup successful:', data);
-              alert('Signup successful! Please log in.'); // Inform user
-              navigateTo('/login'); // Redirect to login page
+              alert('Signup successful! Please log in.');
+              navigateTo('/login');
           } else {
               throw new Error(data.error || 'Signup failed. Please try again.');
           }
@@ -216,7 +216,6 @@ function addSignupFormListeners() {
       }
   });
 
-  // Close button navigates back to Welcome page
   closeButton.addEventListener('click', () => {
 	navigateTo('/');
   });

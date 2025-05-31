@@ -1,9 +1,9 @@
 import './game.css';
-import { getSocket, connectSocket } from './socketManager'; // Added connectSocket
-import { Socket } from 'socket.io-client'; // Keep for type annotation
-import { navigateTo } from './main'; // For redirecting if no token
+import { getSocket, connectSocket } from './socketManager';
+import { Socket } from 'socket.io-client';
+import { navigateTo } from './main';
 
-// --- Interfaces (matching backend GameState) ---
+
 interface PaddleState {
     y: number;
     height: number;
@@ -26,18 +26,27 @@ interface GameState {
         player1: number;
         player2: number;
     };
+    gameOver: boolean; 
 }
 
-// --- Constants ---
 const SERVER_WIDTH = 900;
 const SERVER_HEIGHT = 600;
 
-// --- Module-level variables ---
 let socket: Socket | null = null;
 let canvas: HTMLCanvasElement | null = null;
 let ctx: CanvasRenderingContext2D | null = null;
 let animationFrameId: number | null = null;
-let gameConnectHandler: (() => void) | null = null; // To manage the on-connect listener
+let gameConnectHandler: (() => void) | null = null; 
+let matchId: string | null = null;
+
+let player1SocketId: string | null = null;
+let player2SocketId: string | null = null;
+let currentPlayerRole: 'player1' | 'player2' | null = null;
+
+// --- Game Over UI Elements ---
+let gameOverControlsContainer: HTMLDivElement | null = null;
+let newMatchButton: HTMLButtonElement | null = null;
+let dashboardButton: HTMLButtonElement | null = null;
 
 // --- Drawing Logic ---
 function drawGame(state: GameState) {
@@ -46,9 +55,8 @@ function drawGame(state: GameState) {
         return;
     }
 
-    const { width, height } = canvas; // Use current canvas dimensions
+    const { width, height } = canvas;
 
-    // Calculate scaling factors
     const scaleX = width / SERVER_WIDTH;
     const scaleY = height / SERVER_HEIGHT;
 
@@ -122,11 +130,13 @@ function drawGame(state: GameState) {
     );
 
     // Check for game end condition
-    if (state.score.player1 >= 5 || state.score.player2 >= 5) {
+    if (state.gameOver) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect(0, 0, width, height);
         ctx.fillStyle = 'red';
-        ctx.font = `${Math.max(40, 70 * Math.min(scaleX, scaleY))}px Arial`;
+        ctx.font = `${Math.max(35, 60 * Math.min(scaleX, scaleY))}px "Press Start 2P", cursive`; // Retro font
         ctx.textAlign = 'center';
-        ctx.fillText('END', width / 2, height / 2);
+        ctx.fillText('END', width / 2, height / 2 - Math.max(20, 40 * scaleY));
     }
 }
 
@@ -136,6 +146,14 @@ function handleStateUpdate(state: GameState) {
         cancelAnimationFrame(animationFrameId);
     }
     animationFrameId = requestAnimationFrame(() => drawGame(state));
+
+    // Show/Hide game over buttons
+    if (state.gameOver && gameOverControlsContainer) {
+        gameOverControlsContainer.style.display = 'flex';
+    } else if (gameOverControlsContainer) {
+        // Hide if game somehow resets or is not over
+        gameOverControlsContainer.style.display = 'none';
+    }
 }
 
 // --- Resize Canvas ---
@@ -148,19 +166,16 @@ function handleResize() {
 
 
     const aspectRatio = SERVER_WIDTH / SERVER_HEIGHT;
-    let newWidth = containerWidth; // Start by assuming width fits container
+    let newWidth = containerWidth;
     let newHeight = newWidth / aspectRatio;
 
-    // If calculated height is too tall, adjust based on container height instead
     if (newHeight > containerHeight) {
         newHeight = containerHeight;
         newWidth = newHeight * aspectRatio;
     }
 
-    // Ensure the canvas doesn't exceed container dimensions (safety check)
     newWidth = Math.min(newWidth, containerWidth);
     newHeight = Math.min(newHeight, containerHeight);
-
 
     canvas.width = newWidth;
     canvas.height = newHeight;
@@ -169,12 +184,29 @@ function handleResize() {
 
 // --- Keyboard Input Handler ---
 function handleKeyDown(e: KeyboardEvent) {
-    if (!socket) return;
+    if (!socket || !currentPlayerRole) {
+        // console.log("KeyDown ignored: No socket or no player role determined.");
+        return;
+    }
     const key = e.key.toLowerCase();
-    if (key === 'arrowup') socket.emit('player_move', { playerId: 'player2', direction: 'up' });
-    if (key === 'arrowdown') socket.emit('player_move', { playerId: 'player2', direction: 'down' });
-    if (key === 'w') socket.emit('player_move', { playerId: 'player1', direction: 'up' });
-    if (key === 's') socket.emit('player_move', { playerId: 'player1', direction: 'down' });
+
+    if (['arrowup', 'arrowdown', 'w', 's'].includes(key)) {
+        e.preventDefault();
+    }
+
+    if (currentPlayerRole === 'player1') {
+        if (key === 'w') {
+            socket.emit('player_move', { playerId: 'player1', direction: 'up' });
+        } else if (key === 's') {
+            socket.emit('player_move', { playerId: 'player1', direction: 'down' });
+        }
+    } else if (currentPlayerRole === 'player2') {
+        if (key === 'arrowup') {
+            socket.emit('player_move', { playerId: 'player2', direction: 'up' });
+        } else if (key === 'arrowdown') {
+            socket.emit('player_move', { playerId: 'player2', direction: 'down' });
+        }
+    }
 }
 
 function setupGameSocketListeners() {
@@ -183,13 +215,38 @@ function setupGameSocketListeners() {
         return;
     }
 
-    // Remove existing state_update listener to prevent duplicates
     socket.off('state_update', handleStateUpdate);
     socket.on('state_update', handleStateUpdate);
     console.log('[Game] state_update listener attached to shared socket.');
 
-    // You can add other game-specific listeners here if needed
-    // e.g., socket.on('game_over', handleGameOver);
+    socket.off('rematch_started'); 
+    socket.on('rematch_started', (data: { newMatchId: string, player1SocketId: string, player2SocketId: string, initialState: GameState }) => {
+        console.log('[Game] Rematch started:', data);
+        
+        matchId = data.newMatchId;
+        player1SocketId = data.player1SocketId; 
+        player2SocketId = data.player2SocketId;
+
+        initializeGameDisplayAndControls();
+        setupPlayerRole();
+        handleStateUpdate(data.initialState);
+    });
+
+    socket.off('rematch_error');
+    socket.on('rematch_error', (data: { message: string }) => {
+        // console.error('[Game] Rematch error:', data.message);
+        alert(`Rematch Error: ${data.message}`);
+        if (newMatchButton) {
+            newMatchButton.disabled = false;
+            newMatchButton.textContent = 'New Match';
+        }
+        if (dashboardButton) {
+            dashboardButton.disabled = false;
+        }
+        if (gameOverControlsContainer) {
+            gameOverControlsContainer.style.display = 'flex'; 
+        }
+    });
 }
 
 // --- Cleanup function ---
@@ -197,12 +254,10 @@ function cleanupGame() {
     console.log("Cleaning up game resources (using shared socket)...");
     if (socket) {
         socket.off('state_update', handleStateUpdate);
-        if (gameConnectHandler) { // If game is cleaned up before connect event fired
+        if (gameConnectHandler) { 
             socket.off('connect', gameConnectHandler);
             gameConnectHandler = null;
         }
-        // Remove other game-specific listeners if any were added
-        // e.g., socket.off('game_over', handleGameOver);
     }
     if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
@@ -211,88 +266,147 @@ function cleanupGame() {
     window.removeEventListener('resize', handleResize);
     window.removeEventListener('keydown', handleKeyDown);
     
-    // Remove hash change listener if it was added by this module
-    // (Assuming the existing hash change listener in renderGame is for this module's cleanup)
-    // window.removeEventListener('hashchange', handleHashChangeForCleanup); // You'll need to define handleHashChangeForCleanup if used
+    currentPlayerRole = null;
+    player1SocketId = null;
+    player2SocketId = null;
+    matchId = null;
 
     if (canvas) {
         const parent = canvas.parentElement;
-        if (parent) {
-            parent.innerHTML = ''; // Clear the container
+        if (parent && parent.id === 'game-container') {
+            parent.innerHTML = ''; // Clear the game container
         }
+        canvas = null;
     }
-    canvas = null;
     ctx = null;
-    socket = null; // Clear module-level reference to the shared socket
+    
+    if (gameOverControlsContainer) {
+        gameOverControlsContainer = null;
+    }
+    newMatchButton = null;
+    dashboardButton = null;
+
     console.log("Game cleanup complete.");
 }
 
 // --- Main Render Function ---
-export function renderGame(): (() => void) { // Ensure it returns the cleanup function
-    // Ensure cleanup happens if renderGame is called again
-    cleanupGame();
-
-    const appElement = document.querySelector<HTMLDivElement>('#app');
-    if (!appElement) {
-        throw new Error('App root element (#app) not found!');
+export function renderGame(): (() => void) {
+    const app = document.getElementById('app');
+    if (!app) {
+        console.error('App element not found');
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            window.removeEventListener('keydown', handleKeyDown);
+        };
     }
-    appElement.innerHTML = ''; // Clear previous content before creating new
+    app.innerHTML = `
+        <div id="game-container" class="game-container">
+            <canvas id="pong-canvas" class="game-canvas"></canvas>
+            <div id="game-over-controls" style="display: none;"></div>
+        </div>
+    `;
 
-    // --- Create Elements ---
-    const container = document.createElement('div');
-    container.className = "game-container";
+    const container = document.getElementById('game-container') as HTMLDivElement;
+    canvas = document.getElementById('pong-canvas') as HTMLCanvasElement;
+    gameOverControlsContainer = document.getElementById('game-over-controls') as HTMLDivElement;
 
-    canvas = document.createElement('canvas');
-    canvas.className = "game-canvas";
-    canvas.style.setProperty('--server-width', String(SERVER_WIDTH));
-    canvas.style.setProperty('--server-height', String(SERVER_HEIGHT));
+    if (!container || !canvas || !gameOverControlsContainer) {
+        console.error('Failed to get game elements from DOM');
+        return () => { /* basic cleanup */ };
+    }
 
     ctx = canvas.getContext('2d');
-
     if (!ctx) {
-        container.innerHTML = '<p>Canvas not supported</p>';
-        appElement.appendChild(container);
-        return cleanupGame; // Return cleanup even on error
+        console.error('Failed to get 2D rendering context');
+        return () => { /* basic cleanup */ };
     }
-    container.appendChild(canvas);
-    appElement.appendChild(container);
+
+    // Parse URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    matchId = urlParams.get('matchId');
+    player1SocketId = urlParams.get('p1');
+    player2SocketId = urlParams.get('p2');
+
+    if (!matchId || !player1SocketId || !player2SocketId) {
+        console.error('[Game] Missing matchId, p1, or p2 in URL. Cannot determine player role.');
+        container.innerHTML = '<p>Error: Game information missing. <a href="/dashboard">Back to Dashboard</a></p>';
+        return () => { /* basic cleanup */ };
+    }
 
     // --- Initialize Socket Connection (using socketManager) ---
     const token = localStorage.getItem('authToken');
     if (!token) {
-        console.warn('[Game] No auth token found. Redirecting to login.');
-        container.innerHTML = '<p>Access denied. Please login. Redirecting...</p>';
-        setTimeout(() => navigateTo('/login'), 1500);
-        return cleanupGame;
+        console.error('[Game] No auth token found. Redirecting to login.');
+        navigateTo('/login');
+        return () => { /* basic cleanup */ };
     }
 
-    let globalSocket = getSocket();
-    if (!globalSocket || !globalSocket.connected) {
-        console.log('[Game] Global socket not connected or null. Attempting to connect via socketManager.');
-        globalSocket = connectSocket(token); // connectSocket from manager establishes/returns the global socket
+    socket = getSocket(); 
+    if (!socket) { // If socket isn't already in dashboard
+        console.log('[Game] Socket not found, attempting to connect via socketManager.');
+        connectSocket(token);
+        socket = getSocket();
     }
-    socket = globalSocket; // Assign to the game's module-level socket variable
-
+    
     if (!socket) {
-        console.error('[Game] Failed to obtain socket instance from socketManager. Cannot start game.');
-        container.innerHTML = '<p>Error: Could not connect to game services. Please try refreshing.</p>';
-        return cleanupGame;
+        console.error("[Game] Failed to get or initialize socket instance. Game cannot proceed.");
+        container.innerHTML = '<p>Error: Could not connect to game server. <a href="/dashboard">Back to Dashboard</a></p>';
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            window.removeEventListener('keydown', handleKeyDown);
+        };
     }
+
+    const setupPlayerRole = () => {
+        if (socket && socket.id && player1SocketId && player2SocketId) {
+            if (socket.id === player1SocketId) {
+                currentPlayerRole = 'player1';
+            } else if (socket.id === player2SocketId) {
+                currentPlayerRole = 'player2';
+            } else {
+                // This client is neither player1 nor player2 (e.g., spectator, or error in IDs)
+                console.warn(`[Game] Client socket ID ${socket.id} does not match P1 (${player1SocketId}) or P2 (${player2SocketId}). No controls will be active.`);
+                currentPlayerRole = null; 
+            }
+            console.log(`[Game] Client role: ${currentPlayerRole}. Socket ID: ${socket.id}. P1: ${player1SocketId}, P2: ${player2SocketId}`);
+        } else {
+            console.warn('[Game] Cannot determine player role: socket, socket.id, player1SocketId, or player2SocketId is missing/invalid.', {
+                socketExists: !!socket,
+                socketId: socket?.id,
+                p1Id: player1SocketId,
+                p2Id: player2SocketId
+            });
+            currentPlayerRole = null;
+        }
+    };
 
     // --- Setup Game Logic based on Socket Connection State ---
+    const setupGameForMatch = () => {
+        console.log('[Game] Socket connected/available. Setting up game. Socket ID:', socket?.id);
+        
+        setupPlayerRole(); // Determine role now that socket.id should be available
+
+        if (matchId) {
+            console.log(`[Game] Joining specific match: ${matchId}`);
+            socket?.emit('join_specific_game', { gameId: matchId }); 
+        } else {
+            console.warn('[Game] No matchId found (should have been caught earlier). Game might not start correctly.');
+        }
+        setupGameSocketListeners(); 
+    };
+
     if (socket.connected) {
-        console.log('[Game] Shared socket already connected. Setting up game listeners. ID:', socket.id);
-        setupGameSocketListeners();
+        console.log('[Game] Socket already connected. Proceeding with game setup.');
+        setupGameForMatch();
     } else {
-        console.log('[Game] Shared socket not yet connected. Setting up on-connect listener.');
-        if (gameConnectHandler && socket) { // Remove previous if any to avoid multiple executions
+        console.log('[Game] Socket not yet connected. Setting up on-connect listener.');
+        if (gameConnectHandler && socket) { // Clean up previous listener if any
             socket.off('connect', gameConnectHandler);
         }
         gameConnectHandler = () => {
-            console.log('[Game] Shared socket connected (detected by gameConnectHandler). Setting up game listeners. ID:', socket?.id);
-            setupGameSocketListeners();
-            // Clean up this one-time connect listener
-            if (socket && gameConnectHandler) {
+            console.log('[Game] Socket connected (via gameConnectHandler). Proceeding with game setup.');
+            setupGameForMatch();
+            if (socket && gameConnectHandler) { // Clean up this one-time listener
                 socket.off('connect', gameConnectHandler);
                 gameConnectHandler = null;
             }
@@ -306,25 +420,67 @@ export function renderGame(): (() => void) { // Ensure it returns the cleanup fu
 
 
     // --- Initialize Game Display and Controls ---
-    handleResize(); // Call resize once immediately
-    requestAnimationFrame(handleResize); // And again for stability
+    gameOverControlsContainer.innerHTML = ''; // Clear previous buttons if any
+    gameOverControlsContainer.className = 'game-over-controls';
+
+    newMatchButton = document.createElement('button');
+    newMatchButton.className = 'game-over-button';
+    newMatchButton.textContent = 'New Match';
+    newMatchButton.onclick = () => {
+        if (socket && matchId && newMatchButton && dashboardButton) {
+            socket.emit('request_rematch', { oldMatchId: matchId });
+            newMatchButton.disabled = true;
+            newMatchButton.textContent = 'Requesting...';
+            dashboardButton.disabled = true;
+        }
+    };
+
+    dashboardButton = document.createElement('button');
+    dashboardButton.className = 'game-over-button';
+    dashboardButton.textContent = 'Back to Dashboard';
+    dashboardButton.onclick = () => {
+        navigateTo('/dashboard');
+    };
+
+    gameOverControlsContainer.appendChild(newMatchButton);
+    gameOverControlsContainer.appendChild(dashboardButton);
+
+    initializeGameDisplayAndControls(); 
 
     // Add event listeners for game controls and window resize
     window.addEventListener('resize', handleResize);
     window.addEventListener('keydown', handleKeyDown);
+    handleResize();
+    requestAnimationFrame(handleResize);
 
-    // The existing hash change listener for cleanup:
-    // Ensure this specific handler is correctly managed if you have multiple hash change listeners.
     const handleHashChangeForGameCleanup = () => {
-        if (window.location.pathname !== '/game' && window.location.hash !== '#/game') { // Check path and hash
+        if (window.location.pathname !== '/game' && window.location.hash !== '#/game') {
             console.log('[Game] Navigating away from game, triggering cleanup via hash/path change.');
             cleanupGame();
-            window.removeEventListener('popstate', handleHashChangeForGameCleanup); // Use popstate for router
+            window.removeEventListener('popstate', handleHashChangeForGameCleanup);
             window.removeEventListener('hashchange', handleHashChangeForGameCleanup); 
         }
     };
-    window.addEventListener('popstate', handleHashChangeForGameCleanup); // For path changes via navigateTo
-    window.addEventListener('hashchange', handleHashChangeForGameCleanup); // For direct hash changes
+    window.addEventListener('popstate', handleHashChangeForGameCleanup);
+    window.addEventListener('hashchange', handleHashChangeForGameCleanup);
 
-    return cleanupGame; // Return the cleanup function
+    return cleanupGame;
+
+}
+
+function initializeGameDisplayAndControls() {
+    if (gameOverControlsContainer) {
+        gameOverControlsContainer.style.display = 'none';
+    }
+    if (newMatchButton) {
+        newMatchButton.disabled = false;
+        newMatchButton.textContent = 'New Match';
+    }
+    if (dashboardButton) {
+        dashboardButton.disabled = false;
+    }
+}
+
+function setupPlayerRole() {
+    throw new Error('Function not implemented.');
 }

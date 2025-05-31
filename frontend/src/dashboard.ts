@@ -1,319 +1,284 @@
 import './dashboard.css';
 import { navigateTo } from './main';
-import { connectSocket, disconnectSocket, getSocket } from './socketManager'; // Import connectSocket
+import { connectSocket, disconnectSocket, getSocket } from './socketManager';
+import { openAvatarSelectionModal } from './avatarModal';
+import { displayChallengeModal } from './challengeModal';
 
-// Define predefined avatars (can be at module scope if preferred)
-const PREDEFINED_AVATARS = [
-  '/avatars/girl.png',
-  '/avatars/boy.png',
-  '/avatars/gojo.png',
-  '/avatars/luffy.png'
-];
 
-// Module-level variable to hold the listener function and UI element for online users
-let onlineUsersUpdateListener: ((users: { username: string; socketId: string }[]) => void) | null = null; // Added socketId
+
+let onlineUsersUpdateListener: ((users: { username: string; socketId: string }[]) => void) | null = null;
 let onlineUsersListContainer: HTMLDivElement | null = null;
-let onSocketConnectForDashboardListener: (() => void) | null = null; // New variable
+let onSocketConnectForDashboardListener: (() => void) | null = null;
+let ownSocketId: string | null = null;
+let ownUsername: string | null = localStorage.getItem('username');
 
-export function renderDashboard() {
-  const appElement = document.querySelector<HTMLDivElement>('#app');
-  if (!appElement) {
-    throw new Error('App root element (#app) not found!');
-  }
-
-  // Attempt to connect socket if a token exists (e.g., after page refresh)
-  const token = localStorage.getItem('authToken');
-  const currentSocket = getSocket();
-
-  if (token) {
-    if (!currentSocket || !currentSocket.connected) {
-      console.log('[DEBUG] renderDashboard: Token found, socket not connected or null. Attempting to connect socket.');
-      connectSocket(token); // connectSocket will handle if it needs to disconnect an old one
-    } else {
-      console.log('[DEBUG] renderDashboard: Token found, socket already connected.');
-      // Optionally, you could verify if the connected socket is using the current token
-      // and reconnect if it's different, but connectSocket already handles disconnecting
-      // if (currentSocket.auth.token !== token) { // This assumes socket.auth.token is accessible and set
-      //   console.log('[DEBUG] renderDashboard: Token mismatch, reconnecting socket.');
-      //   connectSocket(token);
-      // }
-    }
-  } else {
-    console.log('[DEBUG] renderDashboard: No token found. Socket will not be connected by renderDashboard.');
-    // If a user lands on /dashboard without a token, you might want to redirect them to login
-    // navigateTo('/login');
-    // return; // Important: stop further rendering of dashboard if redirecting
-  }
-
-  // Log current socket ID at the beginning of renderDashboard (after connection attempt)
-  const currentSocketForDebug = getSocket();
-  console.log('[DEBUG] renderDashboard: Current Socket ID on render:', currentSocketForDebug?.id, 'Connected:', currentSocketForDebug?.connected);
-
-
-  // Clear previous content
-  appElement.innerHTML = '';
-
-  // --- Create Elements ---
-
-  // Global Container
-  const globalContainer = document.createElement('div');
-  globalContainer.className = "dashboard-global-container";
-
-  // Card Container
-  const cardContainer = document.createElement('div');
-  cardContainer.className = "dashboard-card-container";
-
-  // Left Sidebar
-  const sidebar = document.createElement('div');
-  sidebar.className = "dashboard-sidebar";
-
-  const sidebarHeading = document.createElement('h2');
-  sidebarHeading.className = "dashboard-heading";
-  sidebarHeading.textContent = "Dashboard";
-
-  const nav = document.createElement('nav');
-  nav.className = "dashboard-nav";
-
-  // Navigation Buttons
-  const profileButton = document.createElement('button');
-  profileButton.className = "dashboard-nav-button";
-  profileButton.textContent = "Profile";
-  profileButton.dataset.view = "profile"; // Custom data attribute to identify view
-
-  const gameButton = document.createElement('button');
-  gameButton.className = "dashboard-nav-button";
-  gameButton.textContent = "Game";
-  gameButton.dataset.view = "game";
-
-  const chatButton = document.createElement('button');
-  chatButton.className = "dashboard-nav-button";
-  chatButton.textContent = "Chat";
-  chatButton.dataset.view = "chat";
-
-  // Logout Button
-  const logoutButton = document.createElement('button');
-  logoutButton.className = "dashboard-logout-button";
-  logoutButton.textContent = "Logout";
-
-  // Right Content Area
-  const contentArea = document.createElement('div');
-  contentArea.className = "dashboard-content-area";
-  contentArea.id = "dashboard-content"; // ID to easily update content
-
-  // --- Assemble Sidebar ---
-  nav.appendChild(profileButton);
-  nav.appendChild(gameButton);
-  nav.appendChild(chatButton);
-  sidebar.appendChild(sidebarHeading);
-  sidebar.appendChild(nav);
-  nav.appendChild(logoutButton);
-
-  // --- Assemble Card ---
-  cardContainer.appendChild(sidebar);
-  cardContainer.appendChild(contentArea);
-
-  // --- Assemble Global Container ---
-  globalContainer.appendChild(cardContainer);
-
-  // --- Append to App ---
-  appElement.appendChild(globalContainer);
-
-  // --- Add Event Listeners ---
-
-  // Sidebar navigation
-  const navButtons = [profileButton, gameButton, chatButton];
-  navButtons.forEach(button => {
-    button.addEventListener('click', () => {
-      const view = button.dataset.view;
-      if (view) {
-        setActiveView(view, navButtons, contentArea);
-      }
-    });
-  });
-
-  // Logout button
-  logoutButton.addEventListener('click', () => {
-    localStorage.removeItem('authToken');
-    disconnectSocket(); // Disconnect the socket on logout
-    // Clean up dashboard-specific listeners if any were global to the dashboard itself
-    const currentSocket = getSocket();
-    if (currentSocket && onlineUsersUpdateListener) {
-      currentSocket.off('online_users_update', onlineUsersUpdateListener);
-      onlineUsersUpdateListener = null;
-    }
-    if (currentSocket && onSocketConnectForDashboardListener) {
-      currentSocket.off('connect', onSocketConnectForDashboardListener);
-      onSocketConnectForDashboardListener = null;
-    }
-    if (onlineUsersListContainer) {
-      onlineUsersListContainer.remove();
-      onlineUsersListContainer = null;
-    }
-    navigateTo('/');
-  });
-
-  // --- Initial View ---
-  // Cleanup any listeners from a potential previous full render of the dashboard.
-  const currentSocketOnInitialLoad = getSocket();
-  console.log('[DEBUG] renderDashboard: Socket ID before initial setActiveView:', currentSocketOnInitialLoad?.id); // <-- Add this line
-  if (currentSocketOnInitialLoad && onlineUsersUpdateListener) {
-    currentSocketOnInitialLoad.off('online_users_update', onlineUsersUpdateListener);
-    onlineUsersUpdateListener = null;
-  }
-  if (currentSocketOnInitialLoad && onSocketConnectForDashboardListener) {
-    currentSocketOnInitialLoad.off('connect', onSocketConnectForDashboardListener);
-    onSocketConnectForDashboardListener = null;
-  }
-  if (onlineUsersListContainer) {
-    onlineUsersListContainer.remove();
-    onlineUsersListContainer = null;
-  }
-  setActiveView('profile', navButtons, contentArea); // Set initial view to profile
+interface PendingMatchData {
+  gameId: string;
+  player1SocketId: string;
+  player2SocketId: string;
+  isPlayer1: boolean;
+  localPlayerReady: boolean;
+  opponentReady: boolean;
+  message: string;
 }
+let currentPendingMatch: PendingMatchData | null = null;
+let gameContentAreaRef: HTMLDivElement | null = null; 
 
-// --- Helper Function to Open Avatar Selection Modal ---
-async function openAvatarSelectionModal(
-  token: string,
-  currentProfileAvatarImg: HTMLImageElement,
-  avatarStatusElement: HTMLParagraphElement
-) {
-  // Modal overlay
-  const modalOverlay = document.createElement('div');
-  modalOverlay.className = 'avatar-modal-overlay';
+function setupDashboardSocketListeners() {
+  const socket = getSocket();
+  if (!socket) {
+    console.warn('[Dashboard] Socket not available for setting up listeners.');
+    return;
+  }
+  ownUsername = localStorage.getItem('username');
+
+  // Remove any existing listeners to avoid duplicates
+  socket.off('incoming_challenge');
+  socket.off('challenge_sent');
+  socket.off('challenge_rejected');
+  socket.off('challenge_error');
+  socket.off('game_setup_failed');
+  socket.off('start_game');
+  socket.off('match_confirmed_get_ready');
+  socket.off('ready_acknowledged');
+  socket.off('opponent_ready_status');
+  socket.off('start_actual_game');
+  socket.off('error_starting_match');
+  socket.off('already_ready');
+  socket.off('opponent_disconnected_before_match_start');
+  socket.off('opponent_disconnected_mid_game');
+
+  // console.log('[Dashboard] Setting up dashboard socket listeners.');
+
+  socket.on('incoming_challenge', (data: { challengerUsername: string; challengerSocketId: string; message: string }) => {
+    // console.log('[Dashboard] Incoming challenge:', data);
+    displayChallengeModal(data.challengerUsername, data.challengerSocketId, ownSocketId, ownUsername);
+  });
+
+  socket.on('challenge_sent', (data: { message: string }) => {
+    // console.log('[Dashboard] Challenge sent:', data.message);
+    alert(data.message);
+  });
+
+  socket.on('challenge_rejected', (data: { rejectedBy: string; message: string }) => {
+    // console.log('[Dashboard] Challenge rejected:', data);
+    alert(`Challenge Rejected: ${data.message}`);
+  });
+
+  socket.on('challenge_error', (data: { message: string }) => {
+    // console.error('[Dashboard] Challenge error:', data.message);
+    alert(`Challenge Error: ${data.message}`);
+  });
+
+  socket.on('game_setup_failed', (data: { message: string }) => {
+    console.error('[Dashboard] Game setup failed:', data.message);
+    alert(`Game Setup Failed: ${data.message}`);
+    currentPendingMatch = null;
+    updateGameLobbyUI();
+  });
+
+  // Handlers for the new match flow
+  socket.on('match_confirmed_get_ready', (data: { gameId: string, message: string, player1SocketId: string, player2SocketId: string }) => {
+    // console.log('[Dashboard] Match confirmed, get ready:', data);
+    ownSocketId = socket.id ?? null; 
+    currentPendingMatch = {
+      gameId: data.gameId,
+      player1SocketId: data.player1SocketId,
+      player2SocketId: data.player2SocketId,
+      isPlayer1: (socket.id || "") === data.player1SocketId,
+      localPlayerReady: false,
+      opponentReady: false,
+      message: data.message
+    };
+    if (gameContentAreaRef && document.getElementById('dashboard-content')?.contains(gameContentAreaRef)) {
+      updateGameLobbyUI();
+    }
+    alert(data.message); 
+  });
+
+  socket.on('ready_acknowledged', (data: { gameId: string, message: string }) => {
+    // console.log('[Dashboard] Ready acknowledged:', data);
+    if (currentPendingMatch && currentPendingMatch.gameId === data.gameId) {
+      currentPendingMatch.localPlayerReady = true;
+      currentPendingMatch.message = data.message;
+      updateGameLobbyUI();
+    }
+  });
+
+  socket.on('opponent_ready_status', (data: { gameId: string, message: string }) => {
+    // console.log('[Dashboard] Opponent ready status:', data);
+    if (currentPendingMatch && currentPendingMatch.gameId === data.gameId) {
+      currentPendingMatch.opponentReady = true;
+      currentPendingMatch.message += `\n${data.message}`;
+      updateGameLobbyUI();
+    }
+  });
+
+  socket.on('start_actual_game', (data: { gameId: string, message: string, player1SocketId: string, player2SocketId: string }) => {
+    // console.log('[Dashboard] Both players ready, starting actual game:', data);
+    if (currentPendingMatch && currentPendingMatch.gameId === data.gameId) {
+      alert(data.message);
+      navigateTo(`/game?matchId=${data.gameId}&p1=${data.player1SocketId}&p2=${data.player2SocketId}`);
+      currentPendingMatch = null;
+    }
+  });
+
+  socket.on('error_starting_match', (data: { message: string }) => {
+    // console.error('[Dashboard] Error starting match:', data.message);
+    alert(`Error: ${data.message}`);
+    currentPendingMatch = null;
+    updateGameLobbyUI();
+  });
   
-  // Modal content
-  const modalContent = document.createElement('div');
-  modalContent.className = 'avatar-modal-content';
-
-  const modalTitle = document.createElement('h4');
-  modalTitle.textContent = 'Choose Your Avatar';
-  modalTitle.style.textAlign = 'center';
-  modalTitle.style.marginBottom = '20px';
-
-  const avatarsGrid = document.createElement('div');
-  avatarsGrid.className = 'avatar-modal-grid';
-
-  PREDEFINED_AVATARS.forEach(avatarSrc => {
-    const imgWrapper = document.createElement('div');
-    imgWrapper.className = 'avatar-modal-option';
-    const imgEl = document.createElement('img');
-    imgEl.src = avatarSrc;
-    imgEl.alt = `Avatar ${avatarSrc.split('/').pop()}`;
-    imgEl.style.width = '80px';
-    imgEl.style.height = '80px';
-    imgEl.style.borderRadius = '50%';
-    imgEl.style.objectFit = 'cover';
-    imgEl.style.cursor = 'pointer';
-
-    imgWrapper.appendChild(imgEl);
-    imgWrapper.addEventListener('click', async () => {
-      avatarStatusElement.textContent = 'Processing...';
-      modalContent.style.pointerEvents = 'none'; // Disable further clicks during processing
-      try {
-        const imageResponse = await fetch(avatarSrc);
-        if (!imageResponse.ok) {
-          throw new Error(`Failed to fetch avatar: ${imageResponse.statusText}`);
-        }
-        const imageBlob = await imageResponse.blob();
-        const fileName = avatarSrc.split('/').pop() || 'avatar.png';
-        const imageFile = new File([imageBlob], fileName, { type: imageBlob.type });
-
-        const formData = new FormData();
-        formData.append('avatar', imageFile);
-
-        const uploadResponse = await fetch('/api/profile/avatar', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: formData,
-        });
-
-        const result = await uploadResponse.json();
-
-        if (uploadResponse.ok && result.success) {
-          avatarStatusElement.textContent = 'Avatar updated successfully!';
-          if (result.avatarPath) { // Check for avatarPath
-            currentProfileAvatarImg.src = result.avatarPath; // Use the path directly
-          }
-        } else {
-          avatarStatusElement.textContent = result.error || 'Failed to update avatar.';
-          console.error('Avatar update error:', result);
-        }
-      } catch (error) {
-        console.error('Error selecting/uploading predefined avatar:', error);
-        avatarStatusElement.textContent = 'Error updating avatar. See console.';
-      } finally {
-        closeModal();
-      }
-    });
-    avatarsGrid.appendChild(imgWrapper);
+  socket.on('already_ready', (data: { gameId: string, message: string }) => {
+    // console.log('[Dashboard] Already ready:', data.message);
+    if (currentPendingMatch && currentPendingMatch.gameId === data.gameId) {
+        currentPendingMatch.localPlayerReady = true;
+        currentPendingMatch.message = data.message;
+        updateGameLobbyUI();
+    }
+    alert(data.message);
   });
 
-  const closeButton = document.createElement('button');
-  closeButton.textContent = 'Close';
-  closeButton.className = 'avatar-modal-close-button';
-  closeButton.addEventListener('click', closeModal);
-
-  modalContent.appendChild(modalTitle);
-  modalContent.appendChild(avatarsGrid);
-  modalContent.appendChild(closeButton);
-  modalOverlay.appendChild(modalContent);
-  document.body.appendChild(modalOverlay);
-
-  function closeModal() {
-    if (document.body.contains(modalOverlay)) {
-      document.body.removeChild(modalOverlay);
+  socket.on('opponent_disconnected_before_match_start', (data: { gameId: string, message: string }) => {
+    // console.warn('[Dashboard] Opponent disconnected before match start:', data);
+    if (currentPendingMatch && currentPendingMatch.gameId === data.gameId) {
+      alert(data.message);
+      currentPendingMatch = null;
+      updateGameLobbyUI();
     }
-  }
-  // Close modal if overlay is clicked
-  modalOverlay.addEventListener('click', (event) => {
-    if (event.target === modalOverlay) {
-        closeModal();
+  });
+  
+  socket.on('opponent_disconnected_mid_game', (data: { gameId: string, message: string }) => {
+    // console.warn('[Dashboard] Opponent disconnected mid-game (event received on dashboard):', data);
+    if (currentPendingMatch && currentPendingMatch.gameId === data.gameId) {
+      alert(data.message + " (Match cancelled)");
+      currentPendingMatch = null;
+      updateGameLobbyUI();
     }
   });
 }
 
-// --- Helper Function to Set Active View ---
-async function setActiveView(view: string, buttons: HTMLButtonElement[], contentArea: HTMLDivElement) {
-  // Update button styles
-  buttons.forEach(btn => {
-    if (btn.dataset.view === view) {
-      btn.classList.add('active');
+function updateGameLobbyUI() {
+  if (!gameContentAreaRef) {
+    const mainContentArea = document.getElementById('dashboard-content');
+    if (mainContentArea && mainContentArea.firstChild && (mainContentArea.firstChild as HTMLElement).classList?.contains('game-view-content')) {
+        gameContentAreaRef = mainContentArea.firstChild as HTMLDivElement;
     } else {
-      btn.classList.remove('active');
+        return;
     }
-  });
+  }
 
-  // --- Cleanup listener and UI from previous 'game' view ---
+  gameContentAreaRef.innerHTML = ''; 
+
+  if (currentPendingMatch) {
+    const { gameId, localPlayerReady, opponentReady, message } = currentPendingMatch;
+
+    const statusDiv = document.createElement('div');
+    statusDiv.className = 'match-status-container';
+    
+    const heading = document.createElement('h3');
+    heading.textContent = `Match Lobby: ${gameId}`;
+    statusDiv.appendChild(heading);
+
+    const statusMessage = document.createElement('p');
+    statusMessage.textContent = message;
+    statusMessage.style.whiteSpace = 'pre-line';
+    statusDiv.appendChild(statusMessage);
+
+    if (!localPlayerReady) {
+      const startButton = document.createElement('button');
+      startButton.textContent = 'Start Match';
+      startButton.className = 'dashboard-game-button';
+      startButton.id = 'start-match-button';
+      startButton.onclick = () => {
+        const socket = getSocket();
+        if (socket && currentPendingMatch) {
+          socket.emit('player_ready_for_match', { gameId: currentPendingMatch.gameId });
+          startButton.disabled = true;
+          startButton.textContent = 'Waiting for Server...';
+        }
+      };
+      statusDiv.appendChild(startButton);
+    } else if (localPlayerReady && !opponentReady) {
+      const waitingMsg = document.createElement('p');
+      waitingMsg.textContent = 'You are ready. Waiting for opponent...';
+      statusDiv.appendChild(waitingMsg);
+    } else if (localPlayerReady && opponentReady) {
+      const bothReadyMsg = document.createElement('p');
+      bothReadyMsg.textContent = 'Both players ready! Starting game shortly...';
+      statusDiv.appendChild(bothReadyMsg);
+    }
+    
+    gameContentAreaRef.appendChild(statusDiv);
+
+  } else {
+    // No pending match, show online users list
+    const onlineUsersHeading = document.createElement('h3');
+    onlineUsersHeading.className = 'dashboard-content-heading';
+    onlineUsersHeading.textContent = 'Challenge Players';
+    gameContentAreaRef.appendChild(onlineUsersHeading);
+    
+    onlineUsersListContainer = document.createElement('div');
+    onlineUsersListContainer.id = 'online-users-list';
+    onlineUsersListContainer.className = 'dashboard-online-users';
+    onlineUsersListContainer.innerHTML = '<h4>Online Users:</h4><ul><li>Loading...</li></ul>';
+    gameContentAreaRef.appendChild(onlineUsersListContainer);
+
+    const socket = getSocket();
+    if (socket && socket.connected) {
+      setupOnlineUsersListener(); 
+    } else if (socket) {
+        if (onSocketConnectForDashboardListener) {
+            socket.off('connect', onSocketConnectForDashboardListener);
+        }
+        onSocketConnectForDashboardListener = () => {
+            setupOnlineUsersListener();
+            socket.off('connect', onSocketConnectForDashboardListener!); 
+            onSocketConnectForDashboardListener = null; 
+        };
+        socket.on('connect', onSocketConnectForDashboardListener);
+        if (onlineUsersListContainer) {
+            onlineUsersListContainer.innerHTML = '<h4>Online Users:</h4><ul><li>Connecting to server...</li></ul>';
+        }
+    } else {
+        if (onlineUsersListContainer) {
+            onlineUsersListContainer.innerHTML = '<h4>Online Users:</h4><ul><li>Socket not available.</li></ul>';
+        }
+    }
+  }
+}
+
+async function setActiveView(view: string, buttons: HTMLButtonElement[], contentArea: HTMLDivElement) {
+  buttons.forEach(btn => btn.classList.remove('active'));
+  const activeButton = buttons.find(btn => btn.dataset.view === view);
+  if (activeButton) {
+    activeButton.classList.add('active');
+  }
+
   const currentSocket = getSocket();
   if (onlineUsersUpdateListener && currentSocket) {
     currentSocket.off('online_users_update', onlineUsersUpdateListener);
-    onlineUsersUpdateListener = null;
-    console.log("Removed previous online_users_update listener from dashboard.");
   }
-  if (onSocketConnectForDashboardListener && currentSocket) { // Cleanup the new listener
+  if (onSocketConnectForDashboardListener && currentSocket) { 
     currentSocket.off('connect', onSocketConnectForDashboardListener);
-    onSocketConnectForDashboardListener = null;
-    console.log("Removed previous onSocketConnectForDashboardListener from dashboard.");
-  }
-  if (onlineUsersListContainer) {
-    onlineUsersListContainer.remove();
-    onlineUsersListContainer = null;
   }
 
-  // Update content area
-  contentArea.innerHTML = ''; // Clear previous content
+  contentArea.innerHTML = '';
+
   switch (view) {
     case 'profile':
-      contentArea.innerHTML = `<h3 class="dashboard-content-heading">Profile</h3><p class="dashboard-content-paragraph">Loading profile...</p>`; // Show loading state
+      gameContentAreaRef = null;
+      contentArea.innerHTML = `<h3 class="dashboard-content-heading">Profile</h3><p class="dashboard-content-paragraph">Loading profile...</p>`;
       try {
-        // Get the token from local storage
         const token = localStorage.getItem('authToken');
         if (!token) {
           contentArea.innerHTML = `
             <h3 class="dashboard-content-heading">Profile</h3>
             <p class="dashboard-content-paragraph">Error: You are not logged in or your session has expired.</p>
-            <p class="dashboard-content-paragraph">Please <a href="/login">login</a> again.</p>
+            <button id="profile-login-redirect" class="dashboard-game-button">Go to Login</button>
           `;
+          contentArea.querySelector<HTMLButtonElement>('#profile-login-redirect')?.addEventListener('click', () => navigateTo('/login'));
           return;
         }
         const response = await fetch('/api/profile', {
@@ -329,17 +294,14 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
             contentArea.innerHTML = `
               <h3 class="dashboard-content-heading">Profile</h3>
               <p class="dashboard-content-paragraph">Error: Unauthorized. Your session may have expired.</p>
-              <p class="dashboard-content-paragraph">Please <a href="/login">login</a> again.</p>
-              <style> .dashboard-content-paragraph a { color: #3498db; text-decoration: underline; } </style>
+              <p class="dashboard-content-paragraph">Please <a href="/login" style="color: #3498db; text-decoration: underline;">login</a> again.</p>
             `;
           } else {
-			throw new Error(`API Error: ${response.status} ${response.statusText}`);
+            throw new Error(`API Error: ${response.status} ${response.statusText}`);
           }
           return;
         }
-
         const userProfile = await response.json();
-
         contentArea.innerHTML = `
           <h3 class="dashboard-content-heading">Profile</h3>
           <div class="profile-details">
@@ -356,10 +318,8 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
             <p id="avatarUploadStatus" class="dashboard-content-paragraph" style="min-height: 1.2em; margin-top: 0.5rem;"></p>
           </div>
         `;
-        
         const profileAvatarImg = contentArea.querySelector<HTMLImageElement>('#profileAvatar');
         const avatarUploadStatus = contentArea.querySelector<HTMLParagraphElement>('#avatarUploadStatus');
-
         if (profileAvatarImg && avatarUploadStatus && token) {
           profileAvatarImg.addEventListener('click', () => {
             openAvatarSelectionModal(token, profileAvatarImg, avatarUploadStatus);
@@ -374,100 +334,218 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
       }
       break;
     case 'game':
-      const gameContent = document.createElement('div');
-      gameContent.innerHTML = `
-        <h3 class="dashboard-content-heading">Game</h3>
-        <p class="dashboard-content-paragraph">Ready to play or see who is online.</p>
-      `;
-      // Online Match Button
-      const onlineButton = document.createElement('button');
-      onlineButton.className = "dashboard-game-button";
-      onlineButton.innerHTML = `<span>Play Online Match</span>`;
-      onlineButton.addEventListener('click', () => navigateTo('/game'));
-      gameContent.appendChild(onlineButton);
-
-      // Local Match Button
-      const localButton = document.createElement('button');
-      localButton.className = "dashboard-game-button";
-      localButton.innerHTML = `<span>Play Local Match</span>`;
-      localButton.addEventListener('click', () => navigateTo('/game')); // Adjust if local game has a different route
-      gameContent.appendChild(localButton);
-
-      onlineUsersListContainer = document.createElement('div');
-      onlineUsersListContainer.className = 'dashboard-online-users';
-      onlineUsersListContainer.innerHTML = '<h4>Online Users:</h4><ul><li>Loading...</li></ul>';
-      gameContent.appendChild(onlineUsersListContainer);
-      contentArea.appendChild(gameContent);
-
-      const socket = getSocket(); // Get socket instance
-
-      if (socket) {
-        console.log(`Dashboard 'game' view: Socket ID: ${socket.id}, Connected: ${socket.connected}`);
-
-        onlineUsersUpdateListener = (users: { username: string; socketId: string }[]) => { // Updated type here
-          if (!onlineUsersListContainer) return;
-          console.log('Dashboard received online_users_update:', users); // This log will now show socketId
-          const ul = document.createElement('ul');
-          if (users.length === 0) {
-            const li = document.createElement('li');
-            li.textContent = 'No users currently online.';
-            ul.appendChild(li);
-          } else {
-            users.forEach(user => {
-              const li = document.createElement('li');
-              // You can choose how to display this, e.g.:
-              li.textContent = `${user.username} (Socket: ${user.socketId.substring(0, 5)}...)`; 
-              ul.appendChild(li);
-            });
-          }
-          const heading = onlineUsersListContainer.querySelector('h4');
-          onlineUsersListContainer.innerHTML = '';
-          if (heading) onlineUsersListContainer.appendChild(heading);
-          onlineUsersListContainer.appendChild(ul);
-        };
-
-        const setupOnlineUsersListener = () => {
-          if (socket && onlineUsersUpdateListener && !socket.hasListeners('online_users_update')) {
-            socket.on('online_users_update', onlineUsersUpdateListener);
-            console.log("Attached online_users_update listener for dashboard game view.");
-            // Your backend already emits the list when a new user connects,
-            // so an explicit request here might be redundant but can be added if needed:
-            // socket.emit('get_initial_online_users');
-          }
-        };
-
-        if (socket.connected) {
-          setupOnlineUsersListener();
-        } else {
-          if (onlineUsersListContainer) {
-            onlineUsersListContainer.innerHTML = '<h4>Online Users:</h4><ul><li>Socket connecting...</li></ul>';
-          }
-          console.warn("Dashboard 'game' view: Socket not connected. Setting up listener for 'connect' event.");
-          
-          onSocketConnectForDashboardListener = () => {
-            console.log("Dashboard 'game' view: Socket connected via onSocketConnectForDashboardListener. Setting up online users listener.");
-            setupOnlineUsersListener();
-            // Clean up this specific one-time connect listener
-            if (socket && onSocketConnectForDashboardListener) {
-              socket.off('connect', onSocketConnectForDashboardListener);
-              onSocketConnectForDashboardListener = null;
-            }
-          };
-          socket.on('connect', onSocketConnectForDashboardListener);
-        }
-      } else {
-        if (onlineUsersListContainer) {
-          onlineUsersListContainer.innerHTML = '<h4>Online Users:</h4><ul><li>Socket not available.</li></ul>';
-        }
-        console.error("Dashboard 'game' view: Socket instance not available.");
-      }
+      gameContentAreaRef = document.createElement('div');
+      gameContentAreaRef.className = 'game-view-content';
+      contentArea.appendChild(gameContentAreaRef);
+      updateGameLobbyUI(); // **** Update game lobby UI
       break;
     case 'chat':
+      gameContentAreaRef = null; // Reset game content area reference
       contentArea.innerHTML = `
         <h3 class="dashboard-content-heading">Chat</h3>
         <p class="dashboard-content-paragraph">Connect with other players.</p>
         <!-- Add chat interface elements here -->
       `;
       break;
+  }
+}
+
+const setupOnlineUsersListener = () => {
+  const socket = getSocket();
+  console.log('[DEBUG] setupOnlineUsersListener: CALLED.');
+  if (socket && onlineUsersUpdateListener) {
+    socket.off('online_users_update', onlineUsersUpdateListener);
+    socket.on('online_users_update', onlineUsersUpdateListener);
+    console.log("[DEBUG] setupOnlineUsersListener: Attached 'online_users_update'. Requesting list.");
+    socket.emit('get_current_online_users'); 
+  } else {
+    console.warn('[DEBUG] setupOnlineUsersListener: Socket or onlineUsersUpdateListener not ready.');
+  }
+};
+
+// Define the listener function for updating the online users list UI
+onlineUsersUpdateListener = (users: { username: string; socketId: string }[]) => {
+  console.log('[DEBUG] onlineUsersUpdateListener: CALLED. Users:', JSON.stringify(users));
+  if (!onlineUsersListContainer) {
+    console.error('[DEBUG] onlineUsersUpdateListener: onlineUsersListContainer is NULL.');
+    return;
+  }
+  
+  const ul = document.createElement('ul');
+  ownUsername = localStorage.getItem('username');
+  let otherUsersExist = false;
+
+  if (users.length > 0) {
+    users.forEach(user => {
+      if (user.socketId === ownSocketId) return; 
+      otherUsersExist = true;
+
+      const li = document.createElement('li');
+      li.style.display = 'flex';
+      li.style.justifyContent = 'space-between';
+      li.style.alignItems = 'center';
+      li.style.padding = '5px 0';
+
+      const userNameSpan = document.createElement('span');
+      userNameSpan.textContent = `${user.username}`; 
+      li.appendChild(userNameSpan);
+
+      const challengeButton = document.createElement('button');
+      challengeButton.textContent = 'Challenge';
+      challengeButton.className = 'dashboard-game-button'; 
+      challengeButton.style.marginLeft = '10px';
+      challengeButton.style.padding = '0.25rem 0.5rem'; 
+      challengeButton.style.fontSize = '0.8rem';
+
+      challengeButton.addEventListener('click', () => {
+        const socket = getSocket();
+        if (!socket || !socket.connected) {
+          alert('Socket not connected. Cannot send challenge.');
+          return;
+        }
+        if (!ownSocketId) {
+          alert('Your session ID is not available. Cannot send challenge.');
+          return;
+        }
+        socket.emit('challenge_user', {
+          challengerSocketId: ownSocketId, 
+          challengedSocketId: user.socketId,
+          challengedUsername: user.username
+        });
+      });
+      li.appendChild(challengeButton);
+      ul.appendChild(li);
+    });
+  }
+  
+  if (!otherUsersExist) {
+    const li = document.createElement('li');
+    if (users.some(u => u.socketId === ownSocketId && users.length === 1)) {
+        li.textContent = 'No other users currently online to challenge.';
+    } else {
+        li.textContent = 'No users currently online.';
+    }
+    ul.appendChild(li);
+  }
+
+  const heading = onlineUsersListContainer.querySelector('h4');
+  onlineUsersListContainer.innerHTML = ''; 
+  if (heading) onlineUsersListContainer.appendChild(heading);
+  onlineUsersListContainer.appendChild(ul);
+};
+
+
+export function renderDashboard() {
+  const appElement = document.querySelector<HTMLDivElement>('#app');
+  if (!appElement) {
+    throw new Error('App root element (#app) not found!');
+  }
+  ownUsername = localStorage.getItem('username');
+  const token = localStorage.getItem('authToken');
+  let currentSocket = getSocket();
+
+  if (token) {
+    if (!currentSocket || !currentSocket.connected) {
+      const newSocket = connectSocket(token); 
+      if (newSocket) {
+        currentSocket = newSocket;
+        ownSocketId = newSocket.id ?? null; 
+        newSocket.once('connect', () => {
+          ownSocketId = newSocket.id ?? null;
+          console.log('[DEBUG] renderDashboard: Socket connected via newSocket, ownSocketId:', ownSocketId);
+          setupDashboardSocketListeners();
+        });
+      }
+    } else {
+      ownSocketId = currentSocket.id ?? null; 
+      setupDashboardSocketListeners();
+    }
+  } else {
+    navigateTo('/login');
+    return; 
+  }
+
+  appElement.innerHTML = '';
+
+  const globalContainer = document.createElement('div');
+  globalContainer.className = "dashboard-global-container";
+  const cardContainer = document.createElement('div');
+  cardContainer.className = "dashboard-card-container";
+  const sidebar = document.createElement('div');
+  sidebar.className = "dashboard-sidebar";
+  const sidebarHeading = document.createElement('h2');
+  sidebarHeading.className = "dashboard-heading";
+  sidebarHeading.textContent = "Dashboard";
+  const nav = document.createElement('nav');
+  nav.className = "dashboard-nav";
+
+  const profileButton = document.createElement('button');
+  profileButton.className = "dashboard-nav-button";
+  profileButton.textContent = "Profile";
+  profileButton.dataset.view = "profile";
+
+  const gameButton = document.createElement('button');
+  gameButton.className = "dashboard-nav-button";
+  gameButton.textContent = "Game";
+  gameButton.dataset.view = "game";
+
+  const chatButton = document.createElement('button');
+  chatButton.className = "dashboard-nav-button";
+  chatButton.textContent = "Chat";
+  chatButton.dataset.view = "chat";
+
+  const logoutButton = document.createElement('button');
+  logoutButton.className = "dashboard-logout-button";
+  logoutButton.textContent = "Logout";
+
+  const contentArea = document.createElement('div');
+  contentArea.className = "dashboard-content-area";
+  contentArea.id = "dashboard-content";
+
+  nav.appendChild(profileButton);
+  nav.appendChild(gameButton);
+  nav.appendChild(chatButton);
+  sidebar.appendChild(sidebarHeading);
+  sidebar.appendChild(nav);
+  nav.appendChild(logoutButton);
+
+  cardContainer.appendChild(sidebar);
+  cardContainer.appendChild(contentArea);
+  globalContainer.appendChild(cardContainer);
+  appElement.appendChild(globalContainer);
+
+  const navButtons = [profileButton, gameButton, chatButton];
+  navButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const view = button.dataset.view;
+      if (view) {
+        setActiveView(view, navButtons, contentArea);
+      }
+    });
+  });
+
+  logoutButton.addEventListener('click', () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('currentGameId'); // Clear game related items
+    localStorage.removeItem('myPlayerRole');
+    disconnectSocket(); 
+    
+    // Clear module-level states
+    currentPendingMatch = null;
+    gameContentAreaRef = null;
+
+    const socket = getSocket(); // getSocket() might return null after disconnectSocket
+    if (socket) { // Check if socket still exists to call .off
+        if (onlineUsersUpdateListener) socket.off('online_users_update', onlineUsersUpdateListener);
+        if (onSocketConnectForDashboardListener) socket.off('connect', onSocketConnectForDashboardListener);
+    }
+    navigateTo('/');
+  });
+  
+  // Initial active view
+  if (currentPendingMatch) {
+    setActiveView('game', navButtons, contentArea);
+  } else {
+    setActiveView('profile', navButtons, contentArea);
   }
 }

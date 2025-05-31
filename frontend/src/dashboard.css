@@ -315,3 +315,49 @@
 .dashboard-online-users li:last-child {
   border-bottom: none;
 }
+
+.challenge-modal {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.challenge-modal-content {
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  color: #333;
+}
+
+.challenge-modal-content p {
+  margin-bottom: 15px;
+  font-size: 1.1em;
+}
+
+.challenge-modal-button {
+  padding: 10px 20px;
+  margin: 0 10px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1em;
+}
+
+.challenge-modal-button.accept {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.challenge-modal-button.reject {
+  background-color: #f44336;
+  color: white;
+}
