@@ -6,7 +6,7 @@
 /*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:28:07 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/30 18:20:51 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/05/31 12:49:44 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -29,7 +29,7 @@ class GameEngine {
 	if (success) {
 		this.connectedSockets.add(socketId);
 		console.log(`Player ${socketId} connected as ${this.state.getPlayerId(socketId)}`);
-		console.log('Connected players:', Array.from(this.state.connectedPlayers));
+		// console.log('Connected players:', Array.from(this.state.connectedPlayers));
 		// console.log('Connected sockets:', Array.from(this.connectedSockets));
 
 		// Local match: ensure both players exist for one socket
@@ -38,7 +38,7 @@ class GameEngine {
 				this.state.addPlayer('local_player2');
 				this.connectedSockets.add('local_player2');
 				console.log('Local match: added player2 as local_player2');
-				console.log('Connected players:', Array.from(this.state.connectedPlayers));
+				// console.log('Connected players:', Array.from(this.state.connectedPlayers));
 				// console.log('Connected sockets:', Array.from(this.connectedSockets));
 				}
 			if (!this.isTournament && this.connectedSockets.size === 2) {

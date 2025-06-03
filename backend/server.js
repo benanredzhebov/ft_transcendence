@@ -6,7 +6,7 @@
 /*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/30 18:28:11 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/06/03 18:00:00 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -94,7 +94,7 @@ function startSynchronizedCountdown(io, duration = 10) {
 		}
 		console.log('Match started');
 		io.emit('start_match');
-	}
+		}
 	}, 1000);
 
 	return countdownInterval;
@@ -108,14 +108,14 @@ setInterval(() => {
 	lastUpdate = now;
 	
 	if (!game.paused) {
-	game.update();
-	io.emit('state_update', game.getState());
-	}
-}, 1000 / 60); // 60 FPS
+			game.update();
+			io.emit('state_update', game.getState());
+		}
+	}, 1000 / 60); // 60 FPS
 
 io.on('connection', (socket) => {
 	console.log('Client connected:', socket.id);
-	console.log('Handshake query:', socket.handshake.query);
+	// console.log('Handshake query:', socket.handshake.query);
 	
 	// Detect if it's local match
 	const isLocalMatch = 
@@ -124,13 +124,16 @@ io.on('connection', (socket) => {
 		
 	game.setTournamentMode(!isLocalMatch);
 	
-	// Add player with error handling
-	if (!game.addPlayer(socket.id)) {
-		socket.emit('error', { message: 'Game is full' });
-		socket.disconnect();
-		return;
+	// Add player with error handling CHECK THIS LATER!
+	if (isLocalMatch) {
+		if (!game.addPlayer(socket.id)) {
+			socket.emit('error', { message: 'Game is full' });
+			socket.disconnect();
+			return;
+		}
+		console.log('Connected players:', Array.from(game.state.connectedPlayers));
 	}
-	console.log('Connected players:', Array.from(game.state.connectedPlayers));
+	
 
 	//Emit state_update after both players are present
 	if (!game.isTournament && game.state.connectedPlayers.size === 1) {
@@ -174,15 +177,18 @@ io.on('connection', (socket) => {
 				alias
 			}));
 			io.emit('player_list_updated', playerList);
+
+			console.log('Players in lobby:', Array.from(tournament.players.values()).map(p => p.alias)); // Del
 		
 			// Only show the lobby dialog, do not start the match yet
-			if (tournament.canStartTournament() && tournament.rounds.length === 0) {
-				io.emit('tournament_lobby', {
-					message: 'Ready to start tournament?',
+			io.emit('tournament_lobby', {
+					message: tournament.canStartTournament() && tournament.rounds.length === 0
+						? 'Ready to start tournament?'
+						: 'Waiting for more players to join...',
 					players: Array.from(tournament.players.values()).map(p => p.alias)
 				});
 			}
-		} else {
+		else {
 			socket.emit('tournament_waiting', {
 				message: 'Waiting for more players to join...',
 				playersNeeded: 2 - tournament.players.size
@@ -193,13 +199,25 @@ io.on('connection', (socket) => {
 	// Start tournament when someone clicks "Start Tournament"
 	socket.on('start_tournament', () => {
 		if (!tournament) return;
+		
 		if (tournament.rounds.length === 0) {
 			tournament.generateInitialBracket();
 			const currentMatch = tournament.getCurrentMatchPlayers();
 			game.prepareForMatch();
+			
+			// Emit the bracket to all clients
+			io.emit('tournament_bracket', {
+				rounds: tournament.rounds.map(round =>
+					round.map(([p1, p2]) => ({
+						player1: p1 ? p1[1].alias : null,
+						player2: p2 ? p2[1].alias : null
+					}))
+				)
+			});
+			
 			io.emit('match_announcement', {
-				player1: currentMatch.player1,
-				player2: currentMatch.player2
+				player1: currentMatch.player1.alias,
+				player2: currentMatch.player2 ? currentMatch.player2.alias : 'Bye'
 			});
 			io.emit('await_player_ready');
 		}
@@ -240,7 +258,10 @@ io.on('connection', (socket) => {
 			const { player1, player2 } = tournament.getCurrentMatchPlayers();
 			game.prepareForMatch();
 		
-			io.emit('match_announcement', { player1, player2 });
+			io.emit('match_announcement', { 
+				player1: player1.alias,
+				player2: player2 ? player2.alias : 'Bye' 
+			});
 		
 			// Reset ready states
 			tournament.players.forEach(player => player.isReady = false);
@@ -249,7 +270,8 @@ io.on('connection', (socket) => {
 			if (player2) io.to(player2.socketId).emit('await_player_ready');
 		} else {
 			const winner = tournament.winners[0][1];
-			io.emit('tournament_over', { winner });
+			const winnerAlias = (winner && typeof winner === 'object' && winner.alias) ? winner.alias : String(winner);
+			io.emit('tournament_over', { winner: winnerAlias });
 			tournament = null;
 		}
 	});
