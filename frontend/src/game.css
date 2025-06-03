@@ -1,4 +1,21 @@
 /* Add to your game.css */
+#tournament-bracket {
+	background: #222;
+	color: #fff;
+	padding: 16px;
+	margin-bottom: 16px;
+	border-radius: 8px;
+	max-width: 600px;
+}
+
+.bracket-round {
+	margin-bottom: 12px;
+}
+
+.bracket-match {
+	padding: 4px 0;
+}
+
 .tournament-dialog {
   position: fixed;
   top: 0;

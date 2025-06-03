@@ -60,9 +60,11 @@ class Tournament {
 
 	// Handle odd player count
 	if (shuffled.length === 1) {
-	  const [byePlayer] = shuffled.pop();
-	  firstRound.push([byePlayer, null]);
-	  this.byes.add(byePlayer[0]); // Mark player as having a bye
+		const byePlayer = shuffled.pop();
+		if (byePlayer) {
+			firstRound.push([byePlayer, null]);
+			this.byes.add(byePlayer[0]); // Mark player as having a bye
+		}
 	}
 
 	this.rounds = [firstRound];
