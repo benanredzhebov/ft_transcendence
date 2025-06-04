@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   server.js                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
+/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/06/03 18:00:00 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/06/04 21:42:54 by beredzhe         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -89,10 +89,11 @@ function startSynchronizedCountdown(io, duration = 10) {
 		clearInterval(countdownInterval);
 		game.startMatch(); // Use GameEngine's method
 		if (tournament && tournament.currentMatch) {
-		const [p1, p2] = tournament.currentMatch;
-		console.log(`Match started ${p1[1]} vs ${p2 ? p2[1] : 'Bye'}`);
+			const [p1, p2] = tournament.currentMatch;
+			const alias1 = p1 && p1[1] && p1[1].alias ? p1[1].alias : 'Unknown';
+			const alias2 = p2 && p2[1] && p2[1].alias ? p2[1].alias : 'Bye';
+			console.log(`Match started ${alias1} vs ${alias2}`);
 		}
-		console.log('Match started');
 		io.emit('start_match');
 		}
 	}, 1000);
@@ -239,6 +240,23 @@ io.on('connection', (socket) => {
 			startSynchronizedCountdown(io);
 		}
 	});
+
+	socket.on('host_start_next_match', () => {
+		if (!tournament) return;
+		// Only allow host to trigger
+		const { player1 } = tournament.getCurrentMatchPlayers();
+		if (socket.id !== player1.socketId) return;
+
+		// Only start if all players are ready
+		if (tournament.allPlayersReady()) {
+			const currentMatch = tournament.getCurrentMatchPlayers();
+			io.to(currentMatch.player1.socketId).emit('assign_controls', 'player1');
+			if (currentMatch.player2) {
+				io.to(currentMatch.player2.socketId).emit('assign_controls', 'player2');
+			}
+			startSynchronizedCountdown(io);
+		}
+	});
 	
 	socket.on('match_ended', ({ winnerSocketId }) => {
 		if (!tournament?.currentMatch) {
@@ -246,35 +264,39 @@ io.on('connection', (socket) => {
 			return;
 		}
 
-		const state = game.getState();
-		if (state.score.player1 === 0 && state.score.player2 === 0) {
-			console.warn('Ignoring match_ended: no score change');
-			return;
-		}
-	
-		const nextMatch = tournament.recordWinner(winnerSocketId);
-	
-		if (nextMatch) {
-			const { player1, player2 } = tournament.getCurrentMatchPlayers();
-			game.prepareForMatch();
-		
+	const state = game.getState();
+	if (state.score.player1 === 0 && state.score.player2 === 0) {
+		console.warn('Ignoring match_ended: no score change');
+		return;
+	}
+
+	let nextMatch = tournament.recordWinner(winnerSocketId);
+
+	// Loop to skip byes and auto-advance until a real match or tournament end
+	while (nextMatch && (!nextMatch[0] || !nextMatch[1])) {
+		const autoWinner = nextMatch[0] ? nextMatch[0][0] : nextMatch[1][0];
+		nextMatch = tournament.recordWinner(autoWinner);
+	}
+
+	if (nextMatch) {
+		const { player1, player2 } = tournament.getCurrentMatchPlayers();
+		game.prepareForMatch();
+
+		if (player1 && player2) {
 			io.emit('match_announcement', { 
 				player1: player1.alias,
-				player2: player2 ? player2.alias : 'Bye' 
+				player2: player2.alias
 			});
-		
-			// Reset ready states
-			tournament.players.forEach(player => player.isReady = false);
-		
 			io.to(player1.socketId).emit('await_player_ready');
-			if (player2) io.to(player2.socketId).emit('await_player_ready');
-		} else {
-			const winner = tournament.winners[0][1];
-			const winnerAlias = (winner && typeof winner === 'object' && winner.alias) ? winner.alias : String(winner);
-			io.emit('tournament_over', { winner: winnerAlias });
-			tournament = null;
+			io.to(player2.socketId).emit('await_player_ready');
 		}
-	});
+	} else {
+		const winner = tournament.winners[0];
+		const winnerAlias = winner && winner[1] ? winner[1] : 'Unknown';
+		io.emit('tournament_over', { winner: winnerAlias });
+		tournament = null;
+	}
+});
 
 	socket.on('disconnect', () => {
 		console.log('Client disconnected:', socket.id);

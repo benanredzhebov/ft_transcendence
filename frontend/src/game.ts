@@ -62,6 +62,11 @@ function promptAliasRegistration() {
 	if (alias) socket?.emit('register_alias', alias);
 }
 
+// Remove all overlays
+function removeOverlays() {
+	document.querySelectorAll('.game-overlay').forEach(el => el.remove());
+}
+
 function showTournamentDialog(message: string, options?: { confirmText?: string, timer?: number }) {
 	const existing = document.querySelector('.tournament-dialog');
 	if (existing) existing.remove();
@@ -83,7 +88,7 @@ function showTournamentDialog(message: string, options?: { confirmText?: string,
 
 	if (options?.confirmText) {
 	dialog.querySelector('button')!.onclick = () => {
-		socket?.emit('player_ready');
+		socket?.emit('player_ready'); // Only marks ready, does NOT start countdown
 		dialog.remove();
 	};
 	}
@@ -194,10 +199,11 @@ function setupTournamentHandlers() {
 	});
 
 	socket.on('start_match', () => {
-	countDownActive = false; // added to start the match. Allow state updates to be rendered
-	matchStarted = true;
-	gameEnded = false;
-	if (movePlayersFrame === null) movePlayers();
+		removeOverlays();
+		countDownActive = false; // added to start the match. Allow state updates to be rendered
+		matchStarted = true;
+		gameEnded = false;
+		if (movePlayersFrame === null) movePlayers();
 	});
 
 	socket.on('tournament_over', ({ winner }: { winner: any }) => {
@@ -243,16 +249,24 @@ function setupTournamentHandlers() {
 }
 
 // Game UI Functions
-function showMatchInfo(player1: string, player2: string, score1: number, score2: number) {
+function showMatchInfo(
+	player1: string | { alias:string },
+	player2: string | { alias:string },
+	score1: number,
+	score2: number
+ ) {
+	const p1 = typeof player1 === 'object' && player1 !== null ? player1.alias : player1;
+	const p2 = typeof player2 === 'object' && player2 !== null ? player2.alias : player2;
+	
 	const existing = document.getElementById('match-info-box');
 	if (existing) {
-	existing.innerHTML = `
-		<div><strong>${player1}</strong> vs <strong>${player2}</strong></div>
-		<div style="text-align: center; margin-top: 4px; font-size: 20px;">
-		${score1} : ${score2}
-		</div>
-	`;
-	return;
+		existing.innerHTML = `
+			<div><strong>${p1}</strong> vs <strong>${p2}</strong></div>
+			<div style="text-align: center; margin-top: 4px; font-size: 20px;">
+			${score1} : ${score2}
+			</div>
+		`;
+		return;
 	}
 
 	const box = document.createElement('div');
@@ -260,7 +274,7 @@ function showMatchInfo(player1: string, player2: string, score1: number, score2:
 	box.className = 'match-info-box';
 
 	box.innerHTML = `
-	<div><strong>${player1}</strong> vs <strong>${player2}</strong></div>
+	<div><strong>${p1}</strong> vs <strong>${p2}</strong></div>
 	<div style="text-align: center; margin-top: 4px; font-size: 20px;">
 		${score1} : ${score2}
 	</div>
@@ -269,7 +283,7 @@ function showMatchInfo(player1: string, player2: string, score1: number, score2:
 	document.body.appendChild(box);
 }
 
-function showGameOverScreen(winner: string) {
+function showGameOverScreen(winner: string | { alias: string}) {
 	if (!canvas?.parentElement) return;
 
 	gameEnded = true;
@@ -283,8 +297,10 @@ function showGameOverScreen(winner: string) {
 	overlay.className = 'game-overlay';
 
 	const message = document.createElement('div');
+	const winnerName = typeof winner === 'object' && winner !== null ? winner.alias : winner;
+
 	message.className = 'game-message';
-	message.textContent = `${winner} wins!`;
+	message.textContent = `${winnerName} wins!`;
 
 	const buttons = document.createElement('div');
 	buttons.className = 'game-buttons';
@@ -308,7 +324,7 @@ function showGameOverScreen(winner: string) {
 					movePlayersFrame = null;
 				}
 				movePlayers();
-				overlay.remove();
+				removeOverlays();
 				canvas?.focus();
 			}
 		};
@@ -319,8 +335,8 @@ function showGameOverScreen(winner: string) {
 		const nextBtn = document.createElement('button');
 		nextBtn.textContent = "Next Match";
 		nextBtn.onclick = () => {
-			socket?.emit('player_ready'); // or a new event like 'next_match'
-			overlay.remove();
+			socket?.emit('host_start_next_match'); // or a new event like 'next_match'
+			removeOverlays();
 		};
 	buttons.appendChild(nextBtn);
 	}
@@ -606,7 +622,7 @@ export function renderGame(containerId: string = 'app') {
 		if (inTournament && currentMatch) { 
 			if (
 				(state.score.player1 >= 5 && assignedPlayerId === 'player1') ||
-				(state.score.player1 >= 5 && assignedPlayerId === 'player1')
+				(state.score.player2 >= 5 && assignedPlayerId === 'player2')
 			) {
 				socket?.emit('match_ended', { winnerSocketId: socket.id });
 			}
