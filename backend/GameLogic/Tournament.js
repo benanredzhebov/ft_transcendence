@@ -109,8 +109,8 @@ class Tournament {
 
 	// Tournament finished
 	if (this.winners.length === 1) {
-	  this.currentMatch = null;
-	  return null;
+		this.currentMatch = null;
+		return null;
 	}
 
 	// Generate next round
@@ -122,14 +122,15 @@ class Tournament {
 	const winnersCopy = [...this.winners];
 
 	while (winnersCopy.length >= 2) {
-	  nextRound.push([winnersCopy.pop(), winnersCopy.pop()]);
+		nextRound.push([winnersCopy.pop(), winnersCopy.pop()]);
 	}
 
 	// Handle odd number of winners
 	if (winnersCopy.length === 1) {
-	  const [byeWinner] = winnersCopy.pop();
-	  nextRound.push([byeWinner, null]);
-	  this.byes.add(byeWinner[0]);
+		// const [byeWinner] = winnersCopy.pop();
+		// nextRound.push([byeWinner, null]);
+		nextRound.push([winnersCopy.pop(), null]);
+		// this.byes.add(byeWinner[0]);
 	}
 
 	this.rounds.push(nextRound);
@@ -137,7 +138,11 @@ class Tournament {
 	this.currentMatchIndex = 0;
 	this.winners = [];
 	this.currentMatch = nextRound[0];
-	
+
+	// If the match is a bye, immediately record the winner and advance
+	if (this.currentMatch && this.currentMatch[1] === null) {
+		this.recordWinner(this.currentMatch[0][0]);
+	}
 	return this.currentMatch;
   }
 
