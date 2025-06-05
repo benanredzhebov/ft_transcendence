@@ -47,7 +47,7 @@ class Tournament {
 
   generateInitialBracket() {
 	if (!this.canStartTournament()) {
-	  throw new Error("Not enough players to start tournament");
+		throw new Error("Not enough players to start tournament");
 	}
 
 	const players = Array.from(this.players.entries());
@@ -55,7 +55,7 @@ class Tournament {
 
 	const firstRound = [];
 	while (shuffled.length >= 2) {
-	  firstRound.push([shuffled.pop(), shuffled.pop()]);
+		firstRound.push([shuffled.pop(), shuffled.pop()]);
 	}
 
 	// Handle odd player count
