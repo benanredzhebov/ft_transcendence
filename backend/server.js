@@ -6,7 +6,7 @@
 /*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/06/04 21:42:54 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/06/05 15:11:19 by beredzhe         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -25,6 +25,8 @@ import Tournament from './GameLogic/Tournament.js';
 import GameState from './GameLogic/GameState.js';
 import hashPassword from './crypto/crypto.js';
 import DB from './data_controller/dbConfig.js';
+
+let countdownInterval = null;
 
 // Fix __dirname in ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -81,12 +83,19 @@ const game = new GameEngine();
 function startSynchronizedCountdown(io, duration = 10) {
 	let remaining = duration;
 	
-	const countdownInterval = setInterval(() => {
+	// Clear any existing countdown
+	if (countdownInterval) {
+		clearInterval(countdownInterval);
+		countdownInterval = null;
+	}
+	
+	countdownInterval = setInterval(() => {
 	io.emit('countdown_update', remaining);
 	remaining--;
 	
 	if (remaining < 0) {
 		clearInterval(countdownInterval);
+		countdownInterval = null;
 		game.startMatch(); // Use GameEngine's method
 		if (tournament && tournament.currentMatch) {
 			const [p1, p2] = tournament.currentMatch;
@@ -102,17 +111,17 @@ function startSynchronizedCountdown(io, duration = 10) {
 }
 
 // Improved game loop with delta timing
-let lastUpdate = Date.now();
-setInterval(() => {
-	const now = Date.now();
-	const dt = (now - lastUpdate) / 1000; // Convert to seconds
-	lastUpdate = now;
+// let lastUpdate = Date.now();
+// setInterval(() => {
+// 	const now = Date.now();
+// 	const dt = (now - lastUpdate) / 1000; // Convert to seconds
+// 	lastUpdate = now;
 	
-	if (!game.paused) {
-			game.update();
-			io.emit('state_update', game.getState());
-		}
-	}, 1000 / 60); // 60 FPS
+// 	if (!game.paused) {
+// 			game.update();
+// 			io.emit('state_update', game.getState());
+// 		}
+// 	}, 1000 / 60); // 60 FPS
 
 io.on('connection', (socket) => {
 	console.log('Client connected:', socket.id);
@@ -226,18 +235,21 @@ io.on('connection', (socket) => {
 
 	socket.on('player_ready', () => {
 		if (!tournament) return;
-	
 		tournament.markPlayerReady(socket.id);
 	
-		if (tournament.allPlayersReady()) {
-			const currentMatch = tournament.getCurrentMatchPlayers();
-		
-			// Assign controls
-			io.to(currentMatch.player1.socketId).emit('assign_controls', 'player1');
-			if (currentMatch.player2) {
-				io.to(currentMatch.player2.socketId).emit('assign_controls', 'player2');
+		if (tournament.allPlayersReady() &&
+			tournament.currendRound === 0 &&
+			tournament.currentMatchIndex === 0
+		) {
+			const { player1 } = tournament.getCurrentMatchPlayers();
+			if (socket.id === player1.socketId) {
+				const currentMatch = tournament.getCurrentMatchPlayers();
+				io.to(currentMatch.player1.socketId).emit('assign_controls', 'player1');
+				if (currentMatch.player2) {
+					io.to(currentMatch.player2.socketId).emit('assign_controls', 'player2');
+				}
+				startSynchronizedCountdown(io);
 			}
-			startSynchronizedCountdown(io);
 		}
 	});
 
