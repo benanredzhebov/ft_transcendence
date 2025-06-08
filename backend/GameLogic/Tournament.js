@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   Tournament.js                                      :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2025/06/08 13:21:32 by beredzhe          #+#    #+#             */
+/*   Updated: 2025/06/08 13:31:30 by beredzhe         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 class Tournament {
   constructor() {
 	this.players = new Map();       // socketId -> { alias, isReady }
@@ -25,6 +37,11 @@ class Tournament {
 	if (this.players.has(socketId)) {
 	  this.players.get(socketId).isReady = true;
 	}
+  }
+
+  resetPlayersReady(socketId1, socketId2) {
+	if (this.players.has(socketId1)) this.players.get(socketId1).isReady = false;
+	if (socketId2 && this.players.has(socketId2)) this.players.get(socketId2).isReady = false;
   }
 
   allPlayersReady() {

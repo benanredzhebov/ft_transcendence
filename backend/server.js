@@ -6,7 +6,7 @@
 /*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/06/08 13:04:30 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/06/08 14:55:43 by beredzhe         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -249,19 +249,25 @@ io.on('connection', (socket) => {
 
 	socket.on('host_start_next_match', () => {
 		if (!tournament) return;
-		// Only allow host to trigger
-		const { player1 } = tournament.getCurrentMatchPlayers();
-		if (socket.id !== player1.socketId) return;
 
-		// Only start if all players are ready
-		if (tournament.allPlayersReady()) {
-			const currentMatch = tournament.getCurrentMatchPlayers();
-			io.to(currentMatch.player1.socketId).emit('assign_controls', 'player1');
-			if (currentMatch.player2) {
-				io.to(currentMatch.player2.socketId).emit('assign_controls', 'player2');
-			}
-			startSynchronizedCountdown(io);
-		}
+		// Only allow host to trigger
+		const { player1, player2 } = tournament.getCurrentMatchPlayers();
+		if (!player1 || socket.id !== player1.socketId) return;
+
+		// Reset ready state for both players
+		tournament.resetPlayersReady(player1.socketId, player2 && player2.socketId);
+
+		game.resetGame();
+
+		// Emit the reset state to all clients
+		io.emit('state_update', game.getState());
+
+		// Debug log: show which sockets will receive the event
+		console.log('Emitting await_player_ready to:', player1.socketId, player2 && player2.socketId);
+
+		// Now prompt both players to get ready
+		io.to(player1.socketId).emit('await_player_ready');
+		if (player2) io.to(player2.socketId).emit('await_player_ready');
 	});
 	
 	socket.on('match_ended', ({ winnerSocketId }) => {
@@ -293,8 +299,8 @@ io.on('connection', (socket) => {
 				player1: player1.alias,
 				player2: player2.alias
 			});
-			io.to(player1.socketId).emit('await_player_ready');
-			io.to(player2.socketId).emit('await_player_ready');
+			// io.to(player1.socketId).emit('await_player_ready');
+			// io.to(player2.socketId).emit('await_player_ready');
 		}
 	} else {
 		const winner = tournament.winners[0];

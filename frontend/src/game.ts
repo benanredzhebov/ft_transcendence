@@ -137,6 +137,8 @@ function setupTournamentHandlers() {
 	});
 
 	socket.on('await_player_ready', () => {
+		console.log('Received await_player_ready');
+		removeOverlays();
 		showTournamentDialog('Match ready!', {
 			confirmText: 'I\'m Ready'
 		});
