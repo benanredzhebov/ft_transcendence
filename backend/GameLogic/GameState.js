@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   GameState.js                                       :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
+/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:27:35 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/05/29 21:09:04 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/06/08 14:09:34 by beredzhe         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -109,7 +109,7 @@ class GameState {
 	movePaddle(playerId, direction) {
 		console.log('movePaddle: gameOver=', this.gameOver, 'paused=', this.paused);
 		// console.log(`movePaddle called for ${playerId} ${direction}`);
-		console.log(`player1 Y: ${this.paddles.player1.y}`);
+		// console.log(`player1 Y: ${this.paddles.player1.y}`);
 		
 		if (this.gameOver || this.paused) {
 			console.log('❌ movePaddle blocked: game is paused or over');
