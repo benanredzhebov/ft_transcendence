@@ -291,6 +291,12 @@ function showGameOverScreen(winner: string | { alias: string}) {
 	gameEnded = true;
 	matchStarted = false;
 
+	// Reset movePlayers() to null, when a match ends
+	if (movePlayersFrame !== null) {
+		cancelAnimationFrame(movePlayersFrame);
+		movePlayersFrame = null;
+	}
+
 	// Add this to clear match info
 	const matchBox = document.getElementById('match-info-box');
 	if (matchBox) matchBox.remove();
