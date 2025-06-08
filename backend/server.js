@@ -6,7 +6,7 @@
 /*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/06/05 15:11:19 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/06/08 13:04:30 by beredzhe         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -237,19 +237,13 @@ io.on('connection', (socket) => {
 		if (!tournament) return;
 		tournament.markPlayerReady(socket.id);
 	
-		if (tournament.allPlayersReady() &&
-			tournament.currendRound === 0 &&
-			tournament.currentMatchIndex === 0
-		) {
-			const { player1 } = tournament.getCurrentMatchPlayers();
-			if (socket.id === player1.socketId) {
-				const currentMatch = tournament.getCurrentMatchPlayers();
+		if (tournament.allPlayersReady() ) {
+			const currentMatch = tournament.getCurrentMatchPlayers();
+			if (currentMatch.player1) 
 				io.to(currentMatch.player1.socketId).emit('assign_controls', 'player1');
-				if (currentMatch.player2) {
-					io.to(currentMatch.player2.socketId).emit('assign_controls', 'player2');
-				}
+			if (currentMatch.player2)
+				io.to(currentMatch.player2.socketId).emit('assign_controls', 'player2');
 				startSynchronizedCountdown(io);
-			}
 		}
 	});
 
