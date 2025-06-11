@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   server.js                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
+/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/06/08 16:40:02 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/06/09 15:39:05 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -294,13 +294,16 @@ io.on('connection', (socket) => {
 		const { player1, player2 } = tournament.getCurrentMatchPlayers();
 		game.prepareForMatch();
 
+		// Reset readiness for the new match
+		tournament.resetReadyForCurrentMatch();
+
 		if (player1 && player2) {
 			io.emit('match_announcement', { 
 				player1: player1.alias,
 				player2: player2.alias
 			});
-			// io.to(player1.socketId).emit('await_player_ready');
-			// io.to(player2.socketId).emit('await_player_ready');
+			io.to(player1.socketId).emit('await_player_ready');
+			io.to(player2.socketId).emit('await_player_ready');
 		}
 	} else {
 		const winner = tournament.winners[0];

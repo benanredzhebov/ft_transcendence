@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   Tournament.js                                      :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
+/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/06/08 13:21:32 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/06/08 13:31:30 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/06/09 15:34:41 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -171,6 +171,16 @@ class Tournament {
 	  player1: p1 ? { socketId: p1[0], alias: p1[1] } : null,
 	  player2: p2 ? { socketId: p2[0], alias: p2[1] } : null
 	};
+  }
+
+  resetReadyForCurrentMatch() {
+	const { player1, player2 } = this.getCurrentMatchPlayers();
+	if (player1 && this.players.has(player1.socketId)) {
+	  this.players.get(player1.socketId).isReady = false;
+	}
+	if (player2 && this.players.has(player2.socketId)) {
+	  this.players.get(player2.socketId).isReady = false;
+	}
   }
 
   resetTournament() {
