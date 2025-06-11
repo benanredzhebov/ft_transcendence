@@ -8,6 +8,9 @@
 
 ------------------------
 
+run migration :
+
+npx knex migrate:latest --knexfile backend/data_controller/knexfile.js
 
 fronteend
     1 npm install typescript --save-dev
