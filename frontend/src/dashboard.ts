@@ -242,6 +242,10 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
             'Authorization': `Bearer ${token}`
           }
         });
+        console.log('Fetch response status:', response.status);
+        console.log('Fetch response ok:', response.ok);
+        const responseText = await response.clone().text(); // Clone to read text without consuming body for json()
+        console.log('Fetch response text:', responseText); // ***JSON should be here
 
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {

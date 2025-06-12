@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   server.js                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
+/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/06/09 15:39:05 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/06/12 14:26:22 by beredzhe         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -90,38 +90,27 @@ function startSynchronizedCountdown(io, duration = 10) {
 	}
 	
 	countdownInterval = setInterval(() => {
-	io.emit('countdown_update', remaining);
-	remaining--;
+		io.emit('countdown_update', remaining);
+		remaining--;
 	
-	if (remaining < 0) {
-		clearInterval(countdownInterval);
-		countdownInterval = null;
-		game.startMatch(); // Use GameEngine's method
-		if (tournament && tournament.currentMatch) {
-			const [p1, p2] = tournament.currentMatch;
-			const alias1 = p1 && p1[1] && p1[1].alias ? p1[1].alias : 'Unknown';
-			const alias2 = p2 && p2[1] && p2[1].alias ? p2[1].alias : 'Bye';
-			console.log(`Match started ${alias1} vs ${alias2}`);
-		}
-		io.emit('start_match');
+		if (remaining < 0) {
+			clearInterval(countdownInterval);
+			countdownInterval = null;
+
+			setTimeout(() => {
+				game.startMatch(); // Use GameEngine's method
+				if (tournament && tournament.currentMatch) {
+					const [p1, p2] = tournament.currentMatch;
+					const alias1 = p1 && p1[1] && p1[1].alias ? p1[1].alias : 'Unknown';
+					const alias2 = p2 && p2[1] && p2[1].alias ? p2[1].alias : 'Bye';
+					console.log(`Match started ${alias1} vs ${alias2}`);
+				}
+				io.emit('start_match');
+			}, 1000);
 		}
 	}, 1000);
-
 	return countdownInterval;
 }
-
-// Improved game loop with delta timing
-// let lastUpdate = Date.now();
-// setInterval(() => {
-// 	const now = Date.now();
-// 	const dt = (now - lastUpdate) / 1000; // Convert to seconds
-// 	lastUpdate = now;
-	
-// 	if (!game.paused) {
-// 			game.update();
-// 			io.emit('state_update', game.getState());
-// 		}
-// 	}, 1000 / 60); // 60 FPS
 
 io.on('connection', (socket) => {
 	console.log('Client connected:', socket.id);
@@ -150,24 +139,29 @@ io.on('connection', (socket) => {
 		io.emit('state_update', game.getState());
 	}
 
-	socket.on('player_move', ({ direction, playerId }) => {
-		// console.log('player_move received:', playerId, direction);
-		if (!game.isTournament) {
-			// Local mode: move both paddles if keys are pressed
-			if (playerId === 'player1' || playerId === 'player2') {
-				game.handlePlayerInput(playerId, direction);
-				io.emit('state_update', game.getState());
-			}
-		} else {
-			// Tournament mode: trust playerId from frontend
-			if (playerId === 'player1' || playerId === 'player2') {
-				game.handlePlayerInput(playerId, direction);
-				io.emit('state_update', game.getState());
-				// console.log('Emitting state:', game.getState());
-			}
-		}
-	});
+	// socket.on('player_move', ({ direction, playerId }) => {
+	// 	// console.log('player_move received:', playerId, direction);
+	// 	if (!game.isTournament) {
+	// 		// Local mode: move both paddles if keys are pressed
+	// 		if (playerId === 'player1' || playerId === 'player2') {
+	// 			game.handlePlayerInput(playerId, direction);
+	// 			io.emit('state_update', game.getState());
+	// 		}
+	// 	} else {
+	// 		// Tournament mode: trust playerId from frontend
+	// 		if (playerId === 'player1' || playerId === 'player2') {
+	// 			game.handlePlayerInput(playerId, direction);
+	// 			io.emit('state_update', game.getState());
+	// 			// console.log('Emitting state:', game.getState());
+	// 		}
+	// 	}
+	// });
 
+	socket.on('player_move', ({ direction, playerId }) => {
+		game.handlePlayerInput(playerId, direction);
+		io.emit('state_update', game.getState());
+	});
+	
 	socket.on('restart_game', () => {
 		game.resetGame();
 		game.resume();
