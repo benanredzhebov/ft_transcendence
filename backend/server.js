@@ -6,7 +6,7 @@
 /*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/06/12 14:26:22 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/06/12 16:46:44 by beredzhe         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,7 +16,7 @@ import path, { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
-import multipart from '@fastify/multipart'
+import multipart from '@fastify/multipart';
 import fastifyFormbody from '@fastify/formbody';
 import fastifyCors from '@fastify/cors';
 import { Server } from 'socket.io';
@@ -25,6 +25,8 @@ import Tournament from './GameLogic/Tournament.js';
 import GameState from './GameLogic/GameState.js';
 import hashPassword from './crypto/crypto.js';
 import DB from './data_controller/dbConfig.js';
+import {developerRoutes, credentialsRoutes} from './routes/routes.js'; // Import the routes
+
 
 let countdownInterval = null;
 
@@ -372,96 +374,19 @@ app.register(fastifyStatic, {
 	prefix: '/',
 });
 
+
+//--------Routes------------
+developerRoutes(app);
+credentialsRoutes(app);
+
+// noHandlerRoute(app);
+//-------------------------
+
 // Fallback for SPA routing
 app.setNotFoundHandler((req, reply) => {
 	reply.sendFile('index.html'); // Serve index.html from the root specified in fastifyStatic
 });
 
-// Health check route (optional but helpful)
-app.get('/health', async (req, reply) => {
-	reply.type('text/html').send(`
-		<h1>Backend Server is Running (JS)</h1>
-		<p>Fastify server is active at <code>https://${HOST}:${PORT}</code>.</p>
-		<p>Socket.IO is listening for connections.</p>
-	`);
-});
-
-// --- API Routes ---
-app.get('/data', async (req, reply) => {
-	try {
-		const tables = await DB('credentialsTable');
-		reply.send(tables);
-	} catch (e) {
-		console.error(e);
-		reply.status(500).send({ error: 'Database fetch error' });
-	}
-});
-
-app.post('/signUp', async (req, reply) => {
-	const { username, email, password: rawPassword } = req.body;
-	if (!username || !email || !rawPassword) {
-		reply.status(400).send({ error: 'All fields (username, email, password) are required' });
-		return;
-	}
-
-	try {
-		const exists = await DB('credentialsTable')
-			.where({ username })
-			.orWhere({ email })
-			.first();
-		if (exists) {
-			reply.status(400).send({ error: 'Username or email already in use' });
-			return;
-		}
-
-		const password = hashPassword(rawPassword);
-		const [id] = await DB('credentialsTable').insert({ username, email, password });
-		reply.status(201).send({ success: true, id: id });
-	} catch (e) {
-		console.error(e);
-		reply.status(500).send({ error: 'Signup failed due to server error' });
-	}
-});
-
-app.post('/login', async (req, reply) => {
-	const { email, password: rawPassword } = req.body;
-	if (!email || !rawPassword) {
-		reply.status(400).send({ error: 'Email and password are required' });
-		return;
-	}
-
-	try {
-		const user = await DB('credentialsTable').where({ email }).first();
-		if (!user || user.password !== hashPassword(rawPassword)) {
-			reply.status(401).send({ error: 'Invalid email or password' });
-			return;
-		}
-		reply.send({ success: true, message: 'Login successful', userId: user.id });
-	} catch (e) {
-		console.error(e);
-		reply.status(500).send({ error: 'Login failed due to server error' });
-	}
-});
-
-app.post('/delete', async (req, reply) => {
-	const { id } = req.body;
-	if (!id || typeof id !== 'number') { // Basic validation
-		reply.status(400).send({ error: 'A valid numeric ID is required' });
-		return;
-	}
-
-	try {
-		const deletedCount = await DB('credentialsTable').where({ id }).del();
-		if (deletedCount > 0) {
-				reply.send({ success: true, message: `User with ID ${id} deleted.` });
-		} else {
-				reply.status(404).send({ success: false, message: `User with ID ${id} not found.` });
-		}
-	} catch (e) {
-		console.error(e);
-		reply.status(500).send({ error: 'Delete operation failed due to server error' });
-	}
-});
 
 // --- Start Server ---
 const start =  async () => {

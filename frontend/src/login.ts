@@ -212,7 +212,7 @@ function addLoginFormListeners() {
 
   // Close button navigates back to Welcome page
   closeButton.addEventListener('click', () => {
-	navigateTo('/');
+	  navigateTo('/');
   });
 
 

@@ -1,4 +1,4 @@
-const axios = require('axios');
+import axios from 'axios';
 
 // exchangeCodeForToken: Exchanges the authorization code for an access token using Google's token endpoint.
 // fetchUserInfo: Fetches user profile data using the access token
@@ -30,4 +30,4 @@ async function fetchUserInfo(accessToken) {
 	return response.data;
 }
 
-module.exports = {exchangeCodeForToken, fetchUserInfo}
+export { exchangeCodeForToken, fetchUserInfo };

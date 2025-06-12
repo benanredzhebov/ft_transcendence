@@ -21,6 +21,32 @@ export function navigateTo(path: string) {
   router();
 }
 
+// --- Handler for Google Auth Token ---
+function handleGoogleAuthToken(): (() => void) | void {
+  const queryParams = new URLSearchParams(window.location.search); // Use query parameters
+  const token = queryParams.get('token');
+  const error = queryParams.get('error');
+
+  // Clean the URL by removing query parameters after processing
+  if (token || error) {
+    history.replaceState({}, '', window.location.pathname);
+  }
+
+  if (token) {
+    localStorage.setItem('authToken', token);
+    console.log('Google Auth Token stored successfully.');
+    navigateTo('/dashboard');
+  } else if (error) {
+    console.error('Google authentication failed:', error);
+    alert(`Google authentication failed: ${error}. Please try again.`);
+    navigateTo('/login');
+  } else {
+    // This might be hit if /google-auth-handler is accessed directly without params
+    console.warn('Google auth handler called without token or error. Redirecting to login.');
+    navigateTo('/login');
+  }
+}
+
 // --- Welcome Page ---
 function renderWelcome(): (() => void) | void {
   app!.innerHTML = '';
@@ -125,11 +151,11 @@ const routes: { [key: string]: () => (() => void) | void } = { // render functio
   '/': renderWelcome,
   '/login': renderLogin,
   '/signUp': renderSignUp,
-  '/username-google' : renderGoogle,
+  '/google-auth-handler': handleGoogleAuthToken,
   '/game': renderGame,
   '/dashboard': renderDashboard,
   '/delete': renderDelete, // Add the delete route
-  // '/username-google': renderHomePage
+  '/username-google': renderGoogle,
 
 };
 
