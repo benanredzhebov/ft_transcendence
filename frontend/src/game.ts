@@ -139,6 +139,7 @@ function setupTournamentHandlers() {
 	socket.on('await_player_ready', () => {
 		console.log('Received await_player_ready');
 		removeOverlays();
+		assignedPlayerId = null;
 		showTournamentDialog('Match ready!', {
 			confirmText: 'I\'m Ready'
 		});
@@ -169,31 +170,6 @@ function setupTournamentHandlers() {
 		updateCountdownDisplay(remaining);
 	});
 
-	// socket.on('match_announcement', (match: { 
-	// 	player1: { socketId: string, alias: string },
-	// 	player2: { socketId: string, alias: string } | null 
-	// }) => {
-	// currentMatch = [
-	// 	match.player1.alias,
-	// 	match.player2?.alias || 'Bye'
-	// ];
-	
-	// aliasMap = {
-	// 	[match.player1.socketId]: match.player1.alias,
-	// 	...(match.player2 ? { [match.player2.socketId]: match.player2.alias } : {})
-	// };
-
-	// showMatchInfo(match.player1.alias, match.player2?.alias || 'Bye', 0, 0);
-	
-	// if (socket && socket.id === match.player1.socketId) {
-	// 	assignedPlayerId = 'player1';
-	// } else if (match.player2 && socket && socket.id === match.player2.socketId) {
-	// 	assignedPlayerId = 'player2';
-	// } else {
-	// 	assignedPlayerId = null;
-	// }
-	// });
-
 	socket.on('match_announcement', (match: { player1: string, player2: string }) => {
 		currentMatch = [match.player1, match.player2];
 		showMatchInfo(match.player1, match.player2, 0, 0);
@@ -209,15 +185,16 @@ function setupTournamentHandlers() {
 	});
 
 	socket.on('tournament_over', ({ winner }: { winner: any }) => {
-	const winnerName = typeof winner === 'object' && winner !== null ? winner.alias : winner;
-	showTournamentDialog(`Tournament winner: ${winnerName}!`, {
-		confirmText: 'Return to Lobby'
-	}).querySelector('button')!.onclick = () => {
-		window.location.href = '/';
-	};
-	inTournament = false;
-	currentMatch = null;
-	assignedPlayerId = null;
+		const winnerName = typeof winner === 'object' && winner !== null ? winner.alias : winner;
+		const dialog = showTournamentDialog(`Tournament winner: ${winnerName}!`, {
+			confirmText: 'Return to Lobby'
+		});
+		dialog.querySelector('button')!.onclick = () => {
+			showTournamentResults(winnerName);
+			inTournament = false;
+			currentMatch = null;
+			assignedPlayerId = null;
+		};
 	});
 
 	socket.on('tournament_lobby', ({ message, players, }) => {
@@ -359,6 +336,36 @@ function showGameOverScreen(winner: string | { alias: string}) {
 	overlay.appendChild(message);
 	overlay.appendChild(buttons);
 	canvas.parentElement.appendChild(overlay);
+}
+
+function showTournamentResults(winnerName: string) {
+	removeOverlays();
+
+	const overlay = document.createElement('div');
+	overlay.className = 'game-overlay';
+
+	const message = document.createElement('div');
+	message.className = 'game-message';
+	message.innerHTML = `<h2>🏆 Tournament Winner: ${winnerName}</h2>`;
+
+	// Clone the bracket if it exists
+	const bracketDiv = document.getElementById('tournament-bracket');
+	if (bracketDiv) {
+		const bracketClone = bracketDiv.cloneNode(true) as HTMLElement;
+		bracketClone.style.marginTop = '20px';
+		overlay.appendChild(bracketClone);
+	}
+
+	const dashboardBtn = document.createElement('button');
+	dashboardBtn.textContent = 'Back to Dashboard';
+	dashboardBtn.onclick = () => {
+		window.location.href = '/dashboard';
+	};
+
+	overlay.appendChild(message);
+	overlay.appendChild(dashboardBtn);
+
+	document.body.appendChild(overlay);
 }
 
 // Game Rendering Functions
