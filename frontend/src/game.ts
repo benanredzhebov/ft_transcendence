@@ -190,6 +190,7 @@ function setupTournamentHandlers() {
 			confirmText: 'Return to Lobby'
 		});
 		dialog.querySelector('button')!.onclick = () => {
+			dialog.remove();
 			showTournamentResults(winnerName);
 			inTournament = false;
 			currentMatch = null;
