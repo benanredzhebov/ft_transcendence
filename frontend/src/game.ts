@@ -625,16 +625,36 @@ export function renderGame(containerId: string = 'app') {
 	});
 
 	socket.on('disconnect', () => {
-		console.warn('🔌 Disconnected');
-		assignedPlayerId = null;
-	
-		if (ctx && canvas) {
-			ctx.fillStyle = 'red';
-			ctx.font = '20px Arial';
-		ctx.textAlign = 'center';
-		ctx.fillText('Disconnected', canvas.width / 2, canvas.height / 2);
-		}
-	});
+    removeOverlays();
+    document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
+    document.getElementById('tournament-bracket')?.remove();
+    document.querySelectorAll('.game-loading').forEach(el => el.remove());
+
+    if (canvas?.parentElement) {
+        const overlay = document.createElement('div');
+        overlay.className = 'game-overlay';
+        overlay.style.position = 'absolute';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.display = 'flex';
+        overlay.style.justifyContent = 'center';
+        overlay.style.alignItems = 'center';
+        overlay.style.background = 'rgba(0,0,0,0.8)';
+        overlay.style.zIndex = '1000';
+        overlay.innerHTML = `
+            <div style="color: white; font-size: 2rem; text-align: center;">
+                Disconnected from server<br>
+                <button id="reconnect-btn" style="margin-top: 1rem; padding: 0.5rem 1rem; font-size: 1rem;">Reconnect</button>
+            </div>`;
+        canvas.parentElement.appendChild(overlay);
+
+        document.getElementById('reconnect-btn')?.addEventListener('click', () => {
+            window.location.reload();
+        });
+    }
+});
 
 	socket.on('state_update', (state: GameState & { gameOver: boolean }) => {
 		// console.log("received paddle y positions:", state.paddles);
