@@ -25,6 +25,7 @@ let aliasMap: Record<string, string> = {};
 let assignedPlayerId: 'player1' | 'player2' | null = null;
 let movePlayersFrame: number | null = null;
 let countDownActive = false;
+let aliasRegistered = false;
 
 // Game State Interfaces
 interface PaddleState {
@@ -130,6 +131,7 @@ function setupTournamentHandlers() {
 
 	socket.on('alias_registered', ({ success }) => {
 		if (success) {
+			aliasRegistered = true;
 			inTournament = true;
 			showTournamentDialog('Registered! Waiting for tournament to start...');
 		} else {
@@ -558,7 +560,17 @@ export function renderGame(containerId: string = 'app') {
 	window.addEventListener('orientationchange', onResize);
 	window.addEventListener('focus', onResize);
 	document.addEventListener('visibilitychange', () => {
-		if (document.visibilityState === 'visible') onResize();
+		if (document.visibilityState === 'visible') {
+			onResize();
+			// Prompt for alias if in tournament mode and not registered
+			if (
+				socket &&
+				!aliasRegistered &&
+				window.location.search.includes('tournament=true')
+			) {
+				promptAliasRegistration();
+			}
+		}
 	});
 	window.addEventListener('beforeunload', cleanupGame);
 
@@ -597,7 +609,9 @@ export function renderGame(containerId: string = 'app') {
 			matchStarted = true;
 			if (movePlayersFrame === null) movePlayers();
 		} else {
-			promptAliasRegistration();
+			if (!aliasRegistered) {
+				promptAliasRegistration();
+			}
 		}
 	});
 
