@@ -26,6 +26,7 @@ let assignedPlayerId: 'player1' | 'player2' | null = null;
 let movePlayersFrame: number | null = null;
 let countDownActive = false;
 let aliasRegistered = false;
+let tournamentResults: { player1: string, player2: string, score1: number, score2: number}[] = [];
 
 // Game State Interfaces
 interface PaddleState {
@@ -162,6 +163,7 @@ function setupTournamentHandlers() {
 	});
 
 	socket.on('tournament_bracket', (data: { rounds: { player1: string | null, player2: string | null }[][] }) => {
+		window['lastBracketData'] = data;
 		const bracketDiv = document.getElementById('tournament-bracket') || document.createElement('div');
 		bracketDiv.id = 'tournament-bracket';
 		bracketDiv.innerHTML = '<h2>Tournament Bracket</h2>';
@@ -173,7 +175,20 @@ function setupTournamentHandlers() {
 			round.forEach(match => {
 				const matchDiv = document.createElement('div');
 				matchDiv.className = 'bracket-match';
-				matchDiv.textContent = `${match.player1 || 'Bye'} vs ${match.player2 || 'Bye'}`;
+
+				// Find result for this match
+				let scoreText = '';
+				if (match.player1 && match.player2) {
+					const result = tournamentResults.find(
+						r =>
+							(r.player1 === match.player1 && r.player2 === match.player2) ||
+							(r.player1 === match.player2 && r.player2 === match.player1)
+					);
+					if (result) {
+						scoreText = ` (${result.score1} : ${result.score2})`;
+					}
+				}
+				matchDiv.textContent = `${match.player1 || 'Bye'} vs ${match.player2 || 'Bye'}${scoreText}`;
 				roundDiv.appendChild(matchDiv);
 			});
 			bracketDiv.appendChild(roundDiv);
@@ -365,14 +380,37 @@ function showTournamentResults(winnerName: string) {
 	message.className = 'game-message';
 	message.innerHTML = `<h2>🏆 Tournament Winner: ${winnerName}</h2>`;
 
-	// Clone the bracket if it exists
-	const bracketDiv = document.getElementById('tournament-bracket');
-	if (bracketDiv) {
-		const bracketClone = bracketDiv.cloneNode(true) as HTMLElement;
-		bracketClone.style.marginTop = '20px';
-		overlay.appendChild(bracketClone);
-	}
+	// Render bracket with results
+	const bracketWithResults = document.createElement('div');
+	bracketWithResults.id = 'tournament-bracket';
+	bracketWithResults.innerHTML = '<h2>Tournament Bracket</h2>';
 
+	if (window['lastBracketData']) {
+		window['lastBracketData'].rounds.forEach((round: any[], roundIdx: number) => {
+			const roundDiv = document.createElement('div');
+			roundDiv.className = 'bracket-round';
+			roundDiv.innerHTML = `<strong>Round ${roundIdx + 1}</strong>`;
+			round.forEach(match => {
+				const matchDiv = document.createElement('div');
+				matchDiv.className = 'bracket-match';
+				let scoreText = '';
+				if (match.player1 && match.player2) {
+					const result = tournamentResults.find(
+						r =>
+							(r.player1 === match.player1 && r.player2 === match.player2) ||
+							(r.player1 === match.player2 && r.player2 === match.player1)
+					);
+					if (result) {
+						scoreText = ` (${result.score1} : ${result.score2})`;
+					}
+				}
+				matchDiv.textContent = `${match.player1 || 'Bye'} vs ${match.player2 || 'Bye'}${scoreText}`;
+				roundDiv.appendChild(matchDiv);
+			});
+			bracketWithResults.appendChild(roundDiv);
+		});
+		overlay.appendChild(bracketWithResults);
+	}
 	const dashboardBtn = document.createElement('button');
 	dashboardBtn.textContent = 'Back to Dashboard';
 	dashboardBtn.onclick = () => {
@@ -625,35 +663,35 @@ export function renderGame(containerId: string = 'app') {
 	});
 
 	socket.on('disconnect', () => {
-    removeOverlays();
-    document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
-    document.getElementById('tournament-bracket')?.remove();
-    document.querySelectorAll('.game-loading').forEach(el => el.remove());
+	removeOverlays();
+	document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
+	document.getElementById('tournament-bracket')?.remove();
+	document.querySelectorAll('.game-loading').forEach(el => el.remove());
 
-    if (canvas?.parentElement) {
-        const overlay = document.createElement('div');
-        overlay.className = 'game-overlay';
-        overlay.style.position = 'absolute';
-        overlay.style.top = '0';
-        overlay.style.left = '0';
-        overlay.style.width = '100%';
-        overlay.style.height = '100%';
-        overlay.style.display = 'flex';
-        overlay.style.justifyContent = 'center';
-        overlay.style.alignItems = 'center';
-        overlay.style.background = 'rgba(0,0,0,0.8)';
-        overlay.style.zIndex = '1000';
-        overlay.innerHTML = `
-            <div style="color: white; font-size: 2rem; text-align: center;">
-                Disconnected from server<br>
-                <button id="reconnect-btn" style="margin-top: 1rem; padding: 0.5rem 1rem; font-size: 1rem;">Reconnect</button>
-            </div>`;
-        canvas.parentElement.appendChild(overlay);
+	if (canvas?.parentElement) {
+		const overlay = document.createElement('div');
+		overlay.className = 'game-overlay';
+		overlay.style.position = 'absolute';
+		overlay.style.top = '0';
+		overlay.style.left = '0';
+		overlay.style.width = '100%';
+		overlay.style.height = '100%';
+		overlay.style.display = 'flex';
+		overlay.style.justifyContent = 'center';
+		overlay.style.alignItems = 'center';
+		overlay.style.background = 'rgba(0,0,0,0.8)';
+		overlay.style.zIndex = '1000';
+		overlay.innerHTML = `
+			<div style="color: white; font-size: 2rem; text-align: center;">
+				Disconnected from server<br>
+				<button id="reconnect-btn" style="margin-top: 1rem; padding: 0.5rem 1rem; font-size: 1rem;">Reconnect</button>
+			</div>`;
+		canvas.parentElement.appendChild(overlay);
 
-        document.getElementById('reconnect-btn')?.addEventListener('click', () => {
-            window.location.reload();
-        });
-    }
+		document.getElementById('reconnect-btn')?.addEventListener('click', () => {
+			window.location.reload();
+		});
+	}
 });
 
 	socket.on('state_update', (state: GameState & { gameOver: boolean }) => {
@@ -680,17 +718,28 @@ export function renderGame(containerId: string = 'app') {
 			} else if (state.score.player2 >= 5) {
 				winner = inTournament && currentMatch ? currentMatch[1] : 'Player 2';
 			}
-		showGameOverScreen(winner);
-		gameEnded = true;
 
-		if (inTournament && currentMatch) { 
-			if (
-				(state.score.player1 >= 5 && assignedPlayerId === 'player1') ||
-				(state.score.player2 >= 5 && assignedPlayerId === 'player2')
-			) {
-				socket?.emit('match_ended', { winnerSocketId: socket.id });
+			// Save tournament results
+			if (inTournament && currentMatch) {
+				tournamentResults.push({
+					player1: currentMatch[0],
+					player2: currentMatch[1],
+					score1: state.score.player1,
+					score2: state.score.player2
+				});
 			}
-		}
+
+			showGameOverScreen(winner);
+			gameEnded = true;
+
+			if (inTournament && currentMatch) { 
+				if (
+					(state.score.player1 >= 5 && assignedPlayerId === 'player1') ||
+					(state.score.player2 >= 5 && assignedPlayerId === 'player2')
+				) {
+					socket?.emit('match_ended', { winnerSocketId: socket.id });
+				}
+			}
 		}
 	});
 }
