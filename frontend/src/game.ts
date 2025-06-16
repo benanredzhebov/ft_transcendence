@@ -67,7 +67,9 @@ function removeOverlays() {
 	document.querySelectorAll('.game-overlay').forEach(el => el.remove());
 }
 
-function showTournamentDialog(message: string, options?: { confirmText?: string, timer?: number }) {
+function showTournamentDialog(message: string, 
+	options?: { confirmText?: string, timer?: number, onConfirm?: () => void }
+) {
 	const existing = document.querySelector('.tournament-dialog');
 	if (existing) existing.remove();
 
@@ -87,10 +89,13 @@ function showTournamentDialog(message: string, options?: { confirmText?: string,
 	`;
 
 	if (options?.confirmText) {
-	dialog.querySelector('button')!.onclick = () => {
-		socket?.emit('player_ready'); // Only marks ready, does NOT start countdown
-		dialog.remove();
-	};
+		dialog.querySelector('button')!.onclick = () => {
+			if (options.confirmText === "I'm Ready") {
+				socket?.emit('player_ready'); // Only marks ready, does NOT start countdown
+			}
+			if (options.onConfirm) options.onConfirm();
+			dialog.remove();
+		};
 	}
 
 	document.body.appendChild(dialog);
@@ -134,6 +139,15 @@ function setupTournamentHandlers() {
 					promptAliasRegistration();
 			};
 		}
+	});
+
+	socket.on('tournament_error', (data: { message: string }) => {
+		showTournamentDialog(`Error: ${data.message}`, {
+			confirmText: 'Back to Dashboard',
+			onConfirm: () => {
+				window.location.href = '/dashboard';
+			}
+		});
 	});
 
 	socket.on('await_player_ready', () => {

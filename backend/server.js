@@ -6,7 +6,7 @@
 /*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/06/12 16:46:44 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/06/16 09:22:56 by beredzhe         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -207,7 +207,14 @@ io.on('connection', (socket) => {
 		if (!tournament) return;
 		
 		if (tournament.rounds.length === 0) {
-			tournament.generateInitialBracket();
+			try {
+				tournament.generateInitialBracket();
+			} catch (e) {
+				// Notify the client about the error, do not crash the server
+				socket.emit('tournament_error', { message: e.message });
+				return;
+			}
+			
 			const currentMatch = tournament.getCurrentMatchPlayers();
 			game.prepareForMatch();
 			
