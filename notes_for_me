@@ -8,3 +8,15 @@ const socket = io('wss://localhost:3000', {
 2. Read Canvas
 
 3.There are 2 .gitignore files. Make it 1
+
+
+
+
+
+Benan Notes. Should to fix :
+
+1. While registering the aliases, if the window is changed, the bracket disappears.
+
+2. After stopping the server and rerunning it, pressing "Back" in the game window does not make the result disappear.
+
+3. After the tournament ends, pressing the "Return to Lobby" button does not display the results.
