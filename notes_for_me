@@ -23,6 +23,14 @@ Benan Notes. Should to fix :
 2. After stopping the server and rerunning it, pressing "Back" in the game window does not make the result disappear. `FIXED`
   - frontend socket.on -> disconnect part
 
-3. After the tournament ends, pressing the "Return to Lobby" button does not display the results.
+3. After the tournament ends, pressing the "Return to Lobby" button does not display the results. `FIXED`
+  - Save tournament results in the state_update
+  - reset tournamentResults[] at the start of each new tournament(in the tournament_lobby handler) to avoid mixing results from previous tournaments.
+  - When the tournament ends I  press Return to Lobby, your showTournamentResults function is called.
 
-4. After the 1st match if 1 player press I'm ready button the countdown starts. Should wait to all players to press the button I'm ready
+4. Should develop Tournament bracket to see all matches result
+
+
+5. After the 1st match if 1 player press I'm ready button the countdown starts. Should wait to all players to press the button I'm ready
+
+6. After the tournament has finsished -> Return to Lobby button -> Back to Dashboard button -> appears Disconnected for a while
