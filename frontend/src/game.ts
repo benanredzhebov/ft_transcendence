@@ -20,7 +20,8 @@ let gameEnded = false;
 let matchStarted = false;
 let pressedKeys = new Set<string>();
 let inTournament = false;
-let currentMatch: [string, string] | null = null;
+// let currentMatch: [string, string] | null = null;
+let currentMatch: [string | { alias: string }, string | { alias: string }] | null = null;
 let aliasMap: Record<string, string> = {};
 let assignedPlayerId: 'player1' | 'player2' | null = null;
 let movePlayersFrame: number | null = null;
@@ -163,7 +164,7 @@ function setupTournamentHandlers() {
 	});
 
 	socket.on('tournament_bracket', (data: { rounds: { player1: string | null, player2: string | null }[][] }) => {
-		window['lastBracketData'] = data;
+		(window as any)['lastBracketData'] = data;
 		const bracketDiv = document.getElementById('tournament-bracket') || document.createElement('div');
 		bracketDiv.id = 'tournament-bracket';
 		bracketDiv.innerHTML = '<h2>Tournament Bracket</h2>';
@@ -230,6 +231,7 @@ function setupTournamentHandlers() {
 	});
 
 	socket.on('tournament_lobby', ({ message, players, }) => {
+		tournamentResults = [];
 		isHost = players.length > 0 && aliasMap && Object.values(aliasMap).includes(players[0]) && 
 		Object.keys(aliasMap).find(key => aliasMap[key] === players[0]) === socket?.id;
 		(players as string[]).forEach(alias => {
@@ -238,10 +240,8 @@ function setupTournamentHandlers() {
 			}
 		});
 
-		console.log('F_Received tournament_lobby:', players);
-
-		// const isHost = players.length > 0 && aliasMap && Object.values(aliasMap).includes(players[0]) && 
-		// 	Object.keys(aliasMap).find(key => aliasMap[key] === players[0]) === socket?.id;
+		// Debug
+		// console.log('F_Received tournament_lobby:', players);
 
 		const dialog = showTournamentDialog(
 			`${message}<br>Players: ${players.join(', ')}`,
@@ -373,6 +373,9 @@ function showGameOverScreen(winner: string | { alias: string}) {
 function showTournamentResults(winnerName: string) {
 	removeOverlays();
 
+	// Debug: log the results before rendering
+	// console.log('Tournament Results:', tournamentResults);
+
 	const overlay = document.createElement('div');
 	overlay.className = 'game-overlay';
 
@@ -385,8 +388,8 @@ function showTournamentResults(winnerName: string) {
 	bracketWithResults.id = 'tournament-bracket';
 	bracketWithResults.innerHTML = '<h2>Tournament Bracket</h2>';
 
-	if (window['lastBracketData']) {
-		window['lastBracketData'].rounds.forEach((round: any[], roundIdx: number) => {
+	if ((window as any)['lastBracketData']) {
+		(window as any)['lastBracketData'].rounds.forEach((round: any[], roundIdx: number) => {
 			const roundDiv = document.createElement('div');
 			roundDiv.className = 'bracket-round';
 			roundDiv.innerHTML = `<strong>Round ${roundIdx + 1}</strong>`;
@@ -401,7 +404,7 @@ function showTournamentResults(winnerName: string) {
 							(r.player1 === match.player2 && r.player2 === match.player1)
 					);
 					if (result) {
-						scoreText = ` (${result.score1} : ${result.score2})`;
+						scoreText = ` ${result.score1} : ${result.score2}`;
 					}
 				}
 				matchDiv.textContent = `${match.player1 || 'Bye'} vs ${match.player2 || 'Bye'}${scoreText}`;
@@ -712,7 +715,7 @@ export function renderGame(containerId: string = 'app') {
 		if (!gameEnded && state.gameOver) {
 			if (state.score.player1 === 0 && state.score.player2 === 0) return;
 
-			let winner = 'Unknown';
+			let winner: string | { alias: string } = 'Unknown';
 			if (state.score.player1 >= 5) {
 				winner = inTournament && currentMatch ? currentMatch[0] : 'Player 1';
 			} else if (state.score.player2 >= 5) {
@@ -722,8 +725,8 @@ export function renderGame(containerId: string = 'app') {
 			// Save tournament results
 			if (inTournament && currentMatch) {
 				tournamentResults.push({
-					player1: currentMatch[0],
-					player2: currentMatch[1],
+					player1: typeof currentMatch[0] === 'object' && currentMatch[0] !== null ? currentMatch[0].alias : currentMatch[0],
+					player2: typeof currentMatch[1] === 'object' && currentMatch[1] !== null ? currentMatch[1].alias : currentMatch[1],
 					score1: state.score.player1,
 					score2: state.score.player2
 				});
