@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   server.js                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
+/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/06/16 09:22:56 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/06/19 14:59:24 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -362,7 +362,7 @@ app.register(fastifyCors, { origin: true, credentials: true });
 app.register(multipart, { // Now 'multipart' is defined
 	// attachFieldsToBody: true,
 	limits: {
-	fileSize: 10 * 1024 * 1024, // 5MB
+	fileSize: 5 * 1024 * 1024, // 5MB
 	}
 });
 
