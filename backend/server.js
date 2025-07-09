@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   server.js                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
+/*   By: pfalli <pfalli@student.42wolfsburg.de>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:35:06 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/06/19 14:59:24 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/07/09 11:54:00 by pfalli           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -26,7 +26,9 @@ import GameState from './GameLogic/GameState.js';
 import hashPassword from './crypto/crypto.js';
 import DB from './data_controller/dbConfig.js';
 import {developerRoutes, credentialsRoutes} from './routes/routes.js'; // Import the routes
+import jwt from 'jsonwebtoken';
 
+const JWT_SECRET = process.env.JWT_SECRET || 'hbj2io4@@#!v7946h3&^*2cn9!@09*@B627B^*N39&^847,1';
 
 let countdownInterval = null;
 
@@ -122,8 +124,8 @@ io.on('connection', (socket) => {
 	const isLocalMatch = 
 		socket.handshake.query.local === 'true' ||
 		socket.handshake.query.local === true;
-		
-	game.setTournamentMode(!isLocalMatch);
+	const gameMode = socket.handshake.query.mode || 'local';
+	game.setTournamentMode(!isLocalMatch, gameMode);
 	
 	// Add player with error handling CHECK THIS LATER!
 	if (isLocalMatch) {
@@ -141,24 +143,6 @@ io.on('connection', (socket) => {
 		io.emit('state_update', game.getState());
 	}
 
-	// socket.on('player_move', ({ direction, playerId }) => {
-	// 	// console.log('player_move received:', playerId, direction);
-	// 	if (!game.isTournament) {
-	// 		// Local mode: move both paddles if keys are pressed
-	// 		if (playerId === 'player1' || playerId === 'player2') {
-	// 			game.handlePlayerInput(playerId, direction);
-	// 			io.emit('state_update', game.getState());
-	// 		}
-	// 	} else {
-	// 		// Tournament mode: trust playerId from frontend
-	// 		if (playerId === 'player1' || playerId === 'player2') {
-	// 			game.handlePlayerInput(playerId, direction);
-	// 			io.emit('state_update', game.getState());
-	// 			// console.log('Emitting state:', game.getState());
-	// 		}
-	// 	}
-	// });
-
 	socket.on('player_move', ({ direction, playerId }) => {
 		game.handlePlayerInput(playerId, direction);
 		io.emit('state_update', game.getState());
@@ -170,36 +154,50 @@ io.on('connection', (socket) => {
 		io.emit('state_update', game.getState());
 	});
 
-	// Tournament Registration 
-	socket.on('register_alias', (alias) => {
-		if (!tournament) tournament = new Tournament();
-	
-		const success = tournament.registerPlayer(socket.id, alias);
-		socket.emit('alias_registered', { success });
+	// ***new: added token + data for Match Data***
+	socket.on('register_alias', ({ alias, token }) => { // + token
+        if (!token) {
+            socket.emit('alias_registered', { success: false, message: 'Authentication required.' });
+            return;
+        }
 
-		if (success) {
-			const playerList = Array.from(tournament.players.entries()).map(([socketId, {alias}]) => ({
-				socketId,
-				alias
-			}));
-			io.emit('player_list_updated', playerList);
+        try {
+            const decodedToken = jwt.verify(token, JWT_SECRET);
+            const user = { userId: decodedToken.userId, username: decodedToken.username };
 
-			console.log('Players in lobby:', Array.from(tournament.players.values()).map(p => p.alias)); // Del
-		
-			// Only show the lobby dialog, do not start the match yet
-			io.emit('tournament_lobby', {
-					message: tournament.canStartTournament() && tournament.rounds.length === 0
-						? 'Ready to start tournament?'
-						: 'Waiting for more players to join...',
-					players: Array.from(tournament.players.values()).map(p => p.alias)
-				});
-			}
-		else {
-			socket.emit('tournament_waiting', {
-				message: 'Waiting for more players to join...',
-				playersNeeded: 2 - tournament.players.size
-			});
-		}
+            if (!tournament) tournament = new Tournament();
+        
+            const success = tournament.registerPlayer(socket.id, alias, user);
+            socket.emit('alias_registered', { success });
+
+            if (success) {
+                const playerList = Array.from(tournament.players.entries()).map(([socketId, {alias, userId, username}]) => ({
+                    socketId,
+                    alias,
+                    userId,
+                    username
+                }));
+                io.emit('player_list_updated', playerList);
+
+                console.log('Players in lobby:', Array.from(tournament.players.values()).map(p => p.alias)); // Del
+            
+                // Only show the lobby dialog, do not start the match yet
+                io.emit('tournament_lobby', {
+                        message: tournament.canStartTournament() && tournament.rounds.length === 0
+                            ? 'Ready to start tournament?'
+                            : 'Waiting for more players to join...',
+                        players: Array.from(tournament.players.values()).map(p => p.alias)
+                    });
+                }
+            else {
+                socket.emit('tournament_waiting', {
+                    message: 'Waiting for more players to join...',
+                    playersNeeded: 2 - tournament.players.size
+                });
+            }
+        } catch (e) {
+            socket.emit('alias_registered', { success: false, message: 'Invalid token.' });
+        }
 	});
 
 	// Start tournament when someone clicks "Start Tournament"
@@ -273,7 +271,7 @@ io.on('connection', (socket) => {
 		if (player2) io.to(player2.socketId).emit('await_player_ready');
 	});
 	
-	socket.on('match_ended', ({ winnerSocketId }) => {
+	socket.on('match_ended', async ({ winnerSocketId }) => {
 		if (!tournament?.currentMatch) {
 			console.warn('match_ended received but no current match');
 			return;
@@ -283,6 +281,29 @@ io.on('connection', (socket) => {
 	if (state.score.player1 === 0 && state.score.player2 === 0) {
 		console.warn('Ignoring match_ended: no score change');
 		return;
+	}
+
+	// ***new: save Match Data***
+	const { player1, player2 } = tournament.getCurrentMatchPlayers();
+	const winner = winnerSocketId === player1.socketId ? player1 : player2;
+	
+	if (player1 && player2) {
+		try {
+			await DB('matchHistory').insert({
+				player1_id: player1.userId,
+				player2_id: player2.userId,
+				player1_username: player1.alias,
+				player2_username: player2.alias,
+				player1_score: state.score.player1,
+				player2_score: state.score.player2,
+				winner_id: winner.userId,
+				winner_username: winner.alias,
+				is_tournament: true,
+			});
+			console.log('Match history saved.');
+		} catch (error) {
+			console.error('Failed to save match history:', error);
+		}
 	}
 
 	let nextMatch = tournament.recordWinner(winnerSocketId);

@@ -1,5 +1,3 @@
-
-
 services:
   backend:
     build:
@@ -11,4 +9,14 @@ services:
     #   - ../frontend/dist:/app/frontend/dist # Mount the frontend/dist directory
     # environment:
     #   - NODE_ENV=docker
+    command: npm run dev
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     command: npm run dev

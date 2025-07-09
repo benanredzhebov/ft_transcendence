@@ -202,12 +202,19 @@
 }
 
 /* Game buttons in content area */
+.dashboard-game-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
 .dashboard-game-button {
     margin-top: 1rem;
-    margin-right: 1rem; /* Space between buttons if they are inline */
-    width: auto;
-    min-width: 160px;
-    display: inline-flex;
+    margin-right: 0;
+    width: 100%;
+    max-width: 320px;
+    display: flex;
     justify-content: center;
     align-items: center;
     padding: 0.75rem 1.5rem;
@@ -230,55 +237,40 @@
     transform: translateY(-0.125rem);
 }
 
-/* Avatar Modal Styles */
-.avatar-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.6);
+/* Match History Styles */
+.match-history-container {
+  margin-top: 2rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 1.5rem;
+}
+.match-history-container h4 {
+  margin-bottom: 1rem;
+  color: #fff;
+  font-weight: 600;
+}
+.match-history-container ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.match-history-container li {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
-  z-index: 1000; /* Ensure it's on top */
-}
-
-.avatar-modal-content {
-  background-color: #2c2f33; /* Dark theme background */
-  padding: 25px;
-  border-radius: 8px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-  width: auto;
-  max-width: 500px;
-  color: #e0e0e0; /* Light text for dark background */
-}
-
-.avatar-modal-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 15px;
-  justify-content: center;
-  margin-bottom: 20px;
-}
-
-.avatar-modal-option img:hover {
-  outline: 3px solid #06b6d4; /* Highlight on hover */
-  opacity: 0.8;
-}
-
-.avatar-modal-close-button {
-  display: block;
-  margin: 10px auto 0;
-  padding: 10px 20px;
-  background-color: #7289da; /* Discord-like button color */
-  color: white;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   font-size: 0.9rem;
 }
-
-.avatar-modal-close-button:hover {
-  background-color: #5f73bc;
+.match-history-container li:last-child {
+  border-bottom: none;
+}
+.match-history-container .win {
+  color: #4ade80; /* Green */
+  font-weight: 700;
+}
+.match-history-container .loss {
+  color: #f87171; /* Red */
+  font-weight: 700;
 }

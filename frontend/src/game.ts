@@ -62,7 +62,10 @@ let resizeObserver: ResizeObserver | null = null;
 // Tournament Functions
 function promptAliasRegistration() {
 	const alias = prompt("Enter your tournament alias:");
-	if (alias) socket?.emit('register_alias', alias);
+	if (alias) {
+        const token = localStorage.getItem('authToken'); // ***new: to store Match data***
+        socket?.emit('register_alias', { alias, token });
+    }
 }
 
 // Remove all overlays
@@ -625,22 +628,24 @@ export function renderGame(containerId: string = 'app') {
 	handleResize(container);
 
 	// Detect tournament mode from URL
-	const urlParams = new URLSearchParams(window.location.search);
-	const tournamentMode = urlParams.get('tournament') === 'true'
+    const urlParams = new URLSearchParams(window.location.search);
+    const tournamentMode = urlParams.get('tournament') === 'true'
+    const aiMode = urlParams.get('mode') === 'ai';
 
-	// Socket connection
-	socket = io('https://127.0.0.1:3000', {
-		transports: ['websocket'],
-		secure: true,
-		query: {
-			local: (!tournamentMode).toString() // "true" for local, "false" for tournament
-		}
-	});
+    // Socket connection
+    socket = io('https://127.0.0.1:3000', {
+        transports: ['websocket'],
+        secure: true,
+        query: {
+            local: (!tournamentMode && !aiMode).toString(), // "true" for local, "false" for tournament or AI
+            mode: aiMode ? 'ai' : (tournamentMode ? 'tournament' : 'local')
+        }
+    });
 
-	// Setup tournament handlers
-	setupTournamentHandlers();
+    // Setup tournament handlers
+    setupTournamentHandlers();
 
-	// Socket event handlers
+    // Socket event handlers
 	socket.on('connect', () => {
 		console.log('✅ Connected:', socket!.id);
 	
