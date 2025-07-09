@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   Tournament.js                                      :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
+/*   By: pfalli <pfalli@student.42wolfsburg.de>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/06/08 13:21:32 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/06/09 15:34:41 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/07/09 11:22:09 by pfalli           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -28,7 +28,9 @@ class Tournament {
 
 	this.players.set(socketId, {
 	  alias,
-	  isReady: false
+	  isReady: false,
+	  userId: user.userId, // ***new: to store Match data***
+      username: user.username // ***new: to store Match data***
 	});
 	return true;
   }

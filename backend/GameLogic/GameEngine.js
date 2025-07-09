@@ -3,14 +3,15 @@
 /*                                                        :::      ::::::::   */
 /*   GameEngine.js                                      :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
+/*   By: pfalli <pfalli@student.42wolfsburg.de>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/06 14:28:07 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/06/04 19:40:44 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/07/09 09:39:10 by pfalli           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import GameState from './GameState.js';
+import AIOpponent from './AIOpponent.js';
 
 class GameEngine {
 	constructor() {
@@ -70,13 +71,16 @@ class GameEngine {
 
 	// Game loop
 	update() {
-		if (this.paused || this.state.gameOver) return;
-
-		const now = Date.now();
-		const dt = (now - this.lastUpdateTime) / 1000;
-		this.lastUpdateTime = now;
-
-		this.state.update(dt);
+    	if (this.paused || this.state.gameOver) return;
+    	const now = Date.now();
+    	const dt = (now - this.lastUpdateTime) / 1000;
+    	this.lastUpdateTime = now;
+		
+    	if (this.aiOpponent) {
+    	    this.aiOpponent.update();
+    	}
+	
+    	this.state.update(dt);
 	}
 
 	// Game control
@@ -90,9 +94,14 @@ class GameEngine {
 	}
 	
 	// setting the Tournament mode
-	setTournamentMode(isTournament) {
-		this.isTournament = isTournament;
-	}
+	setTournamentMode(isTournament, mode = 'local') {
+        this.isTournament = isTournament;
+        if (mode === 'ai') {
+            this.aiOpponent = new AIOpponent(this);
+        } else {
+            this.aiOpponent = null;
+        }
+    }
 
 	pause() {
 		this.paused = true;

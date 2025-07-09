@@ -10,7 +10,7 @@ import crypto from 'node:crypto'; // For generating unique filenames
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// IMPORTANT: Store your secret in an environment variable in a real application!
+// IMPORTANT: Store it in an env.
 const JWT_SECRET = process.env.JWT_SECRET || 'hbj2io4@@#!v7946h3&^*2cn9!@09*@B627B^*N39&^847,1';
 
 
@@ -103,6 +103,31 @@ const credentialsRoutes = (app) =>{
         console.error('Error fetching profile:', err);
         reply.status(500).send({ error: 'Server error while fetching profile' });
       }
+    }
+  });
+
+  // *** new: to get Match Data***
+  app.get('/api/profile/matches', async (req, reply) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.status(401).send({ error: 'Unauthorized: No token provided' });
+    }
+
+    const token = authHeader.substring(7);
+    try {
+      const decodedToken = jwt.verify(token, JWT_SECRET);
+      const userId = decodedToken.userId;
+
+      const matches = await DB('matchHistory')
+        .where('player1_id', userId)
+        .orWhere('player2_id', userId)
+        .orderBy('match_date', 'desc')
+        .limit(20);
+      
+      reply.send(matches);
+    } catch (err) {
+      console.error('Error fetching match history:', err);
+      reply.status(500).send({ error: 'Server error while fetching match history' });
     }
   });
 
