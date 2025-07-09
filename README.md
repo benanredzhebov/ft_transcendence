@@ -1,44 +1,17 @@
-
-***Pierotti***
-
-1. added knex file for Profile photo
-2. installed @fastify.multipart
-3. added new route for /api/profile
-4. used JWT to send token of LoginProfile to frontend
-
-------------------------
-
-run migration :
-
-npx knex migrate:latest --knexfile backend/data_controller/knexfile.js
-
-fronteend
-    1 npm install typescript --save-dev
-
-    2.npm install
-    3.npm run build 
-    and nothing more
-
-got to backend
-1.first to get the node_modules folder
-    npm install
-2. Init the https certificates
-        
-
-3. type
-    npm run dev
-
-4. click the link where is written server running
-
-
-
-
-docker exec -it <frontend-container-id> sh
+## to run with Docker
 
 docker-compose up --build
 
+## to run for testing
+
+cd frontend
+npm run build
+
+cd backend
+npm run dev
 
 
+--------------------------------------------------------------------------
 
 
 https://127.0.0.1:3000/username-google
