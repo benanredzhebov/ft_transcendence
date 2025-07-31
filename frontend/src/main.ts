@@ -33,7 +33,7 @@ function handleGoogleAuthToken(): (() => void) | void {
   }
 
   if (token) {
-    localStorage.setItem('authToken', token);
+    sessionStorage.setItem('authToken', token);
     console.log('Google Auth Token stored successfully.');
     navigateTo('/dashboard');
   } else if (error) {
