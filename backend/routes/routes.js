@@ -89,6 +89,7 @@ const credentialsRoutes = (app) =>{
 
       // JSON sending to frontend
       const userProfile = {
+        userId: user.id,
         username: user.username,
         email: user.email,
         avatar: user.avatar_path || null // Send avatar path

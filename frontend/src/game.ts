@@ -364,8 +364,13 @@ function showGameOverScreen(winner: string | { alias: string}) {
 	const dashboardBtn = document.createElement('button');
 	dashboardBtn.textContent = 'Back to Dashboard';
 	dashboardBtn.onclick = () => {
-		window.location.href = '/dashboard';
-	};
+        // Disconnect socket and reload to ensure clean state on dashboard
+        if (socket) {
+            socket.disconnect();
+            socket = null;
+        }
+        window.location.href = '/dashboard';
+    };
 	buttons.appendChild(dashboardBtn);
 	
 	overlay.appendChild(message);
@@ -417,14 +422,19 @@ function showTournamentResults(winnerName: string) {
 		});
 		overlay.appendChild(bracketWithResults);
 	}
-	const dashboardBtn = document.createElement('button');
-	dashboardBtn.textContent = 'Back to Dashboard';
-	dashboardBtn.onclick = () => {
-		window.location.href = '/dashboard';
-	};
+    const dashboardBtn = document.createElement('button');
+    dashboardBtn.textContent = 'Back to Dashboard';
+    dashboardBtn.onclick = () => {
+        // Disconnect socket and reload to ensure clean state on dashboard
+        if (socket) {
+            socket.disconnect();
+            socket = null;
+        }
+        window.location.href = '/dashboard';
+    };
 
-	overlay.appendChild(message);
-	overlay.appendChild(dashboardBtn);
+    overlay.appendChild(message);
+    overlay.appendChild(dashboardBtn);
 
 	document.body.appendChild(overlay);
 }
