@@ -63,7 +63,7 @@ let resizeObserver: ResizeObserver | null = null;
 function promptAliasRegistration() {
 	const alias = prompt("Enter your tournament alias:");
 	if (alias) {
-        const token = localStorage.getItem('authToken'); // ***new: to store Match data***
+        const token = sessionStorage.getItem('authToken'); // ***new: to store Match data***
         socket?.emit('register_alias', { alias, token });
     }
 }

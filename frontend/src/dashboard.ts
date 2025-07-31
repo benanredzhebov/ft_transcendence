@@ -93,7 +93,7 @@ export function renderDashboard() {
 
   // Logout button
   logoutButton.addEventListener('click', () => {
-    localStorage.removeItem('authToken');
+    sessionStorage.removeItem('authToken');
     navigateTo('/');
   });
 
@@ -119,7 +119,7 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
       contentArea.innerHTML = `<h3 class="dashboard-content-heading">Profile</h3><p class="dashboard-content-paragraph">Loading profile...</p>`; // Show loading state
       try {
         // Get the token from local storage
-        const token = localStorage.getItem('authToken');
+        const token = sessionStorage.getItem('authToken');
         if (!token) {
           contentArea.innerHTML = `
             <h3 class="dashboard-content-heading">Profile</h3>
