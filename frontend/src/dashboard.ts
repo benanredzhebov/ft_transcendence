@@ -167,7 +167,7 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
             if (matches.length > 0) {
               matchHistoryHtml = `
                 <div class="match-history-container">
-                  <h4>Statistics</h4>
+                  <h4>Match History</h4>
                   <ul>
                     ${matches.map((match: any) => `
                       <li>

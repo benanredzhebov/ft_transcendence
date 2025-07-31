@@ -20,19 +20,31 @@ class Tournament {
 	this.winners = [];
 	this.byes = new Set();          // Track players who got byes
   }
+  
+  // it checks if the alias is registered
+  registerPlayer(socketId, alias, user) {
+    const aliases = [...this.players.values()].map(p => p.alias);
+    if (aliases.includes(alias)) return false;
 
-  registerPlayer(socketId, alias) {
-	// Validate alias uniqueness
-	const aliases = [...this.players.values()].map(p => p.alias);
-	if (aliases.includes(alias)) return false;
-
-	this.players.set(socketId, {
-	  alias,
-	  isReady: false,
-	  userId: user.userId, // ***new: to store Match data***
+    this.players.set(socketId, {
+      alias,
+      isReady: false,
+      userId: user.userId, // ***new: to store Match data***
       username: user.username // ***new: to store Match data***
-	});
-	return true;
+    });
+    return true;
+  }
+
+  // ***new: aliases were not cleared after Tournament***
+  reset() {
+    this.players.clear();
+    this.rounds = [];
+    this.currentRound = 0;
+    this.currentMatchIndex = 0;
+    this.currentMatch = null;
+    this.winners = [];
+    this.byes.clear();
+    console.log('Tournament has been reset.');
   }
 
   markPlayerReady(socketId) {
@@ -166,13 +178,17 @@ class Tournament {
   }
 
   getCurrentMatchPlayers() {
-	if (!this.currentMatch) return null;
-	
-	const [p1, p2] = this.currentMatch;
-	return {
-	  player1: p1 ? { socketId: p1[0], alias: p1[1] } : null,
-	  player2: p2 ? { socketId: p2[0], alias: p2[1] } : null
-	};
+    if (!this.currentMatch) return { player1: null, player2: null };
+
+    const [p1Data, p2Data] = this.currentMatch;
+    const player1 = p1Data ? this.players.get(p1Data[0]) : null;
+    const player2 = p2Data ? this.players.get(p2Data[0]) : null;
+
+    // Add socketId back for other logic that might need it
+    if (player1 && p1Data) player1.socketId = p1Data[0];
+    if (player2 && p2Data) player2.socketId = p2Data[0];
+
+    return { player1, player2 };
   }
 
   resetReadyForCurrentMatch() {

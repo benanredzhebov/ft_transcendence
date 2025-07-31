@@ -85,7 +85,7 @@ class GameEngine {
 
 	// Game control
 	handlePlayerInput(id, direction) {
-		console.log(`handlePlayerInput called with id=${id}, direction=${direction}, isTournament=${this.isTournament}`);
+		// console.log(`handlePlayerInput called with id=${id}, direction=${direction}, isTournament=${this.isTournament}`);
 		if (this.paused || this.state.gameOver) return;
 
 		if (id === 'player1' || id === 'player2') {
