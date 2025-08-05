@@ -192,7 +192,7 @@ function addSignupFormListeners() {
       const signupData = { username, email, password };
 
       try {
-          const response = await fetch('https://127.0.0.1:3000/signUp', { // Use correct backend URL
+          const response = await fetch(`${import.meta.env.VITE_URL}/signUp`, { // Use correct backend URL
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(signupData),

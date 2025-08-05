@@ -10,7 +10,7 @@ export default defineConfig({
     proxy: {
       // Proxy API requests
       '/api': {
-        target: 'https://127.0.0.1:3000',
+        target: `${process.env.APP_URL}`,
         changeOrigin: true, // Needed for virtual hosted sites
         secure: false,      // Set to false if your backend uses SSL 
         ws: true,           // Enable WebSocket proxying
