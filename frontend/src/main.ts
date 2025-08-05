@@ -59,9 +59,7 @@ function renderWelcome(): (() => void) | void {
 
   const title = document.createElement('h1');
   title.className = "welcome-title";
-  title.innerHTML = `<br> <span>PONG</span>
-    <a href="/dashboard" class="pong-play-link">▶</a>
-  `;
+  title.innerHTML = `<br> <span>PONG</span>`;
 
   const buttonContainer = document.createElement('div');
   buttonContainer.className = "welcome-button-container";

@@ -83,7 +83,7 @@ export function renderDashboard() {
   // --- Socket.IO Chat Connection ---
   const token = sessionStorage.getItem('authToken');
   if (token && !chatSocket) {
-    chatSocket = io('https://127.0.0.1:3000', {
+    chatSocket = io(`${import.meta.env.VITE_URL}`, {
       transports: ['websocket'],
       secure: true,
     });

@@ -10,6 +10,9 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import dotenv from 'dotenv';
+dotenv.config();
+
 import fs from 'fs'
 import { existsSync, readFileSync } from 'fs';
 import path, { join, dirname } from 'path';
@@ -27,6 +30,7 @@ import hashPassword from './crypto/crypto.js';
 import DB from './data_controller/dbConfig.js';
 import {developerRoutes, credentialsRoutes} from './routes/routes.js'; // Import the routes
 import jwt from 'jsonwebtoken';
+
 
 const JWT_SECRET = process.env.JWT_SECRET || 'hbj2io4@@#!v7946h3&^*2cn9!@09*@B627B^*N39&^847,1';
 
@@ -540,6 +544,7 @@ const start =  async () => {
 	try{
 		const address = await app.listen({ port: PORT, host: HOST });
 		console.log("Server running " + address)
+		console.log(`Access to school ${process.env.APP_URL}`)
 	}
 	catch (e){
 		app.log.error(e);

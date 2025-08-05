@@ -643,7 +643,7 @@ export function renderGame(containerId: string = 'app') {
     const aiMode = urlParams.get('mode') === 'ai';
 
     // Socket connection
-    socket = io('https://127.0.0.1:3000', {
+    socket = io(`${import.meta.env.VITE_URL}`, {
         transports: ['websocket'],
         secure: true,
         query: {

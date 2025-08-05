@@ -34,7 +34,7 @@ export function renderDelete() {
         }
 
         try {
-            const response = await fetch('https://127.0.0.1:3000/delete', {
+            const response = await fetch(`${import.meta.env.VITE_URL}/delete`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
