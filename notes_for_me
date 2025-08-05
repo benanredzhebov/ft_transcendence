@@ -30,12 +30,13 @@ Benan Notes. Should to fix :
 
 4. Should develop Tournament bracket to see all matches result
 
-
 5. After the 1st match if 1 player press I'm ready button the countdown starts. Should wait to all players to press the button I'm ready
 
 6. After the tournament has finsished -> Return to Lobby button -> Back to Dashboard button -> appears Disconnected for a while
 
 7. Next match button no need after the second match
+
+8. After the first match check `I am ready button`
 
 
 ...........

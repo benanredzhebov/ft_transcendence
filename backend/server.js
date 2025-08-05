@@ -421,12 +421,13 @@ io.on('connection', (socket) => {
         }
 
         // Now, advance the tournament to the next match
-        let nextMatch = tournament.recordWinner(winnerSocketId);
+        const gameScores = { player1: state.score.player1, player2: state.score.player2 };
+        let nextMatch = tournament.recordWinner(winnerSocketId, gameScores);
 
         // Loop to skip byes and auto-advance until a real match or tournament end
         while (nextMatch && (!nextMatch[0] || !nextMatch[1])) {
             const autoWinner = nextMatch[0] ? nextMatch[0][0] : nextMatch[1][0];
-            nextMatch = tournament.recordWinner(autoWinner);
+            nextMatch = tournament.recordWinner(autoWinner); // No scores for bye matches
         }
 
         if (nextMatch) {
@@ -447,7 +448,11 @@ io.on('connection', (socket) => {
         } else {
             const finalWinnerData = tournament.winners[0];
             const finalWinnerAlias = finalWinnerData && finalWinnerData[1] ? finalWinnerData[1] : 'Unknown';
-            io.emit('tournament_over', { winner: finalWinnerAlias });
+            const allMatchResults = tournament.getAllMatchResults();
+            io.emit('tournament_over', { 
+                winner: finalWinnerAlias,
+                allMatches: allMatchResults 
+            });
             tournament.reset(); // Reset for the next tournament
         }
     });
