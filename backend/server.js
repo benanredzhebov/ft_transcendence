@@ -30,6 +30,9 @@ import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'hbj2io4@@#!v7946h3&^*2cn9!@09*@B627B^*N39&^847,1';
 
+// Store authenticated chat users { socketId: { userId, username } }
+const chatUsers = new Map();
+
 let countdownInterval = null;
 
 // Fix __dirname in ESM
@@ -82,6 +85,9 @@ const io = new Server(server, {
 // ***** Game Logic (WebSocket + Game Loop)*******
 let tournament = null;
 const game = new GameEngine();
+
+// Map of online users: socketId -> { userId, username, alias, blocked:Set }
+const onlineUsers = new Map();
 
 // Improved countdown function with cleanup
 function startSynchronizedCountdown(io, duration = 10) {
@@ -143,6 +149,80 @@ io.on('connection', (socket) => {
 		io.emit('state_update', game.getState());
 	}
 
+	// New event handler for chat authentication
+	socket.on('authenticate', ({ token }) => {
+	    if (!token) {
+	        return; // Or emit an error
+	    }
+	    try {
+	        const decoded = jwt.verify(token, JWT_SECRET);
+	        const name = decoded.username; // Use username from token as alias
+
+	        // Prevent duplicate user sessions in chat
+	        const isAlreadyOnline = [...onlineUsers.values()].some(user => user.userId === decoded.userId);
+	        if (isAlreadyOnline) {
+	            // Optionally, you could disconnect the old socket or just prevent the new one.
+	            // For now, we'll just log it and prevent the new connection from being added.
+	            console.log(`User ${name} is already connected to chat.`);
+	            // We can still send them the list of users.
+	            const onlineList = Array.from(onlineUsers.entries()).map(([id, u]) => ({
+	                socketId: id,
+	                userId: u.userId,
+	                username: u.username,
+	            }));
+	            socket.emit('online_users', onlineList); // Send the list to the new connection
+	            return;
+	        }
+
+			const user = {
+	            userId: decoded.userId,
+	            username: decoded.username,
+	            blocked: new Set(),
+	        };
+	        onlineUsers.set(socket.id, user);
+
+	        // Notify all clients about the new user
+	        const onlineList = Array.from(onlineUsers.entries()).map(([id, u]) => ({
+	            socketId: id,
+	            userId: u.userId,
+	            username: u.username,
+	        }));
+	        io.emit('online_users', onlineList);
+
+	        console.log(`User ${user.username} authenticated`);
+	    } catch (e) {
+	        console.error('Chat authentication failed:', e.message);
+	        // Optionally emit an error back to the client
+	        socket.emit('auth_error', { message: 'Authentication failed' });
+	    }
+	});
+
+	socket.on('authenticate_chat', (token) => {
+        if (!token) return;
+        try {
+            const decoded = jwt.verify(token, JWT_SECRET);
+            const user = { userId: decoded.userId, username: decoded.username };
+            chatUsers.set(socket.id, user);
+            console.log(`Chat user authenticated: ${user.username} (${socket.id})`);
+            // Optional: Notify others that a user has connected
+            io.emit('chat_user_list', Array.from(chatUsers.values()));
+        } catch (e) {
+            console.error('Chat authentication failed:', e.message);
+        }
+    });
+
+    socket.on('send_chat_message', (message) => {
+        const user = chatUsers.get(socket.id);
+        if (user && message) {
+            // Broadcast the message to all authenticated chat clients
+            io.emit('receive_chat_message', {
+                username: user.username,
+                text: message,
+                timestamp: new Date()
+            });
+        }
+    });
+
 	socket.on('player_move', ({ direction, playerId }) => {
 		game.handlePlayerInput(playerId, direction);
 		io.emit('state_update', game.getState());
@@ -171,6 +251,10 @@ io.on('connection', (socket) => {
             socket.emit('alias_registered', { success });
 
             if (success) {
+                onlineUsers.set(socket.id, { userId: user.userId, username: user.username, alias, blocked: new Set() });
+                const onlineList = Array.from(onlineUsers.entries()).map(([id, u]) => ({ socketId: id, alias: u.alias, userId: u.userId, username: u.username }));
+                io.emit('online_users', onlineList);
+
                 const playerList = Array.from(tournament.players.entries()).map(([socketId, {alias, userId, username}]) => ({
                     socketId,
                     alias,
@@ -199,6 +283,32 @@ io.on('connection', (socket) => {
             socket.emit('alias_registered', { success: false, message: 'Invalid token.' });
         }
 	});
+
+    socket.on('private_message', ({ targetSocketId, message }) => {
+            const sender = onlineUsers.get(socket.id);
+            const recipient = onlineUsers.get(targetSocketId);
+            if (!sender || !recipient) return;
+            if (recipient.blocked && recipient.blocked.has(sender.userId)) return;
+            io.to(targetSocketId).emit('private_message', { from: socket.id, message, alias: sender.alias, userId: sender.userId });
+    });
+
+    socket.on('block_user', ({ targetUserId }) => {
+            const user = onlineUsers.get(socket.id);
+            if (user) {
+                    user.blocked.add(targetUserId);
+            }
+    });
+
+    socket.on('unblock_user', ({ targetUserId }) => {
+            const user = onlineUsers.get(socket.id);
+            if (user) user.blocked.delete(targetUserId);
+    });
+
+    socket.on('invite_to_game', ({ targetSocketId }) => {
+            const sender = onlineUsers.get(socket.id);
+            if (!sender) return;
+            io.to(targetSocketId).emit('game_invite', { from: socket.id, alias: sender.alias, userId: sender.userId });
+    });
 
 	// Start tournament when someone clicks "Start Tournament"
 	socket.on('start_tournament', () => {
@@ -343,9 +453,12 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-		console.log('Client disconnected:', socket.id);
-		game.removePlayer(socket.id);
-	
+        console.log('Client disconnected:', socket.id);
+        game.removePlayer(socket.id)
+        onlineUsers.delete(socket.id);
+        const onlineList = Array.from(onlineUsers.entries()).map(([id, u]) => ({ socketId: id, alias: u.alias, userId: u.userId, username: u.username }));
+        io.emit('online_users', onlineList);
+
 		if (tournament) {
 			tournament.removePlayer(socket.id);
 		

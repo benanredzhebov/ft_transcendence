@@ -185,6 +185,17 @@ const credentialsRoutes = (app) =>{
     }
   });
 
+  app.get('/api/profile/public/:id', async (req, reply) => {
+    const { id } = req.params;
+    try {
+      const user = await DB('credentialsTable').where({ id }).first();
+      if (!user) return reply.status(404).send({ error: 'User not found' });
+      reply.send({ userId: user.id, username: user.username, avatar: user.avatar_path || null });
+    } catch (err) {
+      reply.status(500).send({ error: 'Server error while fetching profile' });
+    }
+  });
+
   app.post('/signUp', async (req, reply) => {
     const { username, email, password: rawPassword } = req.body;
     if (!username || !email || !rawPassword) {
