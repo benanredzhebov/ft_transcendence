@@ -1,6 +1,10 @@
 import './dashboard.css';
 import { navigateTo } from './main';
 import { openAvatarSelectionModal } from './avatarModal';
+import { io, Socket } from 'socket.io-client';
+import { renderChat } from './chat';
+let chatSocket: Socket | null = null; // module-level variable for the chat socket
+
 
 
 export function renderDashboard() {
@@ -11,8 +15,6 @@ export function renderDashboard() {
 
   // Clear previous content
   appElement.innerHTML = '';
-
-  // --- Create Elements ---
 
   // Global Container
   const globalContainer = document.createElement('div');
@@ -78,7 +80,23 @@ export function renderDashboard() {
   // --- Append to App ---
   appElement.appendChild(globalContainer);
 
-  // --- Add Event Listeners ---
+  // --- Socket.IO Chat Connection ---
+  const token = sessionStorage.getItem('authToken');
+  if (token && !chatSocket) {
+    chatSocket = io('https://127.0.0.1:3000', {
+      transports: ['websocket'],
+      secure: true,
+    });
+
+    chatSocket.on('connect', () => {
+      console.log('Chat socket connected:', chatSocket?.id);
+      chatSocket?.emit('authenticate_chat', token);
+    });
+
+    chatSocket.on('disconnect', () => {
+      console.log('Chat socket disconnected.');
+    });
+  }
 
   // Sidebar navigation
   const navButtons = [profileButton, gameButton, chatButton];
@@ -94,6 +112,10 @@ export function renderDashboard() {
   // Logout button
   logoutButton.addEventListener('click', () => {
     sessionStorage.removeItem('authToken');
+    if (chatSocket) {
+      chatSocket.disconnect();
+      chatSocket = null;
+    }
     navigateTo('/');
   });
 
@@ -263,11 +285,15 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
       contentArea.appendChild(gameContent);
       break;
     case 'chat':
-      contentArea.innerHTML = `
-        <h3 class="dashboard-content-heading">Chat</h3>
-        <p class="dashboard-content-paragraph">Connect with other players.</p>
-        <!-- Add chat interface elements here -->
-      `;
+      contentArea.innerHTML = `<h3 class="dashboard-content-heading">Chat</h3>`;
+      if (chatSocket && chatSocket.connected) {
+        renderChat(chatSocket);
+      } else {
+        contentArea.innerHTML = `
+          <h3 class="dashboard-content-heading">Chat</h3>
+          <p class="dashboard-content-paragraph">Connecting to chat service... Please wait.</p>
+        `;
+      }
       break;
   }
 }

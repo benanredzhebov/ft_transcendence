@@ -166,15 +166,120 @@
         display: block; /* Removes extra space below image */
     }
 
+
+/* ---------------------------CHAT DASHBOARD------------------------------------- */
+.chat-container {
+    display: flex;
+    flex-direction: row; /* Changed from column to row */
+    height: calc(100% - 60px); /* Adjust based on heading height */
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.chat-player-list {
+    flex: 0 0 220px; /* Give the list a fixed width */
+    padding: 1rem;
+    margin: 0;
+    list-style: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    overflow-y: auto;
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.chat-user-item {
+    padding: 0.75rem;
+    cursor: pointer;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    transition: background-color 0.2s;
+    color: #d1d5db;
+}
+
+.chat-user-item:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.chat-user-item.selected {
+    background-color: rgba(79, 70, 229, 0.6);
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.chat-area {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-messages {
+    flex-grow: 1;
+    padding: 1rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.chat-message {
+    padding: 0.5rem 1rem;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 15px;
+    max-width: 80%;
+    align-self: flex-start;
+}
+
+.chat-message strong {
+    color: #06b6d4;
+    margin-right: 0.5rem;
+}
+
+.chat-message time {
+    font-size: 0.75rem;
+    color: #888;
+    margin-left: 1rem;
+    float: right;
+}
+
+.chat-form {
+    display: flex;
+    padding: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.chat-form input {
+    flex-grow: 1;
+    padding: 0.75rem;
+    border: none;
+    border-radius: 20px;
+    background-color: rgba(0, 0, 0, 0.3);
+    color: #fff;
+    outline: none;
+}
+
+.chat-form button {
+    margin-left: 1rem;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 20px;
+    background-color: #0e7490;
+    color: #fff;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.chat-form button:hover {
+    background-color: #0891b2;
+}
+/* ---------------------------------------------------------------- */
+
+
     #avatarUploadStatus {
         min-height: 1.2em;
         margin-top: 0.5rem;
         font-size: 0.9rem;
         color: #b0b0b0; /* Subdued color for status */
     }
-
-
-
 
 
 /* Profile Details Specific Styles */

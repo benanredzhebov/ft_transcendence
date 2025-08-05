@@ -14,9 +14,9 @@ class GameState {
 	constructor() {
 		this.width = 900;
 		this.height = 600;
-		this.paddleSpeed = 20;
+		this.paddleSpeed = 15;
 		this.initialBallSpeed = 5;
-		this.maxBallSpeed = 10;
+		this.maxBallSpeed = 15;
 
 		this.paddles = {
 			player1: { y: 250, height: 100, width: 10 },
