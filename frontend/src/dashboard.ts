@@ -1,6 +1,7 @@
 import './dashboard.css';
 import { navigateTo } from './main';
 import { openAvatarSelectionModal } from './avatarModal';
+import { profileEdit } from './profileEdit'; // Import the new modal function
 import { io, Socket } from 'socket.io-client';
 import { renderChat } from './chat';
 let chatSocket: Socket | null = null; // module-level variable for the chat socket
@@ -223,7 +224,14 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
         // ***end new***
 
         contentArea.innerHTML = `
-          <h3 class="dashboard-content-heading">${userProfile.username || 'N/A'}</h3>
+          <div class="dashboard-heading-container">
+            <h3 class="dashboard-content-heading">${userProfile.username || 'N/A'}</h3>
+            <button id="edit-profile-btn" class="edit-profile-button" title="Edit Profile">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.532 1.532 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.532 1.532 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
+              </svg>
+            </button>
+          </div>
           <div class="profile-details">
             <div class="profile-avatar-container">
               <img id="profileAvatar" 
@@ -241,6 +249,13 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
         
         const profileAvatarImg = contentArea.querySelector<HTMLImageElement>('#profileAvatar');
         const avatarUploadStatus = contentArea.querySelector<HTMLParagraphElement>('#avatarUploadStatus');
+        const editProfileBtn = contentArea.querySelector<HTMLButtonElement>('#edit-profile-btn');
+
+        if (editProfileBtn && token) {
+          editProfileBtn.addEventListener('click', () => {
+            profileEdit(token, { username: userProfile.username, email: userProfile.email });
+          });
+        }
 
         if (profileAvatarImg && avatarUploadStatus && token) {
           profileAvatarImg.addEventListener('click', () => {
