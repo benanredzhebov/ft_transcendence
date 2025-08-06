@@ -132,6 +132,102 @@ const credentialsRoutes = (app) =>{
     }
   });
 
+
+  // --- UPDATE PROFILE ---
+  app.patch('/api/profile', async (req, reply) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.status(401).send({ error: 'Unauthorized: No token provided' });
+    }
+
+    const token = authHeader.substring(7);
+
+    try {
+      const decodedToken = jwt.verify(token, JWT_SECRET);
+      const userId = decodedToken.userId;
+
+      if (!userId) {
+        return reply.status(401).send({ error: 'Unauthorized: Invalid token payload' });
+      }
+
+      const { username, email, newPassword, currentPassword } = req.body;
+      const updates = {};
+
+      // Fetch the current user from the DB
+      const user = await DB('credentialsTable').where({ id: userId }).first();
+      if (!user) {
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      // Check if the user authenticated via Google
+      const isGoogleUser = user.auth_provider === 'google';
+
+      if (isGoogleUser) {
+        // Google users can only change their username.
+        if (username && username !== user.username) {
+          const existingUser = await DB('credentialsTable').where({ username }).first();
+          if (existingUser && existingUser.id !== userId) {
+            return reply.status(409).send({ error: 'Username is already taken.' });
+          }
+          updates.username = username;
+        }
+      } else {
+        // ***** NO CHECKING CURRENT PASSWORD ****
+        // // Logic for standard (local) users
+        // if (!currentPassword) {
+        //   return reply.status(403).send({ error: 'Current password is required to make changes.' });
+        // }
+
+        // // Verify current password
+        // if (user.password !== hashPassword(currentPassword)) {
+        //   return reply.status(403).send({ error: 'Incorrect current password.' });
+        // }
+
+        // Check for username update
+        if (username && username !== user.username) {
+          const existingUser = await DB('credentialsTable').where({ username }).first();
+          if (existingUser && existingUser.id !== userId) {
+            return reply.status(409).send({ error: 'Username is already taken.' });
+          }
+          updates.username = username;
+        }
+
+        // Check for email update
+        if (email && email !== user.email) {
+          const existingUser = await DB('credentialsTable').where({ email }).first();
+          if (existingUser && existingUser.id !== userId) {
+            return reply.status(409).send({ error: 'Email is already in use.' });
+          }
+          updates.email = email;
+        }
+
+        // Check for password update
+        if (newPassword) {
+          if (newPassword.length < 8) {
+            return reply.status(400).send({ error: 'New password must be at least 8 characters long.' });
+          }
+          updates.password = hashPassword(newPassword);
+        }
+      }
+
+      // If there are updates, apply them to the database
+      if (Object.keys(updates).length > 0) {
+        await DB('credentialsTable').where({ id: userId }).update(updates);
+        return reply.send({ success: true, message: 'Profile updated successfully.' });
+      }
+
+      return reply.send({ success: true, message: 'No changes detected.' });
+
+    } catch (err) {
+      if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+        return reply.status(401).send({ error: `Unauthorized: ${err.message}` });
+      }
+      console.error('Error updating profile:', err);
+      reply.status(500).send({ error: 'Server error while updating profile.' });
+    }
+  });
+
+
   app.post('/api/profile/avatar', async (req, reply) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
