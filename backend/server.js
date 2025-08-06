@@ -328,15 +328,9 @@ io.on('connection', (socket) => {
 			const currentMatch = tournament.getCurrentMatchPlayers();
 			game.prepareForMatch();
 			
-			// Emit the bracket to all clients
-			io.emit('tournament_bracket', {
-				rounds: tournament.rounds.map(round =>
-					round.map(([p1, p2]) => ({
-						player1: p1 ? p1[1].alias : null,
-						player2: p2 ? p2[1].alias : null
-					}))
-				)
-			});
+			// Emit the dynamic bracket to all clients
+			const dynamicBracket = tournament.getDynamicBracket();
+			io.emit('tournament_bracket', dynamicBracket);
 			
 			io.emit('match_announcement', {
 				player1: currentMatch.player1.alias,
@@ -436,6 +430,10 @@ io.on('connection', (socket) => {
 
             // Reset readiness for the new match
             tournament.resetReadyForCurrentMatch();
+
+            // Emit updated bracket after match completion
+            const dynamicBracket = tournament.getDynamicBracket();
+            io.emit('tournament_bracket', dynamicBracket);
 
             if (nextP1 && nextP2) {
                 io.emit('match_announcement', { 

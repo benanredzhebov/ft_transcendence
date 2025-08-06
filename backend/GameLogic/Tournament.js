@@ -162,9 +162,9 @@ class Tournament {
 	});
 	
 	// Add final tournament result if tournament is finished
-	if (this.isFinished && this.tournamentWinner) {
-	  results.push(`🏆 TOURNAMENT CHAMPION: ${this.tournamentWinner[1]}`);
-	}
+	// if (this.isFinished && this.tournamentWinner) {
+	//   results.push(`🏆 TOURNAMENT CHAMPION: ${this.tournamentWinner[1]}`);
+	// }
 	
 	return results;
   }
@@ -251,6 +251,50 @@ class Tournament {
 	this.currentMatch = null;
 	this.winners = [];
 	this.byes = new Set();
+  }
+
+  // Get dynamic bracket structure showing current state with winners
+  getDynamicBracket() {
+	const bracketRounds = [];
+	
+	for (let roundIdx = 0; roundIdx < this.rounds.length; roundIdx++) {
+	  const round = this.rounds[roundIdx];
+	  const bracketRound = [];
+	  
+	  round.forEach((match, matchIdx) => {
+		const [p1Data, p2Data] = match;
+		const player1 = p1Data ? this.players.get(p1Data[0])?.alias : null;
+		const player2 = p2Data ? this.players.get(p2Data[0])?.alias : null;
+		
+		// Find if this match has been completed
+		const completedMatch = this.allMatches.find(m => 
+		  m.round === roundIdx + 1 && 
+		  ((m.player1?.alias === player1 && m.player2?.alias === player2) ||
+		   (m.player1?.alias === player2 && m.player2?.alias === player1))
+		);
+		
+		const bracketMatch = {
+		  player1,
+		  player2,
+		  winner: completedMatch ? completedMatch.winner?.alias : null,
+		  scores: completedMatch ? completedMatch.scores : null,
+		  isComplete: !!completedMatch,
+		  isCurrent: roundIdx === this.currentRound && matchIdx === this.currentMatchIndex,
+		  isBye: !player1 || !player2
+		};
+		
+		bracketRound.push(bracketMatch);
+	  });
+	  
+	  bracketRounds.push(bracketRound);
+	}
+	
+	return { 
+	  rounds: bracketRounds,
+	  currentRound: this.currentRound,
+	  isFinished: this.isFinished,
+	  tournamentWinner: this.tournamentWinner ? this.tournamentWinner[1] : null
+	};
   }
 }
 
