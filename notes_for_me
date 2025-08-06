@@ -28,13 +28,15 @@ Benan Notes. Should to fix :
   - reset tournamentResults[] at the start of each new tournament(in the tournament_lobby handler) to avoid mixing results from previous tournaments.
   - When the tournament ends I  press Return to Lobby, your showTournamentResults function is called.
 
-4. Should develop Tournament bracket to see all matches result
-
+4. Should develop Tournament bracket to see all matches result `FIXED`
 
 5. After the 1st match if 1 player press I'm ready button the countdown starts. Should wait to all players to press the button I'm ready
 
 6. After the tournament has finsished -> Return to Lobby button -> Back to Dashboard button -> appears Disconnected for a while
 
+7. Next match button no need after the second match. `FIXED`
+
+8. After the first match check `I am ready button`
 
 
 ...........
