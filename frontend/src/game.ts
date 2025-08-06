@@ -71,6 +71,9 @@ function promptAliasRegistration() {
 // Remove all overlays
 function removeOverlays() {
 	document.querySelectorAll('.game-overlay').forEach(el => el.remove());
+	// Also hide tournament bracket if it exists
+	const bracketDiv = document.getElementById('tournament-bracket');
+	if (bracketDiv) bracketDiv.style.display = 'none';
 }
 
 function showTournamentDialog(message: string, 
@@ -160,44 +163,107 @@ function setupTournamentHandlers() {
 	socket.on('await_player_ready', () => {
 		console.log('Received await_player_ready');
 		removeOverlays();
+		
+		// Show tournament bracket before each match
+		const bracketDiv = document.getElementById('tournament-bracket');
+		if (bracketDiv) bracketDiv.style.display = 'block';
+		
 		assignedPlayerId = null;
 		showTournamentDialog('Match ready!', {
 			confirmText: 'I\'m Ready'
 		});
 	});
 
-	socket.on('tournament_bracket', (data: { rounds: { player1: string | null, player2: string | null }[][] }) => {
+	socket.on('tournament_bracket', (data: { 
+		rounds: { 
+			player1: string | null, 
+			player2: string | null,
+			winner: string | null,
+			scores: { player1: number, player2: number } | null,
+			isComplete: boolean,
+			isCurrent: boolean,
+			isBye: boolean
+		}[][], 
+		currentRound: number,
+		isFinished: boolean,
+		tournamentWinner: string | null 
+	}) => {
 		(window as any)['lastBracketData'] = data;
 		const bracketDiv = document.getElementById('tournament-bracket') || document.createElement('div');
 		bracketDiv.id = 'tournament-bracket';
-		bracketDiv.innerHTML = '<h2>Tournament Bracket</h2>';
+		bracketDiv.innerHTML = `
+			<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+				<h2 style="margin: 0;">Tournament Overview ${data.isFinished ? '- COMPLETE!' : ''}</h2>
+				<button id="close-bracket" style="background: #ff4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 14px;">×</button>
+			</div>
+		`;
 
 		data.rounds.forEach((round, roundIdx) => {
 			const roundDiv = document.createElement('div');
 			roundDiv.className = 'bracket-round';
-			roundDiv.innerHTML = `<strong>Round ${roundIdx + 1}</strong>`;
+			
+			// Round header with status
+			const isCurrentRound = roundIdx === data.currentRound;
+			const roundStatus = isCurrentRound ? ' (Current)' : '';
+			roundDiv.innerHTML = `<strong>Round ${roundIdx + 1}${roundStatus}</strong>`;
+			
 			round.forEach(match => {
 				const matchDiv = document.createElement('div');
 				matchDiv.className = 'bracket-match';
-
-				// Find result for this match
-				let scoreText = '';
-				if (match.player1 && match.player2) {
-					const result = tournamentResults.find(
-						r =>
-							(r.player1 === match.player1 && r.player2 === match.player2) ||
-							(r.player1 === match.player2 && r.player2 === match.player1)
-					);
-					if (result) {
-						scoreText = ` (${result.score1} : ${result.score2})`;
-					}
+				
+				// Add status classes for styling
+				if (match.isComplete) {
+					matchDiv.classList.add('completed-match');
+				} else if (match.isCurrent) {
+					matchDiv.classList.add('current-match');
+				} else if (match.isBye) {
+					matchDiv.classList.add('bye-match');
 				}
-				matchDiv.textContent = `${match.player1 || 'Bye'} vs ${match.player2 || 'Bye'}${scoreText}`;
+
+				// Build match display text
+				let matchText = '';
+				if (match.isBye) {
+					const nonNullPlayer = match.player1 || match.player2;
+					matchText = `${nonNullPlayer} (Bye)`;
+				} else {
+					matchText = `${match.player1 || 'TBD'} vs ${match.player2 || 'TBD'}`;
+				}
+				
+				// Add scores if match is complete
+				if (match.isComplete && match.scores) {
+					matchText += ` (${match.scores.player1} - ${match.scores.player2})`;
+				}
+				
+				// Add winner indicator
+				if (match.winner) {
+					matchText += ` → Winner: ${match.winner}`;
+				} else if (match.isCurrent) {
+					matchText += ' ← Playing Now';
+				}
+				
+				matchDiv.textContent = matchText;
 				roundDiv.appendChild(matchDiv);
 			});
 			bracketDiv.appendChild(roundDiv);
 		});
-		document.body.prepend(bracketDiv);
+		
+		// Add tournament winner display if finished
+		if (data.isFinished && data.tournamentWinner) {
+			const championDiv = document.createElement('div');
+			championDiv.className = 'tournament-champion';
+			championDiv.innerHTML = `<strong>🏆 CHAMPION: ${data.tournamentWinner}</strong>`;
+			bracketDiv.appendChild(championDiv);
+		}
+		
+		// Add close button functionality
+		const closeBtn = bracketDiv.querySelector('#close-bracket');
+		if (closeBtn) {
+			closeBtn.addEventListener('click', () => {
+				bracketDiv.style.display = 'none';
+			});
+		}
+		
+		document.body.appendChild(bracketDiv);
 	});
 
 
@@ -213,20 +279,24 @@ function setupTournamentHandlers() {
 
 	socket.on('start_match', () => {
 		removeOverlays();
+		// Hide tournament bracket during gameplay
+		const bracketDiv = document.getElementById('tournament-bracket');
+		if (bracketDiv) bracketDiv.style.display = 'none';
+		
 		countDownActive = false; // added to start the match. Allow state updates to be rendered
 		matchStarted = true;
 		gameEnded = false;
 		if (movePlayersFrame === null) movePlayers();
 	});
 
-	socket.on('tournament_over', ({ winner }: { winner: any }) => {
+	socket.on('tournament_over', ({ winner, allMatches }: { winner: any, allMatches: string[] }) => {
 		const winnerName = typeof winner === 'object' && winner !== null ? winner.alias : winner;
 		const dialog = showTournamentDialog(`Tournament winner: ${winnerName}!`, {
 			confirmText: 'Return to Lobby'
 		});
 		dialog.querySelector('button')!.onclick = () => {
 			dialog.remove();
-			showTournamentResults(winnerName);
+			showTournamentResults(winnerName, allMatches);
 			inTournament = false;
 			currentMatch = null;
 			assignedPlayerId = null;
@@ -351,16 +421,6 @@ function showGameOverScreen(winner: string | { alias: string}) {
 		buttons.appendChild(restartBtn);
 	}
 
-	if (inTournament && isHost) {
-		const nextBtn = document.createElement('button');
-		nextBtn.textContent = "Next Match";
-		nextBtn.onclick = () => {
-			socket?.emit('host_start_next_match'); // or a new event like 'next_match'
-			removeOverlays();
-		};
-	buttons.appendChild(nextBtn);
-	}
-
 	const dashboardBtn = document.createElement('button');
 	dashboardBtn.textContent = 'Back to Dashboard';
 	dashboardBtn.onclick = () => {
@@ -378,7 +438,7 @@ function showGameOverScreen(winner: string | { alias: string}) {
 	canvas.parentElement.appendChild(overlay);
 }
 
-function showTournamentResults(winnerName: string) {
+function showTournamentResults(winnerName: string, allMatches?: string[]) {
 	removeOverlays();
 
 	// Debug: log the results before rendering
@@ -389,39 +449,28 @@ function showTournamentResults(winnerName: string) {
 
 	const message = document.createElement('div');
 	message.className = 'game-message';
-	message.innerHTML = `<h2>🏆 Tournament Winner: ${winnerName}</h2>`;
+	message.innerHTML = `<h2>🏆 Tournament Champion: ${winnerName}</h2>`;
 
-	// Render bracket with results
-	const bracketWithResults = document.createElement('div');
-	bracketWithResults.id = 'tournament-bracket';
-	bracketWithResults.innerHTML = '<h2>Tournament Bracket</h2>';
-
-	if ((window as any)['lastBracketData']) {
-		(window as any)['lastBracketData'].rounds.forEach((round: any[], roundIdx: number) => {
-			const roundDiv = document.createElement('div');
-			roundDiv.className = 'bracket-round';
-			roundDiv.innerHTML = `<strong>Round ${roundIdx + 1}</strong>`;
-			round.forEach(match => {
-				const matchDiv = document.createElement('div');
-				matchDiv.className = 'bracket-match';
-				let scoreText = '';
-				if (match.player1 && match.player2) {
-					const result = tournamentResults.find(
-						r =>
-							(r.player1 === match.player1 && r.player2 === match.player2) ||
-							(r.player1 === match.player2 && r.player2 === match.player1)
-					);
-					if (result) {
-						scoreText = ` ${result.score1} : ${result.score2}`;
-					}
-				}
-				matchDiv.textContent = `${match.player1 || 'Bye'} vs ${match.player2 || 'Bye'}${scoreText}`;
-				roundDiv.appendChild(matchDiv);
-			});
-			bracketWithResults.appendChild(roundDiv);
+	// Show all match results if provided
+	if (allMatches && allMatches.length > 0) {
+		const matchResultsDiv = document.createElement('div');
+		matchResultsDiv.id = 'all-match-results';
+		matchResultsDiv.innerHTML = '<h3>Complete Tournament Results</h3>';
+		
+		const resultsList = document.createElement('div');
+		resultsList.className = 'match-results-list';
+		
+		allMatches.forEach(matchResult => {
+			const matchDiv = document.createElement('div');
+			matchDiv.className = 'match-result-item';
+			matchDiv.textContent = matchResult;
+			resultsList.appendChild(matchDiv);
 		});
-		overlay.appendChild(bracketWithResults);
+		
+		matchResultsDiv.appendChild(resultsList);
+		overlay.appendChild(matchResultsDiv);
 	}
+
     const dashboardBtn = document.createElement('button');
     dashboardBtn.textContent = 'Back to Dashboard';
     dashboardBtn.onclick = () => {
@@ -452,20 +501,39 @@ function drawGame(state: GameState) {
 	ctx.fillStyle = 'black';
 	ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-	// Paddles
+	// Center line (dashed)
+	ctx.strokeStyle = 'white';
+	ctx.lineWidth = 2 * Math.min(scaleX, scaleY);
+	ctx.setLineDash([10 * Math.min(scaleX, scaleY), 5 * Math.min(scaleX, scaleY)]);
+	ctx.beginPath();
+	ctx.moveTo(canvas.width / 2, 0);
+	ctx.lineTo(canvas.width / 2, canvas.height);
+	ctx.stroke();
+	ctx.setLineDash([]); // Reset line dash
+
+	// Paddles with rounded edges
 	ctx.fillStyle = 'white';
-	ctx.fillRect(
-	0, 
-	state.paddles.player1.y * scaleY, 
-	10 * scaleX, 
-	state.paddles.player1.height * scaleY
-	);
-	ctx.fillRect(
-	canvas.width - 10 * scaleX,
-	state.paddles.player2.y * scaleY,
-	10 * scaleX,
-	state.paddles.player2.height * scaleY
-	);
+	const paddleRadius = 5 * Math.min(scaleX, scaleY);
+	
+	// Player 1 paddle (left side)
+	const p1X = 0;
+	const p1Y = state.paddles.player1.y * scaleY;
+	const p1Width = 10 * scaleX;
+	const p1Height = state.paddles.player1.height * scaleY;
+	
+	ctx.beginPath();
+	ctx.roundRect(p1X, p1Y, p1Width, p1Height, paddleRadius);
+	ctx.fill();
+	
+	// Player 2 paddle (right side)
+	const p2X = canvas.width - 10 * scaleX;
+	const p2Y = state.paddles.player2.y * scaleY;
+	const p2Width = 10 * scaleX;
+	const p2Height = state.paddles.player2.height * scaleY;
+	
+	ctx.beginPath();
+	ctx.roundRect(p2X, p2Y, p2Width, p2Height, paddleRadius);
+	ctx.fill();
 
 	// Ball
 	ctx.fillStyle = 'yellow';
@@ -479,13 +547,21 @@ function drawGame(state: GameState) {
 	);
 	ctx.fill();
 
-	// Score
+	// Score - Player 1 (left side)
 	ctx.fillStyle = 'green';
 	ctx.font = `${40 * Math.min(scaleX, scaleY)}px Arial`;
-	ctx.textAlign = 'center';
+	ctx.textAlign = 'left';
 	ctx.fillText(
-	`${state.score.player1} : ${state.score.player2}`,
-	canvas.width / 2,
+	`${state.score.player1}`,
+	20 * scaleX,
+	50 * scaleY
+	);
+
+	// Score - Player 2 (right side)
+	ctx.textAlign = 'right';
+	ctx.fillText(
+	`${state.score.player2}`,
+	canvas.width - 20 * scaleX,
 	50 * scaleY
 	);
 }

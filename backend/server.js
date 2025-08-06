@@ -332,15 +332,9 @@ io.on('connection', (socket) => {
 			const currentMatch = tournament.getCurrentMatchPlayers();
 			game.prepareForMatch();
 			
-			// Emit the bracket to all clients
-			io.emit('tournament_bracket', {
-				rounds: tournament.rounds.map(round =>
-					round.map(([p1, p2]) => ({
-						player1: p1 ? p1[1].alias : null,
-						player2: p2 ? p2[1].alias : null
-					}))
-				)
-			});
+			// Emit the dynamic bracket to all clients
+			const dynamicBracket = tournament.getDynamicBracket();
+			io.emit('tournament_bracket', dynamicBracket);
 			
 			io.emit('match_announcement', {
 				player1: currentMatch.player1.alias,
@@ -425,12 +419,13 @@ io.on('connection', (socket) => {
         }
 
         // Now, advance the tournament to the next match
-        let nextMatch = tournament.recordWinner(winnerSocketId);
+        const gameScores = { player1: state.score.player1, player2: state.score.player2 };
+        let nextMatch = tournament.recordWinner(winnerSocketId, gameScores);
 
         // Loop to skip byes and auto-advance until a real match or tournament end
         while (nextMatch && (!nextMatch[0] || !nextMatch[1])) {
             const autoWinner = nextMatch[0] ? nextMatch[0][0] : nextMatch[1][0];
-            nextMatch = tournament.recordWinner(autoWinner);
+            nextMatch = tournament.recordWinner(autoWinner); // No scores for bye matches
         }
 
         if (nextMatch) {
@@ -439,6 +434,10 @@ io.on('connection', (socket) => {
 
             // Reset readiness for the new match
             tournament.resetReadyForCurrentMatch();
+
+            // Emit updated bracket after match completion
+            const dynamicBracket = tournament.getDynamicBracket();
+            io.emit('tournament_bracket', dynamicBracket);
 
             if (nextP1 && nextP2) {
                 io.emit('match_announcement', { 
@@ -451,7 +450,11 @@ io.on('connection', (socket) => {
         } else {
             const finalWinnerData = tournament.winners[0];
             const finalWinnerAlias = finalWinnerData && finalWinnerData[1] ? finalWinnerData[1] : 'Unknown';
-            io.emit('tournament_over', { winner: finalWinnerAlias });
+            const allMatchResults = tournament.getAllMatchResults();
+            io.emit('tournament_over', { 
+                winner: finalWinnerAlias,
+                allMatches: allMatchResults 
+            });
             tournament.reset(); // Reset for the next tournament
         }
     });
