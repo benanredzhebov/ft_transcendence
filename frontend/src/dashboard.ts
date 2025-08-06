@@ -223,7 +223,7 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
         // ***end new***
 
         contentArea.innerHTML = `
-          <h3 class="dashboard-content-heading">Profile</h3>
+          <h3 class="dashboard-content-heading">${userProfile.username || 'N/A'}</h3>
           <div class="profile-details">
             <div class="profile-avatar-container">
               <img id="profileAvatar" 
@@ -233,7 +233,6 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
                    style="cursor: pointer;" 
                    title="Click to change avatar">
             </div>
-            <p class="dashboard-content-paragraph"><strong>Username:</strong> ${userProfile.username || 'N/A'}</p>
             <p class="dashboard-content-paragraph"><strong>Email:</strong> ${userProfile.email || 'N/A'}</p>
             <p id="avatarUploadStatus" class="dashboard-content-paragraph" style="min-height: 1.2em; margin-top: 0.5rem;"></p>
           </div>
