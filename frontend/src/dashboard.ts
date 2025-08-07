@@ -5,8 +5,15 @@ import { profileEdit } from './profileEdit'; // Import the new modal function
 import { io, Socket } from 'socket.io-client';
 import { renderChat } from './chat';
 let chatSocket: Socket | null = null; // module-level variable for the chat socket
+let onlineUserCache: OnlineUser[] = []; // Cache for online users
 
-
+// Define a type for online users for better type safety
+type OnlineUser = {
+  socketId: string;
+  userId: number;
+  username: string;
+  alias: string;
+};
 
 export function renderDashboard() {
   const appElement = document.querySelector<HTMLDivElement>('#app');
@@ -66,10 +73,10 @@ export function renderDashboard() {
   nav.appendChild(profileButton);
   nav.appendChild(gameButton);
   nav.appendChild(chatButton);
-  nav.appendChild(logoutButton); // Add logout button to nav
 
   sidebar.appendChild(sidebarHeading);
   sidebar.appendChild(nav);
+  sidebar.appendChild(logoutButton);
 
   // --- Assemble Card ---
   cardContainer.appendChild(sidebar);
@@ -81,23 +88,88 @@ export function renderDashboard() {
   // --- Append to App ---
   appElement.appendChild(globalContainer);
 
-  // --- Socket.IO Chat Connection ---
+  // --- SOCKET Chat Connection ---
   const token = sessionStorage.getItem('authToken');
-  if (token && !chatSocket) {
+  if (token && (!chatSocket || !chatSocket.connected)) {
+    if (chatSocket) {
+      chatSocket.disconnect(); // Disconnect any old socket
+    }
     chatSocket = io(`${import.meta.env.VITE_URL}`, {
       transports: ['websocket'],
       secure: true,
     });
 
     chatSocket.on('connect', () => {
-      console.log('Chat socket connected:', chatSocket?.id);
+      console.log('%cDEBUG: Session socket connected:', chatSocket?.id);
       chatSocket?.emit('authenticate_chat', token);
     });
 
     chatSocket.on('disconnect', () => {
-      console.log('Chat socket disconnected.');
+      console.log('%cDEBUG: Session socket disconnected.');
+      const list = document.getElementById('online-users-list');
+      if (list) {
+        list.innerHTML = '<li>Disconnected</li>';
+      }
+    });
+
+    // Listen for the list of online users and populate the sidebar
+    chatSocket.on('online_users', (users: OnlineUser[]) => {
+      onlineUserCache = users; // Update the cache
+      console.log('Received online users:', users); // Debug log
+      const list = document.getElementById('online-users-list');
+      if (list) {
+        list.innerHTML = ''; // Clear current list
+        if (users.length > 0) {
+          users.forEach(user => {
+            const li = document.createElement('li');
+            li.className = 'online-user-item';
+            li.dataset.userId = String(user.userId);
+            li.textContent = user.username;
+
+            li.addEventListener('click', (e) => {
+              e.stopPropagation(); // Prevent event from bubbling up
+              // Close other popups
+              document.querySelectorAll('.user-action-popup').forEach(p => p.remove());
+
+              const popup = document.createElement('div');
+              popup.className = 'user-action-popup';
+
+              const viewProfileBtn = document.createElement('button');
+              viewProfileBtn.textContent = 'View Profile';
+              viewProfileBtn.onclick = () => {
+                showUserProfileModal(user.userId);
+                popup.remove();
+              };
+
+              const chatBtn = document.createElement('button');
+              chatBtn.textContent = 'Chat';
+              chatBtn.onclick = () => {
+                navigateTo('/dashboard?view=chat');
+                popup.remove();
+              };
+
+              popup.appendChild(viewProfileBtn);
+              popup.appendChild(chatBtn);
+              
+              li.appendChild(popup);
+            });
+
+            list.appendChild(li);
+          });
+        } else {
+          list.innerHTML = '<li>No users online</li>';
+        }
+      } else {
+        console.log('online-users-list element not found'); // Debug log
+      }
+    });
+    // Close popups when clicking elsewhere
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.user-action-popup').forEach(p => p.remove());
     });
   }
+
+  
 
   // Sidebar navigation
   const navButtons = [profileButton, gameButton, chatButton];
@@ -124,6 +196,81 @@ export function renderDashboard() {
   setActiveView('profile', navButtons, contentArea); // Set initial view to profile
 }
 
+async function showUserProfileModal(userId: number) {
+  const token = sessionStorage.getItem('authToken');
+  if (!token) return;
+
+  // Create modal structure
+  const overlay = document.createElement('div');
+  overlay.className = 'profile-view-modal-overlay';
+
+  const content = document.createElement('div');
+  content.className = 'profile-view-modal-content';
+  content.innerHTML = '<p>Loading profile...</p>';
+
+  overlay.appendChild(content);
+  document.body.appendChild(overlay);
+
+  const closeModal = () => {
+    overlay.remove();
+  };
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      closeModal();
+    }
+  });
+
+  try {
+    const response = await fetch(`/api/profile/public/${userId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.message || 'Could not fetch profile.');
+    }
+
+    const profile = await response.json();
+
+    let matchHistoryHtml = '<p>No match history found.</p>';
+    if (profile.matches && profile.matches.length > 0) {
+      matchHistoryHtml = `
+        <ul class="match-history-list-modal">
+          ${profile.matches.map((match: any) => {
+            const isWinner = match.winner_id === profile.userId;
+            const resultClass = isWinner ? 'win' : 'loss';
+            const resultText = isWinner ? 'Win' : 'Loss';
+            return `
+              <li>
+                <span>${match.player1_username} vs ${match.player2_username} (${match.player1_score}-${match.player2_score})</span>
+                <strong class="${resultClass}">${resultText}</strong>
+              </li>
+            `;
+          }).join('')}
+        </ul>
+      `;
+    }
+
+    content.innerHTML = `
+      <img src="${profile.avatar || '/avatars/default.png'}" alt="${profile.username}'s Avatar" class="profile-view-modal-avatar">
+      <h3>${profile.username}</h3>
+      <div class="profile-view-modal-section">
+        <h4>Match History</h4>
+        ${matchHistoryHtml}
+      </div>
+      <button class="profile-view-modal-close-button">Close</button>
+    `;
+
+    content.querySelector('.profile-view-modal-close-button')?.addEventListener('click', closeModal);
+
+    } catch (error: any) {
+    console.error('Failed to fetch public profile:', error);
+    content.innerHTML = `<p>Error: ${error.message}</p><button class="profile-view-modal-close-button">Close</button>`;
+    content.querySelector('.profile-view-modal-close-button')?.addEventListener('click', closeModal);
+  }
+}
+
 
 async function setActiveView(view: string, buttons: HTMLButtonElement[], contentArea: HTMLDivElement) {
   // Update button styles
@@ -140,6 +287,10 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
   switch (view) {
     case 'profile':
       contentArea.innerHTML = `<h3 class="dashboard-content-heading">Profile</h3><p class="dashboard-content-paragraph">Loading profile...</p>`; // Show loading state
+      // Requesh online users list when switching to profile view
+      if (chatSocket && chatSocket.connected) {
+        chatSocket.emit('request_online_users');
+      }
       try {
         // Get the token from local storage
         const token = sessionStorage.getItem('authToken');
@@ -179,6 +330,40 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
 
         const userProfile = await response.json();
 
+        // *** MODIFIED: Fetch all users for the list instead of online users ***
+        let allUsersHtml = '<li>Loading players...</li>';
+        try {
+          const usersResponse = await fetch('/api/users/all', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (usersResponse.ok) {
+            const allUsers = await usersResponse.json();
+            const onlineUserIds = new Set(onlineUserCache.map(u => u.userId)); // Use the cache
+
+            if (allUsers.length > 0) {
+              // We will generate the HTML here and inject it later.
+              // The event listeners will be attached after the content is in the DOM.
+              allUsersHtml = allUsers.map((user: any) => {
+                const isOnline = onlineUserIds.has(user.id);
+                const indicatorHtml = isOnline ? '<span class="online-indicator"></span>' : '';
+                return `
+                <li class="online-user-item" data-user-id="${user.id}" data-username="${user.username}">
+                  ${indicatorHtml}
+                  <span>${user.username}</span>
+                </li>
+              `;
+              }).join('');
+            } else {
+              allUsersHtml = '<li>No players found.</li>';
+            }
+          } else {
+            allUsersHtml = '<li>Could not load player list.</li>';
+          }
+        } catch (e) {
+          console.error('Failed to fetch all users:', e);
+          allUsersHtml = '<li>Error loading player list.</li>';
+        }
+
         // ***new: to fetch Match Data***
         let matchHistoryHtml = '<p>Loading match history...</p>';
         try {
@@ -192,14 +377,24 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
                 <div class="match-history-container">
                   <h4>Match History</h4>
                   <ul>
-                    ${matches.map((match: any) => `
+                    ${matches.map((match: any) => {
+                      const matchType = match.is_tournament ? 'Tournament' : 'Single Match';
+                      // Format the date for better readability
+                      const matchDate = new Date(match.match_date).toLocaleDateString('en-US', {
+                        year: 'numeric', month: 'short', day: 'numeric'
+                      });
+                      return `
                       <li>
-                        <span>${match.player1_username} (${match.player1_score}) vs ${match.player2_username} (${match.player2_score})</span>
+                        <div class="match-info">
+                          <span class="match-players">${match.player1_username} (${match.player1_score}) vs ${match.player2_username} (${match.player2_score})</span>
+                          <span class="match-meta">${matchType} - ${matchDate}</span>
+                        </div>
                         <strong class="${match.winner_id === userProfile.userId ? 'win' : 'loss'}">
                           ${match.winner_id === userProfile.userId ? 'Win' : 'Loss'}
                         </strong>
                       </li>
-                    `).join('')}
+                    `;
+                    }).join('')}
                   </ul>
                 </div>
               `;
@@ -244,8 +439,73 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
             <p class="dashboard-content-paragraph"><strong>Email:</strong> ${userProfile.email || 'N/A'}</p>
             <p id="avatarUploadStatus" class="dashboard-content-paragraph" style="min-height: 1.2em; margin-top: 0.5rem;"></p>
           </div>
-          ${matchHistoryHtml}
+          <div class="profile-lower-container">
+            <div class="online-users-container-profile">
+              <h4 class="online-users-heading">All Players</h4>
+              <ul id="all-players-list" class="online-users-list">
+                ${allUsersHtml}
+              </ul>
+            </div>
+            ${matchHistoryHtml}
+          </div>
         `;
+
+        // *** NEW: Attach event listeners to the new 'All Players' list ***
+        const allPlayersList = contentArea.querySelector<HTMLUListElement>('#all-players-list');
+        if (allPlayersList) {
+          allPlayersList.querySelectorAll('.online-user-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+              const target = e.currentTarget as HTMLLIElement;
+              const userId = parseInt(target.dataset.userId || '0');
+              const username = target.dataset.username || 'Unknown';
+              if (!userId) return;
+
+              e.stopPropagation();
+              document.querySelectorAll('.user-action-popup').forEach(p => p.remove());
+
+              const popup = document.createElement('div');
+              popup.className = 'user-action-popup';
+
+              // The popup logic now needs to find the username from the inner span
+              const usernameFromSpan = (target.querySelector('span:last-child') as HTMLElement)?.textContent || username;
+
+              const viewProfileBtn = document.createElement('button');
+              viewProfileBtn.textContent = 'View Profile';
+              viewProfileBtn.onclick = () => {
+                showUserProfileModal(userId);
+                popup.remove();
+              };
+
+              const chatBtn = document.createElement('button');
+              chatBtn.textContent = 'Chat';
+              chatBtn.onclick = () => {
+                // This will navigate to the chat view.
+                // You'll need to enhance your chat logic to select this user.
+                navigateTo(`/dashboard?view=chat&user=${usernameFromSpan}`);
+                popup.remove();
+              };
+
+              popup.appendChild(viewProfileBtn);
+              popup.appendChild(chatBtn);
+              
+              // --- FIX: Append popup to the container, not the list item ---
+              // This prevents it from being hidden by the list's overflow style.
+              const container = target.closest('.online-users-container-profile');
+              if (container) {
+                // Position the popup relative to the clicked item
+                const rect = target.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+                popup.style.position = 'absolute';
+                popup.style.top = `${rect.top - containerRect.top}px`;
+                popup.style.left = `${rect.right - containerRect.left}px`;
+                container.appendChild(popup);
+              } else {
+                // Fallback for safety, though it might be clipped
+                target.appendChild(popup);
+              }
+            });
+          });
+        }
         
         const profileAvatarImg = contentArea.querySelector<HTMLImageElement>('#profileAvatar');
         const avatarUploadStatus = contentArea.querySelector<HTMLParagraphElement>('#avatarUploadStatus');
@@ -303,8 +563,28 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
       if (chatSocket && chatSocket.connected) {
         renderChat(chatSocket);
       } else {
+        // Try to get username for display
+        let username = 'User';
+        const token = sessionStorage.getItem('authToken');
+        if (token) {
+          try {
+            const response = await fetch('/api/profile', {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            if (response.ok) {
+              const userProfile = await response.json();
+              username = userProfile.username || 'User';
+            }
+          } catch (e) {
+            // Ignore error, fallback to default username
+          }
+        }
         contentArea.innerHTML = `
-          <h3 class="dashboard-content-heading">Chat</h3>
+          <h3 class="dashboard-content-heading">${username}'s Chat</h3>
           <p class="dashboard-content-paragraph">Connecting to chat service... Please wait.</p>
         `;
       }

@@ -159,6 +159,171 @@
     height: 24px;
 }
 
+
+/* ----------------------------------------- */
+
+.online-users-heading {
+    color: #e0e0e0;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 0.75rem;
+}
+
+.online-users-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 200px; /* matchs Match history height and allow scrolling */
+    overflow-y: auto;
+    overflow-x: visible; /* Add this to allow popups to show */
+}
+
+.online-users-list li {
+    color: #b0b0b0;
+    padding: 0.3rem 0;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.online-users-list li.online-user-item {
+    cursor: pointer;
+    position: relative; /* For positioning the popup */
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    transition: background-color 0.2s ease-in-out;
+    display: flex; /* Use flexbox for alignment */
+    align-items: center; /* Center items vertically */
+}
+
+.online-users-list li.online-user-item:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.user-action-popup {
+    position: absolute;
+    left: 100%;
+    top: 0;
+    margin-left: 10px;
+    background-color: #36393f; /* Darker background */
+    border: 1px solid #4f545c;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    z-index: 1100; /* Above other elements */
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem;
+    gap: 0.5rem;
+}
+
+/* --- NEW: Online Status Indicator --- */
+.online-indicator {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  background-color: #4CAF50; /* Green */
+  border-radius: 50%;
+  margin-right: 8px;
+  flex-shrink: 0; /* Prevent the circle from shrinking */
+}
+
+.user-action-popup button {
+    background-color: #4f545c;
+    color: #dcddde;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    white-space: nowrap;
+}
+
+.user-action-popup button:hover {
+    background-color: #5f656d;
+    color: #ffffff;
+}
+
+/* Profile Modal styles */
+.profile-view-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.75);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1060; /* High z-index */
+}
+
+.profile-view-modal-content {
+  background-color: #2c2f33;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+  width: 100%;
+  max-width: 400px;
+  color: #e0e0e0;
+  text-align: center;
+}
+
+.profile-view-modal-content h3 {
+  margin-top: 0;
+  font-size: 1.5rem;
+}
+
+.profile-view-modal-content p {
+  font-size: 1.1rem;
+  margin: 0.75rem 0;
+}
+
+.profile-view-modal-close-button {
+  margin-top: 1.5rem;
+  padding: 10px 20px;
+  background-color: #7289da;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.2s;
+}
+
+.profile-view-modal-close-button:hover {
+    background-color: #5f73bc;
+}
+
+
+/* --- NEW: Styles for the profile page layout --- */
+.profile-lower-container {
+  display: flex;
+  flex-direction: row;
+  gap: 2rem;
+  margin-top: 2rem;
+  align-items: flex-start; /* Aligns the tops of the two boxes */
+}
+
+.online-users-container-profile {
+  flex: 1; /* Make it a flexible item */
+  background-color: rgba(0, 0, 0, 0.15);
+  padding: 1.5rem;
+  border-radius: 8px;
+  position: relative; /* Add this to contain popups correctly */
+}
+
+.online-users-list {
+  /* ... existing styles ... */
+  overflow-y: auto;
+  overflow-x: visible; /* Add this to allow popups to show */
+}
+
+/* ----------------------------------------- */
+
+
 .dashboard-content-paragraph {
     color: #cccccc;
     margin-bottom: 1rem;
@@ -377,11 +542,14 @@
     transform: translateY(-0.125rem);
 }
 
-/* Match History Styles */
+/* ------------------------------------------------------------------------------- */
+
 .match-history-container {
-  margin-top: 2rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: 1.5rem;
+  flex: 1; /* Make it a flexible item */
+  background-color: rgba(0, 0, 0, 0.15);
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin-top: 0; /* Reset margin-top as it's now controlled by the flex gap */
 }
 .match-history-container h4 {
   margin-bottom: 1rem;
@@ -403,6 +571,26 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   font-size: 0.9rem;
 }
+
+/* --- NEW: Styles for detailed match info --- */
+.match-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px; /* Adds a small space between the lines */
+}
+
+.match-players {
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.match-meta {
+  font-size: 0.8rem;
+  color: #8e8e8e; /* A dimmer color for metadata */
+}
+/* --- END NEW --- */
+
 .match-history-container li:last-child {
   border-bottom: none;
 }
