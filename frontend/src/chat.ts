@@ -70,7 +70,7 @@ export function renderChat(socket: Socket): () => void {
   // --- FIXED ISSUE: Show OnlineUser List - Authenticate the user for the chat ---
   const token = sessionStorage.getItem('authToken');
   if (token) {
-    socket.emit('authenticate', { token });
+    socket.emit('authenticate_chat', token);
   } else {
     appendMessage('System', 'Authentication token not found. Chat disabled.');
     console.error('Chat: No auth token found in sessionStorage.');
@@ -172,7 +172,10 @@ export function renderChat(socket: Socket): () => void {
 
   // Return a cleanup function
   return () => {
-    socket.disconnect(); // Disconnect the socket
+    // CRITICAL FIX: Do NOT disconnect the socket here.
+    // The socket is persistent and managed by the dashboard.
+    // We only want to remove the chat UI elements from the DOM.
+    // socket.disconnect();
     container.remove();
   };
 }

@@ -13,19 +13,6 @@ const __dirname = path.dirname(__filename);
 // IMPORTANT: Store it in an env.
 const JWT_SECRET = process.env.JWT_SECRET || 'hbj2io4@@#!v7946h3&^*2cn9!@09*@B627B^*N39&^847,1';
 
-
-// const noHandlerRoute = (app) => {
-// 	app.setNotFoundHandler((req, reply) => {
-// 	reply.sendFile('index.html'); // Serve index.html from the root specified in fastifyStatic
-// });
-// }
-
-// Fallback for SPA routing
-// app.setNotFoundHandler((req, reply) => {
-// 	reply.sendFile('index.html'); // Serve index.html from the root specified in fastifyStatic
-// });
-
-
 const developerRoutes = (app) => {
 
 	app.get('/data', async (req, reply) => {
@@ -286,8 +273,29 @@ const credentialsRoutes = (app) =>{
     try {
       const user = await DB('credentialsTable').where({ id }).first();
       if (!user) return reply.status(404).send({ error: 'User not found' });
-      reply.send({ userId: user.id, username: user.username, avatar: user.avatar_path || null });
+
+      // Fetch match history for the user
+      const matches = await DB('matchHistory')
+        .select(
+          'matchHistory.*',
+          'p1.username as player1_username',
+          'p2.username as player2_username'
+        )
+        .leftJoin('credentialsTable as p1', 'matchHistory.player1_id', 'p1.id')
+        .leftJoin('credentialsTable as p2', 'matchHistory.player2_id', 'p2.id')
+        .where('player1_id', id)
+        .orWhere('player2_id', id)
+        .orderBy('match_date', 'desc')
+        .limit(20);
+
+      reply.send({ 
+        userId: user.id, 
+        username: user.username, 
+        avatar: user.avatar_path || null,
+        matches: matches
+      });
     } catch (err) {
+      console.error('Error fetching public profile:', err);
       reply.status(500).send({ error: 'Server error while fetching profile' });
     }
   });
@@ -356,6 +364,33 @@ const credentialsRoutes = (app) =>{
     } catch (e) {
       console.error(e);
       reply.status(500).send({ error: 'Login failed due to server error' });
+    }
+  });
+
+  app.get('/api/users/all', async (req, reply) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      reply.status(401).send({ error: 'Unauthorized: No token provided' });
+      return;
+    }
+    const token = authHeader.split(' ')[1];
+
+    try {
+      // Verify the token to ensure the request is authenticated
+      jwt.verify(token, JWT_SECRET);
+
+      // Fetch all users from the database
+      const allUsers = await DB('credentialsTable').select('id', 'username').orderBy('username', 'asc');
+      
+      reply.send(allUsers);
+
+    } catch (err) {
+      if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+        reply.status(401).send({ error: `Unauthorized: ${err.message}` });
+      } else {
+        console.error('Error fetching all users:', err);
+        reply.status(500).send({ error: 'Server error while fetching users' });
+      }
     }
   });
 

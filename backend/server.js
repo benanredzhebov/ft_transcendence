@@ -34,9 +34,6 @@ import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'hbj2io4@@#!v7946h3&^*2cn9!@09*@B627B^*N39&^847,1';
 
-// Store authenticated chat users { socketId: { userId, username } }
-const chatUsers = new Map();
-
 let countdownInterval = null;
 
 // Fix __dirname in ESM
@@ -153,79 +150,74 @@ io.on('connection', (socket) => {
 		io.emit('state_update', game.getState());
 	}
 
-	// New event handler for chat authentication
-	socket.on('authenticate', ({ token }) => {
-	    if (!token) {
-	        return; // Or emit an error
-	    }
-	    try {
-	        const decoded = jwt.verify(token, JWT_SECRET);
-	        const name = decoded.username; // Use username from token as alias
-
-	        // Prevent duplicate user sessions in chat
-	        const isAlreadyOnline = [...onlineUsers.values()].some(user => user.userId === decoded.userId);
-	        if (isAlreadyOnline) {
-	            // Optionally, you could disconnect the old socket or just prevent the new one.
-	            // For now, we'll just log it and prevent the new connection from being added.
-	            console.log(`User ${name} is already connected to chat.`);
-	            // We can still send them the list of users.
-	            const onlineList = Array.from(onlineUsers.entries()).map(([id, u]) => ({
-	                socketId: id,
-	                userId: u.userId,
-	                username: u.username,
-	            }));
-	            socket.emit('online_users', onlineList); // Send the list to the new connection
-	            return;
-	        }
-
-			const user = {
-	            userId: decoded.userId,
-	            username: decoded.username,
-	            blocked: new Set(),
-	        };
-	        onlineUsers.set(socket.id, user);
-
-	        // Notify all clients about the new user
-	        const onlineList = Array.from(onlineUsers.entries()).map(([id, u]) => ({
-	            socketId: id,
-	            userId: u.userId,
-	            username: u.username,
-	        }));
-	        io.emit('online_users', onlineList);
-
-	        console.log(`User ${user.username} authenticated`);
-	    } catch (e) {
-	        console.error('Chat authentication failed:', e.message);
-	        // Optionally emit an error back to the client
-	        socket.emit('auth_error', { message: 'Authentication failed' });
-	    }
-	});
 
 	socket.on('authenticate_chat', (token) => {
-        if (!token) return;
-        try {
-            const decoded = jwt.verify(token, JWT_SECRET);
-            const user = { userId: decoded.userId, username: decoded.username };
-            chatUsers.set(socket.id, user);
-            console.log(`Chat user authenticated: ${user.username} (${socket.id})`);
-            // Optional: Notify others that a user has connected
-            io.emit('chat_user_list', Array.from(chatUsers.values()));
+        if (!token) {
+        socket.emit('auth_error', { message: 'Authentication token not provided.' });
+        return;
+    	}
+    	try {
+    	    const decoded = jwt.verify(token, JWT_SECRET);
+
+    	    // Prevent duplicate user sessions
+    	    const isAlreadyOnline = [...onlineUsers.values()].some(user => user.userId === decoded.userId);
+    	    if (isAlreadyOnline) {
+    	        console.log(`User ${decoded.username} is already connected.`);
+    	        // Filter out the current user from the list
+    	        const onlineList = Array.from(onlineUsers.entries())
+    	            .filter(([id, u]) => u.userId !== decoded.userId)
+    	            .map(([id, u]) => ({ socketId: id, userId: u.userId, username: u.username, alias: u.alias }));
+    	        socket.emit('online_users', onlineList);
+    	        return;
+    	    }
+
+    	    const user = {
+    	        userId: decoded.userId,
+    	        username: decoded.username,
+    	        alias: decoded.username, // Default alias to username
+    	        blocked: new Set(),
+    	    };
+    	    onlineUsers.set(socket.id, user);
+    	    console.log(`User authenticated for session: ${user.username} (${socket.id})`);
+
+    	    // Notify all clients about the updated user list (excluding themselves)
+    	    onlineUsers.forEach((_, socketId) => {
+    	        const currentUser = onlineUsers.get(socketId);
+    	        if (currentUser) {
+    	            const onlineList = Array.from(onlineUsers.entries())
+    	                .filter(([id, u]) => u.userId !== currentUser.userId)
+    	                .map(([id, u]) => ({ 
+    	                    socketId: id, 
+    	                    alias: u.alias, 
+    	                    userId: u.userId, 
+    	                    username: u.username 
+    	                }));
+					
+    	            io.to(socketId).emit('online_users', onlineList);
+    	        }
+    	    });
+    	    console.log(`DEBUG: Broadcasting personalized online_users. Total unique users: ${onlineUsers.size}`);
         } catch (e) {
             console.error('Chat authentication failed:', e.message);
+            socket.emit('auth_error', { message: 'Authentication failed' });
         }
     });
 
-    socket.on('send_chat_message', (message) => {
-        const user = chatUsers.get(socket.id);
-        if (user && message) {
-            // Broadcast the message to all authenticated chat clients
-            io.emit('receive_chat_message', {
-                username: user.username,
-                text: message,
-                timestamp: new Date()
-            });
-        }
-    });
+	socket.on('request_online_users', () => {
+	    const currentUser = onlineUsers.get(socket.id);
+	    if (currentUser) {
+	        const onlineList = Array.from(onlineUsers.entries())
+	            .filter(([id, u]) => u.userId !== currentUser.userId)
+	            .map(([id, u]) => ({ 
+	                socketId: id, 
+	                alias: u.alias, 
+	                userId: u.userId, 
+	                username: u.username 
+	            }));
+			
+	        socket.emit('online_users', onlineList);
+	    }
+	});
 
 	socket.on('player_move', ({ direction, playerId }) => {
 		game.handlePlayerInput(playerId, direction);
@@ -458,29 +450,50 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log('Client disconnected:', socket.id);
-        game.removePlayer(socket.id)
-        onlineUsers.delete(socket.id);
-        const onlineList = Array.from(onlineUsers.entries()).map(([id, u]) => ({ socketId: id, alias: u.alias, userId: u.userId, username: u.username }));
-        io.emit('online_users', onlineList);
-
-		if (tournament) {
-			tournament.removePlayer(socket.id);
+    
+    	// Get the user data before deleting (to check if it was an authenticated user)
+    	const disconnectedUser = onlineUsers.get(socket.id);
 		
-			// Check if current match player disconnected
-			if (tournament.currentMatch) {
-				const [p1, p2] = tournament.currentMatch;
-				if (socket.id === p1[0] || socket.id === p2?.[0]) {
-					game.resetGame();
-					io.emit('match_cancelled');
-				}
-			}
-			// End tournament if not enough players
-			if (tournament.players.size < 2) {
-				// tournament = null;
-				tournament.reset(); // ***new:
-				io.emit('tournament_cancelled');
-			}
-		}
+    	// Clean up from all systems
+    	game.removePlayer(socket.id);
+    	onlineUsers.delete(socket.id);
+		
+    	// Handle tournament cleanup
+    	if (tournament) {
+    	    tournament.removePlayer(socket.id);
+		
+    	    // Check if current match player disconnected
+    	    if (tournament.currentMatch) {
+    	        const [p1, p2] = tournament.currentMatch;
+    	        if (socket.id === p1[0] || socket.id === p2?.[0]) {
+    	            game.resetGame();
+    	            io.emit('match_cancelled');
+    	        }
+    	    }
+    	}
+	
+    	// Log if this was an authenticated user
+    	if (disconnectedUser) {
+    	    console.log(`DEBUG: User ${disconnectedUser.username} disconnected. Broadcasting updated list.`);
+    	}
+	
+    	// Send personalized online lists to remaining users (excluding themselves)
+    	onlineUsers.forEach((_, socketId) => {
+    	    const currentUser = onlineUsers.get(socketId);
+    	    if (currentUser) {
+					const onlineList = Array.from(onlineUsers.entries())
+    	            .filter(([id, u]) => u.userId !== currentUser.userId)
+    	            .map(([id, u]) => ({ 
+    	                socketId: id, 
+    	                alias: u.alias, 
+    	                userId: u.userId, 
+    	                username: u.username 
+    	            }));
+				
+    	        io.to(socketId).emit('online_users', onlineList);
+    	    }
+    	});
+    	console.log(`DEBUG: Broadcasting updated online_users after disconnect. Total users: ${onlineUsers.size}`);
 	});
 });
 
