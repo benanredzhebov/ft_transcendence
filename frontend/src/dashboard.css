@@ -269,6 +269,9 @@
   max-width: 400px;
   color: #e0e0e0;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .profile-view-modal-content h3 {
@@ -601,4 +604,120 @@
 .match-history-container .loss {
   color: #f87171; /* Red */
   font-weight: 700;
+}
+
+/* --- Friends List Styles (in Profile View) --- */
+.friends-list-container {
+  margin-top: 2rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 1.5rem;
+}
+
+.friends-list-container h4 {
+  margin-bottom: 1rem;
+  color: #fff;
+  font-weight: 600;
+}
+
+.friends-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 220px; /* Adjust as needed */
+  overflow-y: auto;
+}
+
+.friends-list li {
+  display: flex;
+  align-items: center;
+  padding: 0.6rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.friends-list li:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.friends-list li img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  margin-right: 12px;
+  object-fit: cover;
+}
+
+.friends-list li span {
+  font-weight: 500;
+  color: #d1d5db;
+}
+
+/* --- Profile View Modal Styles --- */
+.profile-view-modal-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.profile-view-modal-action-button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: background-color 0.2s;
+    background-color: #0e7490; /* Cyan color */
+    color: white;
+}
+
+.profile-view-modal-action-button:hover {
+    background-color: #0891b2; /* Lighter cyan */
+}
+
+.profile-view-modal-action-button.delete {
+    background-color: #e11d48; /* Red for delete */
+}
+
+.profile-view-modal-action-button.delete:hover {
+    background-color: #be123c; /* Darker red on hover */
+}
+
+.profile-view-modal-action-button:disabled {
+    background-color: #4b5563;
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.profile-view-modal-avatar {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 1rem;
+    border: 3px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+
+/* DELETE??? */
+.profile-view-modal-close-button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+    background-color: #747f8d; /* Gray */
+    color: white;
+}
+
+/* DELETE??? */
+.profile-view-modal-close-button:hover {
+    background-color: #616e78; /* Darker gray */
 }
