@@ -276,13 +276,6 @@ const credentialsRoutes = (app) =>{
 
       // Fetch match history for the user
       const matches = await DB('matchHistory')
-        .select(
-          'matchHistory.*',
-          'p1.username as player1_username',
-          'p2.username as player2_username'
-        )
-        .leftJoin('credentialsTable as p1', 'matchHistory.player1_id', 'p1.id')
-        .leftJoin('credentialsTable as p2', 'matchHistory.player2_id', 'p2.id')
         .where('player1_id', id)
         .orWhere('player2_id', id)
         .orderBy('match_date', 'desc')
@@ -364,6 +357,129 @@ const credentialsRoutes = (app) =>{
     } catch (e) {
       console.error(e);
       reply.status(500).send({ error: 'Login failed due to server error' });
+    }
+  });
+
+  // --- FRIENDS API ---
+
+  // Get list of friends (accepted)
+  app.get('/api/friends', async (req, reply) => {
+    const token = req.headers.authorization?.substring(7);
+    if (!token) return reply.status(401).send({ error: 'Unauthorized' });
+
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      const userId = decoded.userId;
+
+      const friends = await DB('friendships')
+        .where({ status: 'accepted' })
+        .andWhere(function() {
+          this.where('user1_id', userId).orWhere('user2_id', userId)
+        })
+        .then(rows => {
+          const friendIds = rows.map(row => row.user1_id === userId ? row.user2_id : row.user1_id);
+          return DB('credentialsTable').whereIn('id', friendIds).select('id', 'username', 'avatar_path');
+        });
+      
+      reply.send(friends);
+    } catch (err) {
+      console.error('Error fetching friends:', err);
+      reply.status(500).send({ error: 'Server error' });
+    }
+  });
+
+  // Send a friend request
+  app.post('/api/friends/add', async (req, reply) => {
+    const token = req.headers.authorization?.substring(7);
+    const { friendId } = req.body;
+    if (!token) return reply.status(401).send({ error: 'Unauthorized' });
+
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      const userId = decoded.userId;
+
+      if (userId === friendId) {
+        return reply.status(400).send({ error: 'You cannot add yourself as a friend.' });
+      }
+
+      // Ensure user IDs are ordered to prevent duplicate rows (user1 < user2)
+      const user1_id = Math.min(userId, friendId);
+      const user2_id = Math.max(userId, friendId);
+
+      const existing = await DB('friendships').where({ user1_id, user2_id }).first();
+      if (existing) {
+        return reply.status(409).send({ error: 'You are already friends.' });
+      }
+
+      await DB('friendships').insert({
+        user1_id,
+        user2_id,
+        status: 'accepted',
+        action_user_id: userId
+      });
+
+      reply.send({ success: true, message: 'Friend added successfully.' });
+    } catch (err) {
+      console.error('Error adding friend:', err);
+      reply.status(500).send({ error: 'Server error' });
+    }
+  });
+
+  // Delete a friend
+  app.post('/api/friends/delete', async (req, reply) => {
+    const token = req.headers.authorization?.substring(7);
+    const { friendId } = req.body;
+    if (!token) return reply.status(401).send({ error: 'Unauthorized' });
+
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      const userId = decoded.userId;
+
+      // Order IDs to match how they are stored in the database
+      const user1_id = Math.min(userId, friendId);
+      const user2_id = Math.max(userId, friendId);
+
+      const deletedCount = await DB('friendships').where({ user1_id, user2_id }).del();
+
+      if (deletedCount > 0) {
+        reply.send({ success: true, message: 'Friend removed successfully.' });
+      } else {
+        reply.status(404).send({ error: 'Friendship not found.' });
+      }
+    } catch (err) {
+      console.error('Error deleting friend:', err);
+      reply.status(500).send({ error: 'Server error' });
+    }
+  });
+
+
+  // Get friendship status with a specific user
+  app.get('/api/friends/status/:otherUserId', async (req, reply) => {
+    const token = req.headers.authorization?.substring(7);
+    const { otherUserId } = req.params;
+    if (!token) return reply.status(401).send({ error: 'Unauthorized' });
+
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      const userId = decoded.userId;
+
+      const user1_id = Math.min(userId, parseInt(otherUserId));
+      const user2_id = Math.max(userId, parseInt(otherUserId));
+
+      const friendship = await DB('friendships').where({ user1_id, user2_id }).first();
+
+      if (!friendship) {
+        return reply.send({ status: 'none' });
+      }
+      
+      reply.send({ 
+        status: friendship.status,
+        action_user_id: friendship.action_user_id
+      });
+
+    } catch (err) {
+      console.error('Error fetching friendship status:', err);
+      reply.status(500).send({ error: 'Server error' });
     }
   });
 

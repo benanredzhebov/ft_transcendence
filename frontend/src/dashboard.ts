@@ -126,32 +126,9 @@ export function renderDashboard() {
             li.dataset.userId = String(user.userId);
             li.textContent = user.username;
 
-            li.addEventListener('click', (e) => {
-              e.stopPropagation(); // Prevent event from bubbling up
-              // Close other popups
-              document.querySelectorAll('.user-action-popup').forEach(p => p.remove());
-
-              const popup = document.createElement('div');
-              popup.className = 'user-action-popup';
-
-              const viewProfileBtn = document.createElement('button');
-              viewProfileBtn.textContent = 'View Profile';
-              viewProfileBtn.onclick = () => {
-                showUserProfileModal(user.userId);
-                popup.remove();
-              };
-
-              const chatBtn = document.createElement('button');
-              chatBtn.textContent = 'Chat';
-              chatBtn.onclick = () => {
-                navigateTo('/dashboard?view=chat');
-                popup.remove();
-              };
-
-              popup.appendChild(viewProfileBtn);
-              popup.appendChild(chatBtn);
-              
-              li.appendChild(popup);
+            li.addEventListener('click', () => {
+              // Directly open the profile modal instead of showing a popup.
+              showUserProfileModal(user.userId);
             });
 
             list.appendChild(li);
@@ -222,16 +199,19 @@ async function showUserProfileModal(userId: number) {
   });
 
   try {
-    const response = await fetch(`/api/profile/public/${userId}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    // Fetch 2 data tables
+    const [profileResponse, statusResponse] = await Promise.all([
+      fetch(`/api/profile/public/${userId}`, { headers: { 'Authorization': `Bearer ${token}` } }),
+      fetch(`/api/friends/status/${userId}`, { headers: { 'Authorization': `Bearer ${token}` } })
+    ]);
 
-    if (!response.ok) {
-      const err = await response.json();
+    if (!profileResponse.ok) {
+      const err = await profileResponse.json();
       throw new Error(err.message || 'Could not fetch profile.');
     }
 
-    const profile = await response.json();
+    const profile = await profileResponse.json();
+    const friendship = statusResponse.ok ? await statusResponse.json() : { status: 'none' };
 
     let matchHistoryHtml = '<p>No match history found.</p>';
     if (profile.matches && profile.matches.length > 0) {
@@ -252,18 +232,107 @@ async function showUserProfileModal(userId: number) {
       `;
     }
 
+    let friendButtonHtml = '';
+    if (friendship.status === 'accepted') {
+      // If they are friends, show a "Delete Friend" button
+      friendButtonHtml = `<button id="delete-friend-btn" class="profile-view-modal-action-button delete">Delete Friend</button>`;
+    } else {
+      // Otherwise, show the "Add Friend" button
+      friendButtonHtml = `<button id="add-friend-btn" class="profile-view-modal-action-button">Add Friend</button>`;
+    }
+
     content.innerHTML = `
       <img src="${profile.avatar || '/avatars/default.png'}" alt="${profile.username}'s Avatar" class="profile-view-modal-avatar">
       <h3>${profile.username}</h3>
+      <div class="profile-view-modal-actions">
+        ${friendButtonHtml}
+      </div>
       <div class="profile-view-modal-section">
         <h4>Match History</h4>
         ${matchHistoryHtml}
       </div>
-      <button class="profile-view-modal-close-button">Close</button>
     `;
 
-    content.querySelector('.profile-view-modal-close-button')?.addEventListener('click', closeModal);
+    // The modal can still be closed by clicking the overlay, so this button is removed per your request.
+    // content.querySelector('.profile-view-modal-close-button')?.addEventListener('click', closeModal);
 
+    // Event listener for the new "Delete Friend" button
+    const deleteFriendBtn = content.querySelector<HTMLButtonElement>('#delete-friend-btn');
+    if (deleteFriendBtn) {
+      deleteFriendBtn.addEventListener('click', async () => {
+        if (!confirm(`Are you sure you want to remove ${profile.username} as a friend?`)) {
+          return;
+        }
+        deleteFriendBtn.disabled = true;
+        deleteFriendBtn.textContent = 'Deleting...';
+        try {
+          const res = await fetch('/api/friends/delete', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ friendId: userId })
+          });
+
+          if (res.ok) {
+            closeModal();
+            // Refresh the main profile view to update the friends list
+            const contentArea = document.querySelector<HTMLDivElement>('#dashboard-content');
+            const navButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.dashboard-nav-button'));
+            if (contentArea && navButtons.length > 0) {
+              setActiveView('profile', navButtons, contentArea);
+            }
+          } else {
+            const err = await res.json();
+            throw new Error(err.error || 'Failed to delete friend.');
+          }
+        } catch (e: any) {
+          alert(`Error: ${e.message}`);
+          deleteFriendBtn.disabled = false;
+          deleteFriendBtn.textContent = 'Delete Friend';
+        }
+      });
+    }
+
+    const addFriendBtn = content.querySelector<HTMLButtonElement>('#add-friend-btn');
+    if (addFriendBtn) {
+      addFriendBtn.addEventListener('click', async () => {
+        addFriendBtn.disabled = true;
+        addFriendBtn.textContent = 'Adding...';
+        try {
+          const res = await fetch('/api/friends/add', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ friendId: userId })
+          });
+          if (res.ok) {
+            addFriendBtn.textContent = 'Friend Added';
+            addFriendBtn.disabled = true; // Keep it disabled to prevent multiple adds
+
+            // Refresh the profile view to show the new friend in the list
+            const contentArea = document.querySelector<HTMLDivElement>('#dashboard-content');
+            const navButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.dashboard-nav-button'));
+            if (contentArea && navButtons.length > 0) {
+                closeModal();
+                setActiveView('profile', navButtons, contentArea);
+                console.log("***Refreshing setActiveView");
+            }
+          } else {
+            const err = await res.json();
+            addFriendBtn.textContent = err.error || 'Error';
+            // Optionally re-enable the button if the error is recoverable
+            // addFriendBtn.disabled = false; 
+          }
+        } catch (e) {
+          addFriendBtn.textContent = 'Error';
+          // addFriendBtn.disabled = false;
+        }
+      });
+    }
     } catch (error: any) {
     console.error('Failed to fetch public profile:', error);
     content.innerHTML = `<p>Error: ${error.message}</p><button class="profile-view-modal-close-button">Close</button>`;
@@ -418,6 +487,43 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
         }
         // ***end new***
 
+        // ***new: to fetch Friends List***
+        let friendsListHtml = '<p>Loading friends...</p>';
+        try {
+          const friendsResponse = await fetch('/api/friends', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (friendsResponse.ok) {
+            const friends = await friendsResponse.json();
+            if (friends.length > 0) {
+              friendsListHtml = `
+                <div class="friends-list-container">
+                  <h4>Friends</h4>
+                  <ul class="friends-list">
+                    ${friends.map((friend: any) => `
+                      <li data-user-id="${friend.id}">
+                        <img src="${friend.avatar_path || '/avatars/default.png'}" alt="${friend.username}'s avatar" />
+                        <span>${friend.username}</span>
+                      </li>
+                    `).join('')}
+                  </ul>
+                </div>
+              `;
+            } else {
+              friendsListHtml = `
+                <div class="friends-list-container">
+                  <h4>Friends</h4>
+                  <p>No friends yet😢</p>
+                </div>`;
+            }
+          } else {
+            friendsListHtml = '<p>Could not load friends list.</p>';
+          }
+        } catch (e) {
+          console.error('Failed to fetch friends:', e);
+          friendsListHtml = '<p>Error loading friends list.</p>';
+        }
+
         contentArea.innerHTML = `
           <div class="dashboard-heading-container">
             <h3 class="dashboard-content-heading">${userProfile.username || 'N/A'}</h3>
@@ -440,6 +546,7 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
             <p id="avatarUploadStatus" class="dashboard-content-paragraph" style="min-height: 1.2em; margin-top: 0.5rem;"></p>
           </div>
           <div class="profile-lower-container">
+            ${friendsListHtml}
             <div class="online-users-container-profile">
               <h4 class="online-users-heading">All Players</h4>
               <ul id="all-players-list" class="online-users-list">
@@ -450,6 +557,19 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
           </div>
         `;
 
+        // Add click listeners to new friends list
+        const friendsList = contentArea.querySelector<HTMLUListElement>('.friends-list');
+        if (friendsList) {
+          friendsList.querySelectorAll('li').forEach(item => {
+            item.addEventListener('click', () => {
+              const friendId = parseInt(item.dataset.userId || '0');
+              if (friendId) {
+                showUserProfileModal(friendId);
+              }
+            });
+          });
+        }
+
         // *** NEW: Attach event listeners to the new 'All Players' list ***
         const allPlayersList = contentArea.querySelector<HTMLUListElement>('#all-players-list');
         if (allPlayersList) {
@@ -457,51 +577,8 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
             item.addEventListener('click', (e) => {
               const target = e.currentTarget as HTMLLIElement;
               const userId = parseInt(target.dataset.userId || '0');
-              const username = target.dataset.username || 'Unknown';
-              if (!userId) return;
-
-              e.stopPropagation();
-              document.querySelectorAll('.user-action-popup').forEach(p => p.remove());
-
-              const popup = document.createElement('div');
-              popup.className = 'user-action-popup';
-
-              // The popup logic now needs to find the username from the inner span
-              const usernameFromSpan = (target.querySelector('span:last-child') as HTMLElement)?.textContent || username;
-
-              const viewProfileBtn = document.createElement('button');
-              viewProfileBtn.textContent = 'View Profile';
-              viewProfileBtn.onclick = () => {
+              if (userId) {
                 showUserProfileModal(userId);
-                popup.remove();
-              };
-
-              const chatBtn = document.createElement('button');
-              chatBtn.textContent = 'Chat';
-              chatBtn.onclick = () => {
-                // This will navigate to the chat view.
-                // You'll need to enhance your chat logic to select this user.
-                navigateTo(`/dashboard?view=chat&user=${usernameFromSpan}`);
-                popup.remove();
-              };
-
-              popup.appendChild(viewProfileBtn);
-              popup.appendChild(chatBtn);
-              
-              // --- FIX: Append popup to the container, not the list item ---
-              // This prevents it from being hidden by the list's overflow style.
-              const container = target.closest('.online-users-container-profile');
-              if (container) {
-                // Position the popup relative to the clicked item
-                const rect = target.getBoundingClientRect();
-                const containerRect = container.getBoundingClientRect();
-                popup.style.position = 'absolute';
-                popup.style.top = `${rect.top - containerRect.top}px`;
-                popup.style.left = `${rect.right - containerRect.left}px`;
-                container.appendChild(popup);
-              } else {
-                // Fallback for safety, though it might be clipped
-                target.appendChild(popup);
               }
             });
           });
