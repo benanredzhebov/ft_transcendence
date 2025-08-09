@@ -1,27 +1,20 @@
-// Update with your config settings.
+// knexfile.js (ESM)
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-/**
- * @type { Object.<string, import("knex").Knex.Config> }
- */
-//-------init knex and the data  base
-// npm install knex --save
-// npm install sqlite3
-// npx knex init
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-module.exports = {
-
+const config = {
   development: {
     client: 'sqlite3',
     connection: {
-      filename: './data_controller/data/myData.db'
+      filename: path.resolve(__dirname, 'data/myData.db'),
     },
     migrations: {
-      directory : './data/migrations'  //where you declere the tables, what data type and so on
+      directory: path.resolve(__dirname, 'data/migrations'),
     },
-    // seeds :{  // test data to initialize the data base
-    //   directory: "./data/seeds"
-    // },
-    useNullAsDefault : true,
+    useNullAsDefault: true,
   },
-
 };
+
+export default config;

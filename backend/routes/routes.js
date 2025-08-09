@@ -1,19 +1,26 @@
+import { fileURLToPath } from 'url';
+import path from 'path';
+import DB from '../data_controller/dbConfig.js';
+import hashPassword from '../crypto/crypto.js';
+import { exchangeCodeForToken, fetchUserInfo } from '../token_google/exchangeToken.js';
+import jwt from 'jsonwebtoken';
+import { promises as fs } from 'node:fs'; // For async file operations
+import crypto from 'node:crypto'; // For generating unique filenames
+import speakeasy from 'speakeasy';
+import QRCode from 'qrcode';
 
-const path = require('path');
-const DB = require('../data_controller/dbConfig.js');
-const hashPassword = require('../crypto/crypto.js');
-const {exchangeCodeForToken, fetchUserInfo} = require('../token_google/exchangeToken.js')
-const jwt = require('jsonwebtoken');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// IMPORTANT: Store your secret in an environment variable in a real application!
+// IMPORTANT: Store it in an env.
 const JWT_SECRET = process.env.JWT_SECRET || 'hbj2io4@@#!v7946h3&^*2cn9!@09*@B627B^*N39&^847,1';
 
 
-const noHandlerRoute = (app) => {
-	app.setNotFoundHandler((req, reply) => {
-	reply.sendFile('index.html'); // Serve index.html from the root specified in fastifyStatic
-});
-}
+// const noHandlerRoute = (app) => {
+// 	app.setNotFoundHandler((req, reply) => {
+// 	reply.sendFile('index.html'); // Serve index.html from the root specified in fastifyStatic
+// });
+// }
 
 // Fallback for SPA routing
 // app.setNotFoundHandler((req, reply) => {
@@ -22,6 +29,79 @@ const noHandlerRoute = (app) => {
 
 
 const developerRoutes = (app) => {
+  //2FA --test
+  app.post('/api/2fa/setup', async (req, reply) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.status(401).send({ error: 'Unauthorized: No token provided' });
+    }
+
+    const token = authHeader.substring(7);
+    let decodedToken;
+    try {
+      decodedToken = jwt.verify(token, JWT_SECRET);
+    } catch (err) {
+      return reply.status(401).send({ error: 'Unauthorized: Invalid token' });
+    }
+
+    const userId = decodedToken.userId;
+    if (!userId) {
+      return reply.status(401).send({ error: 'Unauthorized: Invalid token payload' });
+    }
+
+    // Generate a 2FA secret
+    const secret = speakeasy.generateSecret({ name: 'YourAppName' });
+
+    // Save the secret to the database
+    await DB('credentialsTable').where({ id: userId }).update({ two_factor_secret: secret.base32 });
+
+    // Generate a QR code for the user to scan
+    const qrCodeDataURL = await QRCode.toDataURL(secret.otpauth_url);
+
+    reply.send({ success: true, qrCode: qrCodeDataURL });
+  });
+
+  // -------------verify-------------
+
+  app.post('/api/2fa/verify', async (req, reply) => {
+    const { token } = req.body;
+    const authHeader = req.headers.authorization;
+  
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.status(401).send({ error: 'Unauthorized: No token provided' });
+    }
+  
+    const jwtToken = authHeader.substring(7);
+    let decodedToken;
+    try {
+      decodedToken = jwt.verify(jwtToken, JWT_SECRET);
+    } catch (err) {
+      return reply.status(401).send({ error: 'Unauthorized: Invalid token' });
+    }
+  
+    const userId = decodedToken.userId;
+    if (!userId) {
+      return reply.status(401).send({ error: 'Unauthorized: Invalid token payload' });
+    }
+  
+    const user = await DB('credentialsTable').where({ id: userId }).first();
+    if (!user || !user.two_factor_secret) {
+      return reply.status(400).send({ error: '2FA is not set up for this user' });
+    }
+  
+    const verified = speakeasy.totp.verify({
+      secret: user.two_factor_secret,
+      encoding: 'base32',
+      token,
+    });
+  
+    if (!verified) {
+      return reply.status(400).send({ error: 'Invalid 2FA token' });
+    }
+  
+    reply.send({ success: true, message: '2FA verified successfully' });
+  });
+  
 
 	app.get('/data', async (req, reply) => {
 		try {
@@ -84,9 +164,10 @@ const credentialsRoutes = (app) =>{
 
       // JSON sending to frontend
       const userProfile = {
+        userId: user.id,
         username: user.username,
         email: user.email,
-        avatar: user.avatar ? user.avatar.toString('base64') : null // Send avatar as base64
+        avatar: user.avatar_path || null // Send avatar path
       };
 
       reply.send(userProfile); // Send profile data as JSON
@@ -100,6 +181,127 @@ const credentialsRoutes = (app) =>{
       }
     }
   });
+
+  // *** new: to get Match Data***
+  app.get('/api/profile/matches', async (req, reply) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.status(401).send({ error: 'Unauthorized: No token provided' });
+    }
+
+    const token = authHeader.substring(7);
+    try {
+      const decodedToken = jwt.verify(token, JWT_SECRET);
+      const userId = decodedToken.userId;
+
+      const matches = await DB('matchHistory')
+        .where('player1_id', userId)
+        .orWhere('player2_id', userId)
+        .orderBy('match_date', 'desc')
+        .limit(20);
+      
+      reply.send(matches);
+    } catch (err) {
+      console.error('Error fetching match history:', err);
+      reply.status(500).send({ error: 'Server error while fetching match history' });
+    }
+  });
+
+
+  // --- UPDATE PROFILE ---
+  app.patch('/api/profile', async (req, reply) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.status(401).send({ error: 'Unauthorized: No token provided' });
+    }
+
+    const token = authHeader.substring(7);
+
+    try {
+      const decodedToken = jwt.verify(token, JWT_SECRET);
+      const userId = decodedToken.userId;
+
+      if (!userId) {
+        return reply.status(401).send({ error: 'Unauthorized: Invalid token payload' });
+      }
+
+      const { username, email, newPassword, currentPassword } = req.body;
+      const updates = {};
+
+      // Fetch the current user from the DB
+      const user = await DB('credentialsTable').where({ id: userId }).first();
+      if (!user) {
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      // Check if the user authenticated via Google
+      const isGoogleUser = user.auth_provider === 'google';
+
+      if (isGoogleUser) {
+        // Google users can only change their username.
+        if (username && username !== user.username) {
+          const existingUser = await DB('credentialsTable').where({ username }).first();
+          if (existingUser && existingUser.id !== userId) {
+            return reply.status(409).send({ error: 'Username is already taken.' });
+          }
+          updates.username = username;
+        }
+      } else {
+        // ***** NO CHECKING CURRENT PASSWORD ****
+        // // Logic for standard (local) users
+        // if (!currentPassword) {
+        //   return reply.status(403).send({ error: 'Current password is required to make changes.' });
+        // }
+
+        // // Verify current password
+        // if (user.password !== hashPassword(currentPassword)) {
+        //   return reply.status(403).send({ error: 'Incorrect current password.' });
+        // }
+
+        // Check for username update
+        if (username && username !== user.username) {
+          const existingUser = await DB('credentialsTable').where({ username }).first();
+          if (existingUser && existingUser.id !== userId) {
+            return reply.status(409).send({ error: 'Username is already taken.' });
+          }
+          updates.username = username;
+        }
+
+        // Check for email update
+        if (email && email !== user.email) {
+          const existingUser = await DB('credentialsTable').where({ email }).first();
+          if (existingUser && existingUser.id !== userId) {
+            return reply.status(409).send({ error: 'Email is already in use.' });
+          }
+          updates.email = email;
+        }
+
+        // Check for password update
+        if (newPassword) {
+          if (newPassword.length < 8) {
+            return reply.status(400).send({ error: 'New password must be at least 8 characters long.' });
+          }
+          updates.password = hashPassword(newPassword);
+        }
+      }
+
+      // If there are updates, apply them to the database
+      if (Object.keys(updates).length > 0) {
+        await DB('credentialsTable').where({ id: userId }).update(updates);
+        return reply.send({ success: true, message: 'Profile updated successfully.' });
+      }
+
+      return reply.send({ success: true, message: 'No changes detected.' });
+
+    } catch (err) {
+      if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+        return reply.status(401).send({ error: `Unauthorized: ${err.message}` });
+      }
+      console.error('Error updating profile:', err);
+      reply.status(500).send({ error: 'Server error while updating profile.' });
+    }
+  });
+
 
   app.post('/api/profile/avatar', async (req, reply) => {
     const authHeader = req.headers.authorization;
@@ -119,40 +321,49 @@ const credentialsRoutes = (app) =>{
       return reply.status(401).send({ error: 'Unauthorized: Invalid token payload' });
     }
 
-    console.log('--- Avatar Upload Request ---');
-    console.log('Request Headers:', JSON.stringify(req.headers, null, 2));
-
-    const data = await req.file(); // From @fastify/multipart
-    console.log('Data from req.file():', data); // Log what req.file() returns
-
+    const data = await req.file();
 
     if (!data || !data.file) {
-      console.error('Condition failed: !data || !data.file. Data was:', data);
       return reply.status(400).send({ error: 'No file uploaded or invalid format.' });
     }
 
-    // Basic MIME type check (can be more robust)
-    console.log('Uploaded file mimetype:', data.mimetype);
     if (!['image/jpeg', 'image/png', 'image/gif'].includes(data.mimetype)) {
-        return reply.status(400).send({ error: 'Invalid file type. Only JPG, PNG, GIF allowed.' });
+      return reply.status(400).send({ error: 'Invalid file type. Only JPG, PNG, GIF allowed.' });
     }
 
     try {
-      const buffer = await data.toBuffer(); // Get file content as a buffer
+      const buffer = await data.toBuffer();
+      const fileExtension = path.extname(data.filename) || `.${data.mimetype.split('/')[1]}`;
+      const uniqueFilename = `${userId}_${crypto.randomBytes(8).toString('hex')}${fileExtension}`;
+      const avatarFilePath = path.join(__dirname, '..', '..', 'uploads', 'avatars', uniqueFilename); // Adjusted path
+      const avatarUrlPath = `/uploads/avatars/${uniqueFilename}`; // Path to be stored in DB and used by frontend
+
+      await fs.writeFile(avatarFilePath, buffer);
 
       await DB('credentialsTable')
         .where({ id: userId })
-        .update({ avatar: buffer });
-        console.log('Avatar updated in DB for userId:', userId);
+        .update({ avatar_path: avatarUrlPath }); // Store the URL path
 
+      console.log('Avatar path updated in DB for userId:', userId, 'to', avatarUrlPath);
 
-      reply.send({ success: true, message: 'Avatar uploaded successfully.', avatar: buffer.toString('base64') });
+      reply.send({ success: true, message: 'Avatar uploaded successfully.', avatarPath: avatarUrlPath }); // Send the path back
     } catch (error) {
       console.error('Error uploading avatar:', error);
-      if (error.message.includes('Request file too large')) { // Example for specific error
-        return reply.status(413).send({ error: 'File too large.' });
+      if (error.code === 'FST_REQ_FILE_TOO_LARGE') {
+        return reply.status(413).send({ error: 'File too large. Maximum size is 5MB.' });
       }
       reply.status(500).send({ error: 'Failed to upload avatar.' });
+    }
+  });
+
+  app.get('/api/profile/public/:id', async (req, reply) => {
+    const { id } = req.params;
+    try {
+      const user = await DB('credentialsTable').where({ id }).first();
+      if (!user) return reply.status(404).send({ error: 'User not found' });
+      reply.send({ userId: user.id, username: user.username, avatar: user.avatar_path || null });
+    } catch (err) {
+      reply.status(500).send({ error: 'Server error while fetching profile' });
     }
   });
 
@@ -191,15 +402,29 @@ const credentialsRoutes = (app) =>{
   app.post('/login', async (req, reply) => {
     const { email, password: rawPassword } = req.body;
     if (!email || !rawPassword) {
-      reply.status(400).send({ error: 'Email and password are required' });
+      reply.status(401).send({ error: 'Email and password are required' });
       return;
     }
-
+   
     try {
       const user = await DB('credentialsTable').where({ email }).first();
       if (!user || user.password !== hashPassword(rawPassword)) {
         reply.status(401).send({ error: 'Invalid email or password' });
         return;
+      }
+      if (user.two_factor_secret) {
+        // Step 1 complete: return short-lived temp token
+        const tempToken = jwt.sign(
+          { userId: user.id, twoFAPending: true },
+          JWT_SECRET,
+          { expiresIn: '5m' } // short lifespan
+        );
+      
+        return reply.send({
+          success: true,
+          requires2FA: true,
+          tempToken
+        });
       }
       // Generate token
       const tokenPayload = {
@@ -223,36 +448,104 @@ const credentialsRoutes = (app) =>{
     }
   });
 
+  app.post('/login/2fa', async (req, reply) => {
+    const { token: twoFAToken, tempToken } = req.body;
+  
+    if (!tempToken) {
+      return reply.status(400).send({ error: 'Temporary token is required' });
+    }
+  
+    let decoded;
+    try {
+      decoded = jwt.verify(tempToken, JWT_SECRET);
+    } catch (err) {
+      return reply.status(401).send({ error: 'Invalid or expired temporary token' });
+    }
+  
+    if (!decoded.twoFAPending) {
+      return reply.status(400).send({ error: 'Not a valid 2FA pending session' });
+    }
+  
+    const user = await DB('credentialsTable').where({ id: decoded.userId }).first();
+    if (!user) {
+      return reply.status(404).send({ error: 'User not found' });
+    }
+  
+    const verified = speakeasy.totp.verify({
+      secret: user.two_factor_secret,
+      encoding: 'base32',
+      token: twoFAToken,
+      window: 1
+
+    });
+  
+    if (!verified) {
+      return reply.status(400).send({ error: 'Invalid 2FA code' });
+    }
+  
+    // 2FA passed → issue real token
+    const realToken = jwt.sign(
+      { userId: user.id, email: user.email, username: user.username },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+  
+    reply.send({ success: true, token: realToken });
+  });
+
 
   app.get('/username-google', async (req, reply) => {
-    const { code } = req.query; // Extract the authozation code from the query parameters
+    const { code } = req.query;
 
     if (!code) {
-      reply.status(400).send({ error: 'Authorization code is missing' });
-      return;
+      return reply.redirect('/login?error=google_auth_missing_code');
     }
 
     try {
-      // Exchange the authorization code for an access token (implement this logic)
       const tokenResponse = await exchangeCodeForToken(code);
-      const userInfo = await fetchUserInfo(tokenResponse.access_token);
-      const {email, name} = userInfo;
-      const existingUser = await DB('credentialsTable').where({ email }).first();
-      if (!existingUser) {
-        const username = name;
-        let passwordBeforeHas = '##';
-      const password = hashPassword(passwordBeforeHas);
-        const [id] =  await DB('credentialsTable').insert({ email, username, password });
-        const user = { id, email, username };
-
+      if (!tokenResponse || !tokenResponse.access_token) {
+        console.error('Failed to exchange code for token or access_token missing:', tokenResponse);
+        return reply.redirect('/login?error=google_token_exchange_failed');
       }
-      reply.redirect('/dashboard');
+      const userInfo = await fetchUserInfo(tokenResponse.access_token);
+      if (!userInfo || !userInfo.email) {
+        console.error('Failed to fetch user info from Google or email missing:', userInfo);
+        return reply.redirect('/login?error=google_user_info_failed');
+      }
+
+      const {email, name} = userInfo;
+      let user = await DB('credentialsTable').where({ email }).first();
+
+      if (!user) {
+        const username = name || `user_${Date.now()}`; // Use Google name or a fallback
+        // For Google-authenticated users, you might use a placeholder password
+        // or a flag indicating Google auth, as they won't use this password to log in.
+        const placeholderPassword = hashPassword(`google_auth_${email}_${Date.now()}`);
+        const [id] =  await DB('credentialsTable').insert({
+            email,
+            username,
+            password: placeholderPassword
+            // Consider adding a field like 'auth_provider' and set it to 'google'
+        });
+        user = { id, email, username }; // Use the newly created user's details
+      }
+
+      // Generate JWT token for the user
+      const tokenPayload = {
+        userId: user.id,
+        email: user.email,
+        username: user.username
+      };
+      const jwtAuthToken = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '1h' });
+
+      reply.redirect(`/google-auth-handler?token=${jwtAuthToken}`);
 
     } catch (e) {
-      console.error(e);
-      reply.status(500).send({ error: 'Failed to handle Google OAuth callback' });
+      console.error('Error during Google OAuth callback:', e);
+      // Redirect to frontend login with a generic error
+      reply.redirect('/login?error=google_auth_failed');
     }
   });
 }
 
-module.exports = {developerRoutes, credentialsRoutes, noHandlerRoute};
+export {developerRoutes, credentialsRoutes};
