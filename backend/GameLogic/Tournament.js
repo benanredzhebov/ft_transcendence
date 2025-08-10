@@ -190,6 +190,24 @@ class Tournament {
 	return this.generateNextRound();
   }
 
+  getNextMatch() {
+	// Check if there are more matches in current round
+	if (this.currentMatchIndex + 1 < this.rounds[this.currentRound].length) {
+	  return this.rounds[this.currentRound][this.currentMatchIndex + 1];
+	}
+	
+	// Check if we can generate next round
+	if (this.winners.length > 1) {
+	  // Simulate next round generation to see what the next match would be
+	  const winnersCopy = [...this.winners];
+	  if (winnersCopy.length >= 2) {
+		return [winnersCopy.pop(), winnersCopy.pop()];
+	  }
+	}
+	
+	return null; // No more matches
+  }
+
   generateNextRound() {
 	const nextRound = [];
 	const winnersCopy = [...this.winners];

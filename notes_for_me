@@ -35,7 +35,7 @@ Benan Notes. Should to fix :
 
 7. Next match button no need after the second match. `FIXED`
 
-8. After the first match check `I am ready button`
+8. After the first match check `I am ready button`. `FIXED`
 
 Don't get a new socket for each alias registration.
 SOCKET CONNECTION PATTERN:
@@ -91,6 +91,61 @@ The Flow:
 3. Server receives connection → New socket ID is generated (like abc123)
 4. Player registers alias → socket.emit('register_alias', { alias, token })
 5. Server maps socket to alias → tournament.registerPlayer(socket.id, alias, user)
+
+Key edge cases to test for the game logic and tournament system :
+
+Tournament Edge Cases
+
+1. Odd Number of Players: Ensure the bracket handles byes correctly and no player is left unassigned. `OK`
+2. Single Player Tournament: Verify the system gracefully handles or prevents tournaments with only one participant. `OK`
+3. Simultaneous "I'm Ready" Presses: Multiple players press "I'm Ready" at the same time—check for race conditions or missed events.
+4. Player Disconnects Mid-Tournament: Test what happens if a player disconnects during a match or between rounds. Is the match forfeited, or does the system wait? `FIXED - FORFEIT SYSTEM IMPLEMENTED + BUG FIXED`
+
+**PROPER DISCONNECT BEHAVIOR:**
+
+- **During a match**: Disconnected player automatically forfeits, opponent wins and advances
+- **Between rounds**: Player is removed from tournament, bracket adjusts automatically
+- **Tournament continuation**: If ≥2 players remain, tournament continues; if <2 players, tournament is cancelled
+- **User feedback**: Clear notifications about forfeits and cancellations
+- **Automatic progression**: Winner is recorded, bracket updates, next match starts automatically
+
+**Implementation Details:**
+
+- Server: Enhanced disconnect handler with forfeit logic in server.js
+- Tournament: Added getNextMatch() method for automatic progression
+- Frontend: Added handlers for match_forfeit, match_cancelled, tournament_cancelled events
+- UI: Proper dialog messages and tournament bracket visibility management
+
+**Bug Fix Applied:**
+
+- Fixed `recordWinner` call to use `winnerSocketId` instead of `winnerData` object
+- Added proper forfeit scores (5-0 for winner)
+- Improved error handling with try-catch block
+- Fixed timing issue where disconnected player was removed before recording winner
+- Added proper tournament state management and next match progression5. Alias Re-registration: A player tries to register a new alias after already registering one. Ensure the mapping updates or is blocked as intended.
+
+6. Multiple Tabs/Windows: Same user opens multiple tabs—does the system create duplicate sockets or aliases?
+7. Tournament Reset During Active Match: Admin or system triggers a reset while a match is ongoing. Ensure all states are cleared and no orphaned matches remain.
+8. Rapid Tournament Start/Stop: Start and immediately stop tournaments repeatedly to check for memory leaks or lingering state.
+9. Bracket Visibility: Changing browser tab/window during registration or matches—ensure bracket and state persist or recover correctly.
+10. Return to Lobby/Back to Dashboard: After tournament ends, test navigation to lobby/dashboard and verify results/history are displayed and not mixed with previous tournaments.
+
+Game Logic Edge Cases
+
+1. Score Overflow: Unusually high scores or rapid scoring—ensure score display and logic do not break.
+2. Simultaneous Paddle Movement: Both players move paddles at the same time—check for sync issues.
+3. Ball Stuck/Infinite Loop: Ball gets stuck in a corner or bounces infinitely—ensure game can recover.
+4. AI Mode vs Tournament Mode: Switching between modes—verify correct socket query and game logic.
+5. Countdown/Ready State: Countdown starts before all players are ready, or countdown box overlaps with bracket—check UI and logic.
+6. Game End Conditions: Game ends due to disconnect, timeout, or score—ensure proper winner assignment and result recording.
+7. Multiple "Next Match" Events: Ensure "Next Match" button/events do not appear or trigger after the second match (already fixed, but re-test).
+
+General Edge Cases
+
+1. Socket Reconnection: Socket disconnects and reconnects—verify alias re-prompt and state recovery.
+2. Server Restart: Server is stopped and restarted during a tournament—check for proper client/server state sync.
+3. Invalid Data: Malformed or missing data sent from client—ensure server validation and error handling.
+4. Concurrent Tournaments: Multiple tournaments started at once—ensure isolation of state and results.
 
 ...........
 Vullnerable

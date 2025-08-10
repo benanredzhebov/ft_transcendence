@@ -463,21 +463,85 @@ io.on('connection', (socket) => {
         io.emit('online_users', onlineList);
 
 		if (tournament) {
-			tournament.removePlayer(socket.id);
-		
+			const disconnectedPlayer = tournament.players.get(socket.id);
+			
 			// Check if current match player disconnected
 			if (tournament.currentMatch) {
 				const [p1, p2] = tournament.currentMatch;
-				if (socket.id === p1[0] || socket.id === p2?.[0]) {
-					game.resetGame();
-					io.emit('match_cancelled');
+				const isPlayerInMatch = socket.id === p1[0] || socket.id === p2?.[0];
+				
+				if (isPlayerInMatch) {
+					// Determine the winner (the opponent who didn't disconnect)
+					const winnerSocketId = socket.id === p1[0] ? p2?.[0] : p1[0];
+					const winnerData = winnerSocketId ? tournament.players.get(winnerSocketId) : null;
+					const loserAlias = disconnectedPlayer?.alias || 'Unknown Player';
+					
+					if (winnerData && winnerSocketId) {
+						try {
+							// Record the forfeit victory with forfeit scores
+							const forfeitScores = { 
+								player1: socket.id === p1[0] ? 0 : 5, 
+								player2: socket.id === p2?.[0] ? 0 : 5 
+							};
+							
+							// Don't remove the disconnected player yet - recordWinner needs to validate
+							let nextMatch = tournament.recordWinner(winnerSocketId, forfeitScores);
+							
+							game.resetGame();
+							io.emit('match_forfeit', {
+								winner: winnerData.alias,
+								loser: loserAlias,
+								reason: 'Player disconnected'
+							});
+							
+							// Update bracket display
+							const bracket = tournament.getDynamicBracket();
+							io.emit('tournament_bracket', bracket);
+							
+							if (tournament.isFinished) {
+								const finalWinnerAlias = tournament.tournamentWinner?.alias || 'Unknown';
+								const allMatchResults = tournament.allMatches;
+								io.emit('tournament_over', { 
+									winner: finalWinnerAlias,
+									allMatches: allMatchResults 
+								});
+								tournament.reset();
+							} else if (nextMatch) {
+								// Announce the next match
+								const [player1, player2] = nextMatch;
+								io.emit('match_announcement', { 
+									player1: player1[1].alias, 
+									player2: player2[1].alias 
+								});
+								// Reset ready states for new match
+								tournament.resetReadyForCurrentMatch();
+							}
+						} catch (error) {
+							console.error('Error handling forfeit:', error);
+							game.resetGame();
+							io.emit('match_cancelled', {
+								reason: 'Error processing forfeit: ' + error.message
+							});
+						}
+					} else {
+						// No valid opponent found, cancel match
+						game.resetGame();
+						io.emit('match_cancelled', {
+							reason: 'Player disconnected, no valid opponent'
+						});
+					}
 				}
 			}
-			// End tournament if not enough players
+			
+			// Remove player from tournament AFTER handling the match
+			tournament.removePlayer(socket.id);
+			
+			// End tournament if not enough players remain
 			if (tournament.players.size < 2) {
-				// tournament = null;
-				tournament.reset(); // ***new:
-				io.emit('tournament_cancelled');
+				tournament.reset();
+				io.emit('tournament_cancelled', {
+					reason: 'Not enough players remaining'
+				});
 			}
 		}
 	});

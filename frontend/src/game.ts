@@ -303,6 +303,48 @@ function setupTournamentHandlers() {
 		};
 	});
 
+	socket.on('match_forfeit', ({ winner, loser, reason }: { winner: string, loser: string, reason: string }) => {
+		removeOverlays();
+		const dialog = showTournamentDialog(
+			`Match Forfeit!<br><strong>${winner}</strong> wins by forfeit<br>${loser} ${reason}`, 
+			{ confirmText: 'Continue Tournament' }
+		);
+		dialog.querySelector('button')!.onclick = () => {
+			dialog.remove();
+			inTournament = true;
+			// Show tournament bracket again
+			const bracketDiv = document.getElementById('tournament-bracket');
+			if (bracketDiv) bracketDiv.style.display = 'block';
+		};
+	});
+
+	socket.on('match_cancelled', ({ reason }: { reason?: string }) => {
+		removeOverlays();
+		const message = reason ? `Match cancelled: ${reason}` : 'Match cancelled due to player disconnection';
+		const dialog = showTournamentDialog(message, { confirmText: 'OK' });
+		dialog.querySelector('button')!.onclick = () => {
+			dialog.remove();
+			// Show tournament bracket again
+			const bracketDiv = document.getElementById('tournament-bracket');
+			if (bracketDiv) bracketDiv.style.display = 'block';
+		};
+	});
+
+	socket.on('tournament_cancelled', ({ reason }: { reason?: string }) => {
+		removeOverlays();
+		document.getElementById('tournament-bracket')?.remove();
+		const message = reason ? `Tournament cancelled: ${reason}` : 'Tournament cancelled';
+		const dialog = showTournamentDialog(message, { confirmText: 'Return to Dashboard' });
+		dialog.querySelector('button')!.onclick = () => {
+			dialog.remove();
+			inTournament = false;
+			currentMatch = null;
+			assignedPlayerId = null;
+			// Redirect to dashboard
+			window.location.href = '/dashboard.html';
+		};
+	});
+
 	socket.on('tournament_lobby', ({ message, players, }) => {
 		tournamentResults = [];
 		isHost = players.length > 0 && aliasMap && Object.values(aliasMap).includes(players[0]) && 
