@@ -1,0 +1,84 @@
+1. needs Update the WebSocket connection in your frontend :
+
+const socket = io('wss://localhost:3000', {
+  transports: ['websocket'],
+  secure: true
+});
+
+2. Read Canvas
+
+3.There are 2 .gitignore files. Make it 1
+
+
+
+
+
+Benan Notes. Should to fix :
+
+1. While registering the aliases, if the window is changed, the bracket disappears. `FIXED`
+  - assignned new variable to track if the alias is registered `aliasRegistered = false`. added it to 'alias_registered'
+  - adjusted the event listener for the visibility change
+  - also re-promt on socket reconnect if not registered
+
+2. After stopping the server and rerunning it, pressing "Back" in the game window does not make the result disappear. `FIXED`
+  - frontend socket.on -> disconnect part
+
+3. After the tournament ends, pressing the "Return to Lobby" button does not display the results. `FIXED`
+  - Save tournament results in the state_update
+  - reset tournamentResults[] at the start of each new tournament(in the tournament_lobby handler) to avoid mixing results from previous tournaments.
+  - When the tournament ends I  press Return to Lobby, your showTournamentResults function is called.
+
+4. Should develop Tournament bracket to see all matches result `FIXED`
+
+5. After the 1st match if 1 player press I'm ready button the countdown starts. Should wait to all players to press the button I'm ready
+
+6. After the tournament has finsished -> Return to Lobby button -> Back to Dashboard button -> appears Disconnected for a while
+
+7. Next match button no need after the second match. `FIXED`
+
+8. After the first match check `I am ready button`
+
+
+...........
+Vullnerable 
+...........
+
+1. A denial-of-service (DoS) attack is a cyberattack that aims to make a computer system, website, or network unavailable to legitimate users by overwhelming it with traffic or resource requests. This disruption can occur due to a single source (DoS) or multiple sources (DDoS), all targeting the same resource. 
+Here's a more detailed breakdown:
+Goal:
+DoS attacks aim to prevent legitimate users from accessing a service, such as a website, email, or online banking. 
+Method:
+Attackers flood the target with traffic, often by sending more requests than the system can handle, or by exploiting vulnerabilities in the system. 
+Impact:
+A successful DoS attack can result in downtime, loss of availability of services, and potentially financial losses for the targeted organization. 
+Types:
+DoS attacks can be volumetric (aimed at bandwidth), protocol-based (aimed at specific protocols), or application layer (aimed at specific applications). 
+DDoS vs. DoS:
+A Distributed Denial-of-Service (DDoS) attack is a type of DoS attack that utilizes multiple sources to overwhelm the target, making it harder to detect and mitigate. 
+
+2. A MIME type, also known as a media type or content type, is a standard that identifies the format of a file or resource. It's a two-part identifier, consisting of a type and a subtype, like text/plain or image/jpeg. These types are used by web servers, browsers, and other applications to determine how to handle the file. 
+Here's a more detailed explanation: 
+Purpose:
+MIME types tell applications (like web browsers) what kind of content they are dealing with. This is crucial for proper rendering, downloading, or processing of files.
+Structure:
+A MIME type has the format type/subtype, for example:
+text/html: Indicates an HTML document.
+image/jpeg: Indicates a JPEG image.
+application/json: Indicates a JSON file.
+audio/mpeg: Indicates an MP3 audio file.
+Importance:
+Web Servers: Web servers use MIME types in the Content-Type header of HTTP responses to inform browsers about the type of content being sent.
+Browsers: Browsers use MIME types to determine how to display or handle a file. If the MIME type is incorrect, the browser might not display the file correctly (e.g., displaying code instead of rendering an image).
+Operating Systems: Some operating systems also use MIME types for file handling and association.
+Where to find them:
+The Internet Assigned Numbers Authority (IANA) is the official authority for MIME types. You can find the official list on their Media Types page.
+Examples:
+text/plain: Plain text
+text/css: Cascading Style Sheets
+application/pdf: PDF documents
+image/png: PNG images
+video/mp4: MP4 videos
+audio/mpeg: MP3 audio
+How they work:
+When a browser requests a file, the server sends back the file along with a Content-Type header indicating its MIME type. The browser then uses this information to process the file. For instance, if the server sends Content-Type: image/jpeg, the browser knows to treat the response as a JPEG image and render it accordingly.
+In essence, MIME types are a fundamental part of how the internet and other systems handle different file formats, ensuring that resources are interpreted and displayed correctly. 

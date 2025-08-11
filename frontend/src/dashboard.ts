@@ -1,7 +1,16 @@
 import './dashboard.css';
 import { navigateTo } from './main';
+import { openAvatarSelectionModal } from './avatarModal';
+import { profileEdit } from './profileEdit'; // Import the new modal function
+import { io, Socket } from 'socket.io-client';
+import { renderChat } from './chat';
+let chatSocket: Socket | null = null; // module-level variable for the chat socket
+
+
 
 export function renderDashboard() {
+
+ 
   const appElement = document.querySelector<HTMLDivElement>('#app');
   if (!appElement) {
     throw new Error('App root element (#app) not found!');
@@ -9,8 +18,6 @@ export function renderDashboard() {
 
   // Clear previous content
   appElement.innerHTML = '';
-
-  // --- Create Elements ---
 
   // Global Container
   const globalContainer = document.createElement('div');
@@ -76,10 +83,37 @@ export function renderDashboard() {
   // --- Append to App ---
   appElement.appendChild(globalContainer);
 
-  // --- Add Event Listeners ---
+  // --- Socket.IO Chat Connection ---
+  const token = sessionStorage.getItem('authToken');
+  if (token && !chatSocket) {
+    chatSocket = io(`${import.meta.env.VITE_URL}`, {
+      transports: ['websocket'],
+      secure: true,
+    });
+
+    chatSocket.on('connect', () => {
+      console.log('Chat socket connected:', chatSocket?.id);
+      chatSocket?.emit('authenticate_chat', token);
+    });
+
+    chatSocket.on('disconnect', () => {
+      console.log('Chat socket disconnected.');
+    });
+  }
+
+  
+
+   // ----test 2FA QR----
+
+   const twoFaButton = document.createElement('button');
+   twoFaButton.className = "dashboard-nav-button";
+   twoFaButton.textContent = "2FA Setup";
+   twoFaButton.dataset.view = "twofa";
+   
+   nav.appendChild(twoFaButton); // Add the 2FA button to the navigation
 
   // Sidebar navigation
-  const navButtons = [profileButton, gameButton, chatButton];
+  const navButtons = [profileButton, gameButton, chatButton,twoFaButton];
   navButtons.forEach(button => {
     button.addEventListener('click', () => {
       const view = button.dataset.view;
@@ -91,25 +125,37 @@ export function renderDashboard() {
 
   // Logout button
   logoutButton.addEventListener('click', () => {
-    localStorage.removeItem('authToken');
+    sessionStorage.removeItem('authToken');
+    if (chatSocket) {
+      chatSocket.disconnect();
+      chatSocket = null;
+    }
     navigateTo('/');
   });
 
+
   // --- Initial View ---
   setActiveView('profile', navButtons, contentArea); // Set initial view to profile
+  // navButtons.forEach(button => {
+  //   button.addEventListener('click', () => {
+  //     const view = button.dataset.view; // Get the view from the button's data-view attribute
+  //     if (view) {
+  //       setActiveView(view, navButtons, contentArea); // Call setActiveView with the view
+  //     }
+  //   });
+  // });
 }
 
-// --- Helper Function to Set Active View ---
+
 async function setActiveView(view: string, buttons: HTMLButtonElement[], contentArea: HTMLDivElement) {
-	// Update button styles
-	buttons.forEach(btn => {
-	  if (btn.dataset.view === view) {
-		btn.classList.add('active');
-	  } else {
-		btn.classList.remove('active');
-	  }
-	}
-);
+  // Update button styles
+  buttons.forEach(btn => {
+    if (btn.dataset.view === view) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
 
   // Update content area
   contentArea.innerHTML = '';
@@ -118,137 +164,128 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
       contentArea.innerHTML = `<h3 class="dashboard-content-heading">Profile</h3><p class="dashboard-content-paragraph">Loading profile...</p>`; // Show loading state
       try {
         // Get the token from local storage
-        const token = localStorage.getItem('authToken');
+        const token = sessionStorage.getItem('authToken');
         if (!token) {
           contentArea.innerHTML = `
             <h3 class="dashboard-content-heading">Profile</h3>
             <p class="dashboard-content-paragraph">Error: You are not logged in or your session has expired.</p>
             <p class="dashboard-content-paragraph">Please <a href="/login">login</a> again.</p>
           `;
-		            return;
+          return;
         }
-		    const response = await fetch('/api/profile', {
-			  method: 'GET',
-			  headers: {
-			    'Content-Type': 'application/json',
-			    'Authorization': `Bearer ${token}`
-			  }
-		  });
-      //*** Debugging logs
+        const response = await fetch('/api/profile', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
         console.log('Fetch response status:', response.status);
         console.log('Fetch response ok:', response.ok);
         const responseText = await response.clone().text(); // Clone to read text without consuming body for json()
         console.log('Fetch response text:', responseText); // ***JSON should be here
-    
-		
-		if (!response.ok) {
-			if (response.status === 401 || response.status === 403) {
-			  contentArea.innerHTML = `
-				<h3 class="dashboard-content-heading">Profile</h3>
-				<p class="dashboard-content-paragraph">Error: Unauthorized. Your session may have expired.</p>
-				<p class="dashboard-content-paragraph">Please <a href="/login">login</a> again.</p>
-			  `;
-			} else {
-        throw new Error(`API Error: ${response.status} ${response.statusText}. Response: ${responseText}`);
-			}
-			return;
-		}
 
-		const userProfile = await response.json();
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            contentArea.innerHTML = `
+              <h3 class="dashboard-content-heading">Profile</h3>
+              <p class="dashboard-content-paragraph">Error: Unauthorized. Your session may have expired.</p>
+              <p class="dashboard-content-paragraph">Please <a href="/login">login</a> again.</p>
+              <style> .dashboard-content-paragraph a { color: #3498db; text-decoration: underline; } </style>
+            `;
+          } else {
+			throw new Error(`API Error: ${response.status} ${response.statusText}`);
+          }
+          return;
+        }
+
+        const userProfile = await response.json();
+
+        // ***new: to fetch Match Data***
+        let matchHistoryHtml = '<p>Loading match history...</p>';
+        try {
+          const matchesResponse = await fetch('/api/profile/matches', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (matchesResponse.ok) {
+            const matches = await matchesResponse.json();
+            if (matches.length > 0) {
+              matchHistoryHtml = `
+                <div class="match-history-container">
+                  <h4>Match History</h4>
+                  <ul>
+                    ${matches.map((match: any) => `
+                      <li>
+                        <span>${match.player1_username} (${match.player1_score}) vs ${match.player2_username} (${match.player2_score})</span>
+                        <strong class="${match.winner_id === userProfile.userId ? 'win' : 'loss'}">
+                          ${match.winner_id === userProfile.userId ? 'Win' : 'Loss'}
+                        </strong>
+                      </li>
+                    `).join('')}
+                  </ul>
+                </div>
+              `;
+            } else {
+              matchHistoryHtml = `
+              <div class="match-history-container">
+                  <h4>Match History</h4>
+                  <p>No match history found.</p>
+              </div>`;
+            }
+          } else {
+            matchHistoryHtml = `
+              <div class="match-history-container">
+                  <h4>Match History</h4>
+                  <p>Could not load match history.</p>
+              </div>`;
+          }
+        } catch (e) {
+          console.error('Failed to fetch match history:', e);
+          matchHistoryHtml = '<p>Error loading match history.</p>';
+        }
+        // ***end new***
 
         contentArea.innerHTML = `
-          <h3 class="dashboard-content-heading">Profile</h3>
+          <div class="dashboard-heading-container">
+            <h3 class="dashboard-content-heading">${userProfile.username || 'N/A'}</h3>
+            <button id="edit-profile-btn" class="edit-profile-button" title="Edit Profile">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.532 1.532 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.532 1.532 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
+              </svg>
+            </button>
+          </div>
           <div class="profile-details">
             <div class="profile-avatar-container">
-              <img id="profileAvatar" src="${userProfile.avatar ? `data:image/jpeg;base64,${userProfile.avatar}` : '/images/default-avatar.png'}" alt="User Avatar" class="profile-avatar-img">
-              <input type="file" id="avatarUpload" accept="image/jpeg, image/png, image/gif" style="display: none;">
-              <button id="changeAvatarButton" class="dashboard-button">Change Picture</button>
+              <img id="profileAvatar" 
+                   src="${userProfile.avatar || '/avatars/default.png'}" 
+                   alt="User Avatar" 
+                   class="profile-avatar-img" 
+                   style="cursor: pointer;" 
+                   title="Click to change avatar">
             </div>
-            <p class="dashboard-content-paragraph"><strong>Username:</strong> ${userProfile.username || 'N/A'}</p>
             <p class="dashboard-content-paragraph"><strong>Email:</strong> ${userProfile.email || 'N/A'}</p>
-            <button id="uploadAvatarButton" class="dashboard-button" style="display: none;">Upload Selected</button>
-            <p id="avatarUploadStatus" class="dashboard-content-paragraph" style="min-height: 1.2em;"></p>
+            <p id="avatarUploadStatus" class="dashboard-content-paragraph" style="min-height: 1.2em; margin-top: 0.5rem;"></p>
           </div>
+          ${matchHistoryHtml}
         `;
-        const changeAvatarButton = contentArea.querySelector<HTMLButtonElement>('#changeAvatarButton');
-        const avatarUploadInput = contentArea.querySelector<HTMLInputElement>('#avatarUpload');
-        const uploadAvatarButton = contentArea.querySelector<HTMLButtonElement>('#uploadAvatarButton');
+        
         const profileAvatarImg = contentArea.querySelector<HTMLImageElement>('#profileAvatar');
         const avatarUploadStatus = contentArea.querySelector<HTMLParagraphElement>('#avatarUploadStatus');
+        const editProfileBtn = contentArea.querySelector<HTMLButtonElement>('#edit-profile-btn');
 
-        if (changeAvatarButton && avatarUploadInput && uploadAvatarButton && profileAvatarImg && avatarUploadStatus) {
-          changeAvatarButton.addEventListener('click', () => {
-            avatarUploadInput.click(); // Trigger file input click
+        if (editProfileBtn && token) {
+          editProfileBtn.addEventListener('click', () => {
+            profileEdit(token, { username: userProfile.username, email: userProfile.email });
           });
+        }
 
-          avatarUploadInput.addEventListener('change', () => {
-            if (avatarUploadInput.files && avatarUploadInput.files.length > 0) {
-              const file = avatarUploadInput.files[0];
-              // Preview image (optional)
-              const reader = new FileReader();
-              reader.onload = (e) => {
-                if (e.target && e.target.result) {
-                  // profileAvatarImg.src = e.target.result as string; // Preview if desired
-                }
-              };
-              reader.readAsDataURL(file);
-              uploadAvatarButton.style.display = 'inline-block'; // Show upload button
-              avatarUploadStatus.textContent = `Selected: ${file.name}`;
-            } else {
-              uploadAvatarButton.style.display = 'none';
-              avatarUploadStatus.textContent = '';
-            }
-          });
-          uploadAvatarButton.addEventListener('click', async () => {
-            if (!avatarUploadInput.files || avatarUploadInput.files.length === 0) {
-              avatarUploadStatus.textContent = 'Please select a file first.';
-              return;
-            }
-            const file = avatarUploadInput.files[0];
-            const formData = new FormData();
-            formData.append('avatar', file); // 'avatar' must match the field name expected by backend
-
-            avatarUploadStatus.textContent = 'Uploading...';
-            uploadAvatarButton.disabled = true;
-
-            try {
-              const uploadResponse = await fetch('/api/profile/avatar', {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  // 'Content-Type': 'multipart/form-data' is set automatically by browser with FormData
-                },
-                body: formData,
-              });
-              const result = await uploadResponse.json();
-              console.log('Upload response from backend:', result); // Log the entire response
-              console.log('profileAvatarImg element:', profileAvatarImg); // Check if the img element is found
-
-              if (uploadResponse.ok && result.success) {
-                avatarUploadStatus.textContent = 'Upload successful!';
-                if (result.avatar && profileAvatarImg) { // *** SHOW PICTURE ***
-                  const newSrc = `data:image/jpeg;base64,${result.avatar}`;
-                  console.log('Setting new image src (first 100 chars):', newSrc.substring(0, 100) + '...');
-                  profileAvatarImg.src = newSrc; // Update displayed avatar
-                  console.log('Image src after update (first 100 chars):', profileAvatarImg.src.substring(0, 100) + '...');
-                }
-              } else {
-                console.log('Either result.avatar is missing or profileAvatarImg element was not found.');
-                if (!result.avatar) console.log('result.avatar is missing or empty.');
-                if (!profileAvatarImg) console.log('profileAvatarImg element is null.');
-              }
-              uploadAvatarButton.style.display = 'none';
-
-            } catch (uploadError) {
-              console.error('Error uploading avatar:', uploadError);
-              avatarUploadStatus.textContent = 'Upload error. See console.';
-            } finally {
-              uploadAvatarButton.disabled = false;
-            }
+        if (profileAvatarImg && avatarUploadStatus && token) {
+          profileAvatarImg.addEventListener('click', () => {
+            openAvatarSelectionModal(token, profileAvatarImg, avatarUploadStatus);
           });
         }
       } catch (error) {
-        console.error('HERE-Failed to fetch profile:', error);
+        console.error('Failed to fetch profile:', error);
         contentArea.innerHTML = `
           <h3 class="dashboard-content-heading">Profile</h3>
           <p class="dashboard-content-paragraph">Could not load profile information. Please try again later.</p>
@@ -257,16 +294,23 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
       break;
     case 'game':
       const gameContent = document.createElement('div');
-      gameContent.innerHTML = `
-        <h3 class="dashboard-content-heading">Game</h3>
-        <p class="dashboard-content-paragraph">Matchmaking with online players.</p>
-      `;
-      // Online Match Button
-      const onlineButton = document.createElement('button');
-      onlineButton.className = "dashboard-game-button";
-      onlineButton.innerHTML = `<span>Online Match</span>`;
-      onlineButton.addEventListener('click', () => navigateTo('/game'));
-      gameContent.appendChild(onlineButton);
+      gameContent.className = "dashboard-game-content"; // ***new***
+      gameContent.innerHTML = `<h3 class="dashboard-content-heading">Choose your Game</h3>`;
+      // Tournament Mode button
+      const tournamentBtn = document.createElement('button');
+      tournamentBtn.className = "dashboard-game-button";
+      tournamentBtn.innerHTML = `<span>Tournament Mode</span>`;
+      tournamentBtn.onclick = () => {
+	      navigateTo('/game?tournament=true'); // it will trigger tournament flow from game.ts
+      };
+      gameContent.appendChild(tournamentBtn);
+
+      // AI Match Button
+      const aiButton = document.createElement('button');
+      aiButton.className = "dashboard-game-button";
+      aiButton.innerHTML = `<span>Play against AI</span>`;
+      aiButton.addEventListener('click', () => navigateTo('/game?mode=ai'));
+      gameContent.appendChild(aiButton);
 
       // Local Match Button
       const localButton = document.createElement('button');
@@ -277,11 +321,67 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
       contentArea.appendChild(gameContent);
       break;
     case 'chat':
-      contentArea.innerHTML = `
-        <h3 class="dashboard-content-heading">Chat</h3>
-        <p class="dashboard-content-paragraph">Connect with other players.</p>
-        <!-- Add chat interface elements here -->
-      `;
+      contentArea.innerHTML = `<h3 class="dashboard-content-heading">Chat</h3>`;
+      if (chatSocket && chatSocket.connected) {
+        renderChat(chatSocket);
+      } else {
+        contentArea.innerHTML = `
+          <h3 class="dashboard-content-heading">Chat</h3>
+          <p class="dashboard-content-paragraph">Connecting to chat service... Please wait.</p>
+        `;
+      }
       break;
+      // -----------2FA case----------
+      case 'twofa':
+        contentArea.innerHTML = `
+          <h3 class="dashboard-content-heading">Two-Factor Authentication Setup</h3>
+          <button id="generate-qr-btn" class="dashboard-action-button">Generate QR Code</button>
+          <div id="qr-code-container" style="margin-top: 20px;">
+            <p id="qr-instructions" style="display: none;">Scan this QR code with your Google Authenticator app:</p>
+            <img id="qr-code" alt="QR Code" style="display: none; max-width: 200px;" />
+          </div>
+          <p id="qr-error" style="color: red;"></p>
+        `;
+      
+        const generateQrButton = contentArea.querySelector<HTMLButtonElement>('#generate-qr-btn');
+        const qrCodeImage = contentArea.querySelector<HTMLImageElement>('#qr-code');
+        const qrInstructions = contentArea.querySelector<HTMLParagraphElement>('#qr-instructions');
+        const qrError = contentArea.querySelector<HTMLParagraphElement>('#qr-error');
+      
+        if (generateQrButton && qrCodeImage && qrInstructions && qrError) {
+          generateQrButton.addEventListener('click', async () => {
+            qrError.textContent = ''; // Clear any previous errors
+            qrCodeImage.style.display = 'none';
+            qrInstructions.style.display = 'none';
+      
+            try {
+              const token = sessionStorage.getItem('authToken'); // Replace with your token storage logic
+              if (!token) {
+                throw new Error('User is not authenticated. Please log in.');
+              }
+      
+              const response = await fetch('/api/2fa/setup', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`
+                },
+              });
+      
+              if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to generate QR code.');
+              }
+      
+              const data = await response.json();
+              qrCodeImage.src = data.qrCode; // Set the QR code image source
+              qrCodeImage.style.display = 'block';
+              qrInstructions.style.display = 'block';
+            } catch (error) {
+              qrError.textContent = (error as Error).message;
+              console.error(error);
+            }
+          });
+        }
+        break;
   }
 }
