@@ -1,5 +1,5 @@
 import { Socket } from 'socket.io-client';
-import './dashboard.css';
+import './chat.css';
 
 interface OnlineUser {
   socketId: string;
@@ -33,28 +33,22 @@ export function renderChat(socket: Socket): () => void {
 
   const blockBtn = document.createElement('button');
   blockBtn.className = 'chat-block-btn';
-  blockBtn.textContent = 'Block';
+  blockBtn.textContent = 'Block Contact';
   blockBtn.disabled = true;
 
   const inviteBtn = document.createElement('button');
   inviteBtn.className = 'chat-invite-btn';
-  inviteBtn.textContent = 'Invite';
+  inviteBtn.textContent = 'Invite for Match';
   inviteBtn.disabled = true;
-
-  const viewProfileBtn = document.createElement('button');
-  viewProfileBtn.className = 'chat-profile-btn';
-  viewProfileBtn.textContent = 'View Profile';
-  viewProfileBtn.disabled = true;
 
   const controlsDiv = document.createElement('div');
   controlsDiv.className = 'chat-controls';
   controlsDiv.appendChild(blockBtn);
   controlsDiv.appendChild(inviteBtn);
-  controlsDiv.appendChild(viewProfileBtn);
+  controlsDiv.appendChild(sendBtn);
 
   chatArea.appendChild(messagesDiv);
   chatArea.appendChild(input);
-  chatArea.appendChild(sendBtn);
   chatArea.appendChild(controlsDiv);
 
   container.appendChild(playerList);
@@ -96,7 +90,6 @@ export function renderChat(socket: Socket): () => void {
             appendMessage('System', `Chatting with ${selectedUser.username}`);
             blockBtn.disabled = false;
             inviteBtn.disabled = false;
-            viewProfileBtn.disabled = false;
       });
       playerList.appendChild(li);
     });
@@ -149,33 +142,14 @@ export function renderChat(socket: Socket): () => void {
     }
   });
 
-  viewProfileBtn.addEventListener('click', async () => {
-    if (!selectedUser) return;
-    try {
-      const res = await fetch(`/api/profile/public/${selectedUser.userId}`);
-      if (res.ok) {
-        const profile = await res.json();
-        // Display profile info more clearly
-        appendMessage('Profile', `Username: ${profile.username}, Wins: ${profile.wins}, Losses: ${profile.losses}`);
-      } else {
-        const err = await res.json();
-        appendMessage('System', `Error fetching profile: ${err.message}`);
-      }
-    } catch (e) {
-      console.error('Failed to fetch profile:', e);
-      appendMessage('System', 'Failed to fetch profile.');
-    }
-  });
 
   const root = document.querySelector('#dashboard-content');
   root?.appendChild(container);
 
   // Return a cleanup function
   return () => {
-    // CRITICAL FIX: Do NOT disconnect the socket here.
+    // CRITICAL: Do NOT disconnect the socket here.
     // The socket is persistent and managed by the dashboard.
-    // We only want to remove the chat UI elements from the DOM.
-    // socket.disconnect();
     container.remove();
   };
 }

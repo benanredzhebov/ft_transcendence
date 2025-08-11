@@ -162,12 +162,39 @@
 
 /* ----------------------------------------- */
 
+.container-heading {
+    display: flex;
+    justify-content: center; /* Center the heading */
+    align-items: center;
+    margin-bottom: 1rem;
+    position: relative; /* Needed for absolute positioning of the button */
+}
+
 .online-users-heading {
-    color: #e0e0e0;
-    font-size: 0.9rem;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 0.75rem;
+    margin: 0;
+    color: #fff;
+    font-weight: 600;
+}
+
+.refresh-btn {
+    position: absolute; /* Position relative to the parent */
+    right: 0; /* Align to the right edge */
+    top: 50%; /* Center vertically */
+    transform: translateY(-50%); /* Fine-tune vertical alignment */
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: 0.25rem;
+    line-height: 1;
+    opacity: 0.6;
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+.refresh-btn:hover {
+    opacity: 1;
+    transform: translateY(-50%) rotate(-90deg); /* Combine transforms */
 }
 
 .online-users-list {
@@ -371,109 +398,7 @@
 
 
 /* ---------------------------CHAT DASHBOARD------------------------------------- */
-.chat-container {
-    display: flex;
-    flex-direction: row; /* Changed from column to row */
-    height: calc(100% - 60px); /* Adjust based on heading height */
-    background-color: rgba(0, 0, 0, 0.2);
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-.chat-player-list {
-    flex: 0 0 220px; /* Give the list a fixed width */
-    padding: 1rem;
-    margin: 0;
-    list-style: none;
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
-    overflow-y: auto;
-    background-color: rgba(0, 0, 0, 0.1);
-}
-
-.chat-user-item {
-    padding: 0.75rem;
-    cursor: pointer;
-    border-radius: 6px;
-    margin-bottom: 0.5rem;
-    transition: background-color 0.2s;
-    color: #d1d5db;
-}
-
-.chat-user-item:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-}
-
-.chat-user-item.selected {
-    background-color: rgba(79, 70, 229, 0.6);
-    color: #ffffff;
-    font-weight: 600;
-}
-
-.chat-area {
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-}
-
-.chat-messages {
-    flex-grow: 1;
-    padding: 1rem;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
-
-.chat-message {
-    padding: 0.5rem 1rem;
-    background-color: rgba(255, 255, 255, 0.05);
-    border-radius: 15px;
-    max-width: 80%;
-    align-self: flex-start;
-}
-
-.chat-message strong {
-    color: #06b6d4;
-    margin-right: 0.5rem;
-}
-
-.chat-message time {
-    font-size: 0.75rem;
-    color: #888;
-    margin-left: 1rem;
-    float: right;
-}
-
-.chat-form {
-    display: flex;
-    padding: 1rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.chat-form input {
-    flex-grow: 1;
-    padding: 0.75rem;
-    border: none;
-    border-radius: 20px;
-    background-color: rgba(0, 0, 0, 0.3);
-    color: #fff;
-    outline: none;
-}
-
-.chat-form button {
-    margin-left: 1rem;
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 20px;
-    background-color: #0e7490;
-    color: #fff;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-.chat-form button:hover {
-    background-color: #0891b2;
-}
+/* Chat styles have been moved to chat.css */
 /* ---------------------------------------------------------------- */
 
 
@@ -548,7 +473,7 @@
 /* ------------------------------------------------------------------------------- */
 
 .match-history-container {
-  flex: 1; /* Make it a flexible item */
+  flex: 3; /* wider than All Players and Friend list*/
   background-color: rgba(0, 0, 0, 0.15);
   padding: 1.5rem;
   border-radius: 8px;
@@ -701,6 +626,61 @@
     margin-bottom: 1rem;
     border: 3px solid rgba(255, 255, 255, 0.15);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* --- Responsive Design for Dashboard --- */
+@media (max-width: 768px) {
+    .dashboard-card-container {
+        flex-direction: column;
+    }
+
+    .dashboard-sidebar {
+        flex: 0 0 auto; /* Do not grow, take content height */
+        height: auto;
+        flex-direction: row; /* Arrange items horizontally */
+        align-items: center;
+        padding: 0.5rem 1rem;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        overflow-x: auto; /* Allow scrolling if nav items overflow */
+    }
+
+    .dashboard-heading {
+        display: none; /* Hide "Dashboard" title on mobile to save space */
+    }
+
+    .dashboard-nav {
+        flex-direction: row; /* Nav buttons in a row */
+        align-items: center;
+    }
+
+    .dashboard-nav > * + * {
+        margin-top: 0;
+        margin-left: 0.5rem; /* Space between nav buttons */
+    }
+
+    .dashboard-nav-button {
+        padding: 0.5rem 0.75rem; /* Smaller padding for horizontal buttons */
+        white-space: nowrap; /* Prevent button text from wrapping */
+    }
+
+    .dashboard-logout-button {
+        margin-top: 0;
+        margin-left: auto; /* Push logout to the far right */
+        border-top: none;
+        padding: 0.5rem 0.75rem;
+        width: auto; /* Shrink to content width */
+    }
+
+    .dashboard-content-area {
+        height: auto; /* Adjust height automatically */
+        padding: 1rem; /* Reduce padding on smaller screens */
+    }
+
+    .profile-lower-container {
+        flex-direction: column; /* Stack profile sections vertically */
+        gap: 1.5rem;
+    }
 }
 
 
