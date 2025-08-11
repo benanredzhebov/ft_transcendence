@@ -155,7 +155,14 @@ function setupTournamentHandlers() {
 		showTournamentDialog(`Error: ${data.message}`, {
 			confirmText: 'Back to Dashboard',
 			onConfirm: () => {
-				window.location.href = '/dashboard';
+				// Check authentication before redirecting
+				const token = sessionStorage.getItem('authToken');
+				if (!token) {
+					alert('Your session has expired. Please log in again.');
+					window.location.href = '/login';
+				} else {
+					window.location.href = '/dashboard';
+				}
 			}
 		});
 	});
@@ -306,16 +313,20 @@ function setupTournamentHandlers() {
 	socket.on('match_forfeit', ({ winner, loser, reason }: { winner: string, loser: string, reason: string }) => {
 		removeOverlays();
 		const dialog = showTournamentDialog(
-			`Match Forfeit!<br><strong>${winner}</strong> wins by forfeit<br>${loser} ${reason}`, 
-			{ confirmText: 'Continue Tournament' }
+			`Match Forfeit!<br><strong>${winner}</strong> wins by forfeit<br>${loser} ${reason}<br><br>Tournament will continue automatically...`
+			// No confirmText provided = no button shown
 		);
-		dialog.querySelector('button')!.onclick = () => {
-			dialog.remove();
+		
+		// Automatically remove the dialog after 3 seconds to match server delay
+		setTimeout(() => {
+			if (dialog.parentNode) {
+				dialog.remove();
+			}
 			inTournament = true;
 			// Show tournament bracket again
 			const bracketDiv = document.getElementById('tournament-bracket');
 			if (bracketDiv) bracketDiv.style.display = 'block';
-		};
+		}, 3000);
 	});
 
 	socket.on('match_cancelled', ({ reason }: { reason?: string }) => {
@@ -340,8 +351,17 @@ function setupTournamentHandlers() {
 			inTournament = false;
 			currentMatch = null;
 			assignedPlayerId = null;
-			// Redirect to dashboard
-			window.location.href = '/dashboard.html';
+			
+			// Check authentication before redirecting
+			const token = sessionStorage.getItem('authToken');
+			if (!token) {
+				// No valid session, redirect to login with message
+				alert('Your session has expired. Please log in again.');
+				window.location.href = '/login';
+			} else {
+				// Valid session, redirect to dashboard (use correct SPA route)
+				window.location.href = '/dashboard';
+			}
 		};
 	});
 
@@ -471,7 +491,15 @@ function showGameOverScreen(winner: string | { alias: string}) {
             socket.disconnect();
             socket = null;
         }
-        window.location.href = '/dashboard';
+        
+        // Check authentication before redirecting
+        const token = sessionStorage.getItem('authToken');
+        if (!token) {
+            alert('Your session has expired. Please log in again.');
+            window.location.href = '/login';
+        } else {
+            window.location.href = '/dashboard';
+        }
     };
 	buttons.appendChild(dashboardBtn);
 	
@@ -521,7 +549,15 @@ function showTournamentResults(winnerName: string, allMatches?: string[]) {
             socket.disconnect();
             socket = null;
         }
-        window.location.href = '/dashboard';
+        
+        // Check authentication before redirecting
+        const token = sessionStorage.getItem('authToken');
+        if (!token) {
+            alert('Your session has expired. Please log in again.');
+            window.location.href = '/login';
+        } else {
+            window.location.href = '/dashboard';
+        }
     };
 
     overlay.appendChild(message);

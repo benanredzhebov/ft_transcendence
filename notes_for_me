@@ -99,7 +99,15 @@ Tournament Edge Cases
 1. Odd Number of Players: Ensure the bracket handles byes correctly and no player is left unassigned. `OK`
 2. Single Player Tournament: Verify the system gracefully handles or prevents tournaments with only one participant. `OK`
 3. Simultaneous "I'm Ready" Presses: Multiple players press "I'm Ready" at the same time—check for race conditions or missed events.
-4. Player Disconnects Mid-Tournament: Test what happens if a player disconnects during a match or between rounds. Is the match forfeited, or does the system wait? `FIXED - FORFEIT SYSTEM IMPLEMENTED + BUG FIXED`
+4. Player Disconnects Mid-Tournament: Test what happens if a player disconnects during a match or between rounds. Is the match forfeited, or does the system wait? `FIXED - FORFEIT SYSTEM + BYE HANDLING`
+
+**FORFEIT WITH BYE HANDLING FIX:**
+
+- **Root Issue**: Forfeit handler missing bye auto-processing logic that exists in normal match_ended handler
+- **Symptom**: After forfeit, tournament shows "Winner vs BYE" instead of "Winner vs ActualOpponent"
+- **Solution**: Added bye-handling loop to forfeit case to auto-advance bye matches
+- **Match Announcement**: Uses proper `getCurrentMatchPlayers()` and sends `await_player_ready` to both players
+- **Tournament Flow**: Now seamlessly handles forfeit → bye processing → next real match `FIXED - FORFEIT SYSTEM IMPLEMENTED + BUG FIXED`
 
 **PROPER DISCONNECT BEHAVIOR:**
 
@@ -122,13 +130,31 @@ Tournament Edge Cases
 - Added proper forfeit scores (5-0 for winner)
 - Improved error handling with try-catch block
 - Fixed timing issue where disconnected player was removed before recording winner
-- Added proper tournament state management and next match progression5. Alias Re-registration: A player tries to register a new alias after already registering one. Ensure the mapping updates or is blocked as intended.
+- Added proper tournament state management and next match progression
+- **ADDITIONAL FIX**: Fixed array access pattern for `tournamentWinner[1]` and `player[1]` (aliases)
+- **ADDITIONAL FIX**: Added game pause and reset to prevent background game from continuing during forfeit
+- **ADDITIONAL FIX**: Proper null checking for `player2` in match announcements
+
+5. Alias Re-registration: A player tries to register a new alias after already registering one. Ensure the mapping updates or is blocked as intended.
 
 6. Multiple Tabs/Windows: Same user opens multiple tabs—does the system create duplicate sockets or aliases?
 7. Tournament Reset During Active Match: Admin or system triggers a reset while a match is ongoing. Ensure all states are cleared and no orphaned matches remain.
 8. Rapid Tournament Start/Stop: Start and immediately stop tournaments repeatedly to check for memory leaks or lingering state.
 9. Bracket Visibility: Changing browser tab/window during registration or matches—ensure bracket and state persist or recover correctly.
-10. Return to Lobby/Back to Dashboard: After tournament ends, test navigation to lobby/dashboard and verify results/history are displayed and not mixed with previous tournaments.
+10. Return to Lobby/Back to Dashboard: After tournament ends, test navigation to lobby/dashboard and verify results/history are displayed and not mixed with previous tournaments. `FIXED - DASHBOARD REDIRECT + FINAL MATCH FORFEIT`
+
+**DASHBOARD REDIRECT FIX:**
+
+- **Authentication Check**: Added `sessionStorage.getItem('authToken')` validation before redirecting
+- **Correct Route**: Changed `/dashboard.html` to `/dashboard` (SPA routing)
+- **Error Handling**: Shows alert and redirects to `/login` if session expired
+- **Applied to all dashboard buttons**: tournament_cancelled, tournament_error, game overlays
+
+**FINAL MATCH FORFEIT FIX:**
+
+- **Smart Tournament End**: If 1 player remains after disconnect in final match, they win the tournament
+- **Proper Winner Declaration**: Remaining player is declared tournament winner instead of cancelling
+- **Tournament vs Cancel Logic**: Only cancels if <2 players and tournament not in final state
 
 Game Logic Edge Cases
 
