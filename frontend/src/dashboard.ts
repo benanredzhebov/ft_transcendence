@@ -407,12 +407,11 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
           });
           if (usersResponse.ok) {
             const allUsers = await usersResponse.json();
-            const onlineUserIds = new Set(onlineUserCache.map(u => u.userId)); // Use the cache
+            const onlineUserIds = new Set(onlineUserCache.map(u => u.userId));
+            const remainedUsers = allUsers.filter((user: any) => user.id !== userProfile.userId);
 
             if (allUsers.length > 0) {
-              // We will generate the HTML here and inject it later.
-              // The event listeners will be attached after the content is in the DOM.
-              allUsersHtml = allUsers.map((user: any) => {
+              allUsersHtml = remainedUsers.map((user: any) => {
                 const isOnline = onlineUserIds.has(user.id);
                 const indicatorHtml = isOnline ? '<span class="online-indicator"></span>' : '';
                 return `
@@ -487,7 +486,6 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
         }
         // ***end new***
 
-        // ***new: to fetch Friends List***
         let friendsListHtml = '<p>Loading friends...</p>';
         try {
           const friendsResponse = await fetch('/api/friends', {
@@ -496,22 +494,30 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
           if (friendsResponse.ok) {
             const friends = await friendsResponse.json();
             if (friends.length > 0) {
+              const onlineUserIds = new Set(onlineUserCache.map(u => u.userId));
               friendsListHtml = `
-                <div class="friends-list-container">
-                  <h4>Friends</h4>
+                <div class="online-users-container-profile">
+                  <div class="container-heading">
+                    <h4 class="online-users-heading">Friends</h4>
+                  </div>
                   <ul class="friends-list">
-                    ${friends.map((friend: any) => `
-                      <li data-user-id="${friend.id}">
-                        <img src="${friend.avatar_path || '/avatars/default.png'}" alt="${friend.username}'s avatar" />
-                        <span>${friend.username}</span>
-                      </li>
-                    `).join('')}
+                    ${friends.map((friend: any) => {
+                      const isOnline = onlineUserIds.has(friend.id);
+                      const indicatorHtml = isOnline ? '<span class="online-indicator"></span>' : '';
+                      return `
+                        <li data-user-id="${friend.id}">
+                          <img src="${friend.avatar_path || '/avatars/default.png'}" alt="${friend.username}'s avatar" />
+                          ${indicatorHtml}
+                          <span>${friend.username}</span>
+                        </li>
+                      `;
+                    }).join('')}
                   </ul>
                 </div>
               `;
             } else {
               friendsListHtml = `
-                <div class="friends-list-container">
+                <div class="online-users-container-profile">
                   <h4>Friends</h4>
                   <p>No friends yet😢</p>
                 </div>`;
@@ -548,7 +554,10 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
           <div class="profile-lower-container">
             ${friendsListHtml}
             <div class="online-users-container-profile">
-              <h4 class="online-users-heading">All Players</h4>
+              <div class="container-heading">
+                <h4 class="online-users-heading">All Players</h4>
+                <button id="refresh-players-btn" class="refresh-btn" title="Refresh List">🔄</button>
+              </div>
               <ul id="all-players-list" class="online-users-list">
                 ${allUsersHtml}
               </ul>
@@ -581,6 +590,14 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
                 showUserProfileModal(userId);
               }
             });
+          });
+        }
+
+        // *** Refresh button ***
+        const refreshPlayersBtn = contentArea.querySelector<HTMLButtonElement>('#refresh-players-btn');
+        if (refreshPlayersBtn) {
+          refreshPlayersBtn.addEventListener('click', () => {
+            setActiveView('profile', buttons, contentArea);
           });
         }
         
@@ -632,38 +649,38 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
       localButton.className = "dashboard-game-button";
       localButton.innerHTML = `<span>Local Match</span>`;
       localButton.addEventListener('click', () => navigateTo('/game')); // Or a different route/logic for local
+      
       gameContent.appendChild(localButton);
       contentArea.appendChild(gameContent);
       break;
     case 'chat':
-      contentArea.innerHTML = `<h3 class="dashboard-content-heading">Chat</h3>`;
+      // Try to get username for display
+      let username = 'User';
+      const token = sessionStorage.getItem('authToken');
+      if (token) {
+        try {
+          const response = await fetch('/api/profile', {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (response.ok) {
+            const userProfile = await response.json();
+            username = userProfile.username || 'User';
+          }
+        } catch (e) {
+          // Ignore error, fallback to default username
+        }
+      }
+      contentArea.innerHTML = `
+          <h3 class="dashboard-content-heading">${username}'s Messages</h3>
+        `;
       if (chatSocket && chatSocket.connected) {
         renderChat(chatSocket);
       } else {
-        // Try to get username for display
-        let username = 'User';
-        const token = sessionStorage.getItem('authToken');
-        if (token) {
-          try {
-            const response = await fetch('/api/profile', {
-              method: 'GET',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              }
-            });
-            if (response.ok) {
-              const userProfile = await response.json();
-              username = userProfile.username || 'User';
-            }
-          } catch (e) {
-            // Ignore error, fallback to default username
-          }
-        }
-        contentArea.innerHTML = `
-          <h3 class="dashboard-content-heading">${username}'s Chat</h3>
-          <p class="dashboard-content-paragraph">Connecting to chat service... Please wait.</p>
-        `;
+        // add
       }
       break;
   }
