@@ -5,16 +5,30 @@ interface OnlineUser {
   socketId: string;
   userId: number;
   username: string;
+  isBlocked?: boolean; // Add this to track block status
 }
 
 export function renderChat(socket: Socket): () => void {
   let selectedUser: OnlineUser | null = null; // selectedUser is now local to the render function
+  let blockedUserIds = new Set<number>(); // Keep track of blocked user IDs
 
   const container = document.createElement('div');
   container.className = 'chat-container';
 
+  // Create a wrapper for the player list and its title
+  const playerListContainer = document.createElement('div');
+  playerListContainer.className = 'player-list-container';
+
+  const playerListTitle = document.createElement('h3');
+  playerListTitle.textContent = 'ONLINE USERS';
+  playerListTitle.className = 'player-list-title';
+
   const playerList = document.createElement('ul');
   playerList.className = 'chat-player-list';
+
+  // Add the title and the list to their container
+  playerListContainer.appendChild(playerListTitle);
+  playerListContainer.appendChild(playerList);
 
   const chatArea = document.createElement('div');
   chatArea.className = 'chat-area';
@@ -51,7 +65,7 @@ export function renderChat(socket: Socket): () => void {
   chatArea.appendChild(input);
   chatArea.appendChild(controlsDiv);
 
-  container.appendChild(playerList);
+  container.appendChild(playerListContainer); // Add the new container to the main layout
   container.appendChild(chatArea);
 
   function appendMessage(sender: string, text: string) {
@@ -80,14 +94,42 @@ export function renderChat(socket: Socket): () => void {
         li.dataset.socketId = u.socketId;
         li.className = 'chat-user-item';
         // List item for each online user
-        li.addEventListener('click', () => {
+        li.addEventListener('click', async () => { // Make listener async
             // Clear selection styles from other users
             playerList.querySelectorAll('.chat-user-item').forEach(item => item.classList.remove('selected'));
             li.classList.add('selected');
 
             selectedUser = u;
             messagesDiv.innerHTML = ''; // Clear messages for new user
-            appendMessage('System', `Chatting with ${selectedUser.username}`);
+
+            // Update block button state
+            if (blockedUserIds.has(u.userId)) {
+                blockBtn.textContent = 'Unblock Contact';
+                blockBtn.classList.add('unblock');
+            } else {
+                blockBtn.textContent = 'Block Contact';
+                blockBtn.classList.remove('unblock');
+            }
+
+            // Fetch and display message history
+            const token = sessionStorage.getItem('authToken');
+            if (token) {
+                try {
+                    const response = await fetch(`/api/chat/history/${u.userId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (response.ok) {
+                        const history: { sender: string; text: string }[] = await response.json();
+                        history.forEach(msg => appendMessage(msg.sender, msg.text));
+                    } else {
+                        appendMessage('System', 'Failed to load message history.');
+                    }
+                } catch (error) {
+                    console.error('Error fetching chat history:', error);
+                    appendMessage('System', 'Error loading messages.');
+                }
+            }
+
             blockBtn.disabled = false;
             inviteBtn.disabled = false;
       });
@@ -95,11 +137,15 @@ export function renderChat(socket: Socket): () => void {
     });
   });
 
-  socket.on('private_message', ({ from, message, username }) => {
+  socket.on('private_message', ({ from, message, username, userId }) => {
+    // Ignore message if sender is blocked
+    if (blockedUserIds.has(userId)) {
+        console.log(`Blocked message from ${username} (${userId})`);
+        return;
+    }
     if (selectedUser && from === selectedUser.socketId) {
       appendMessage(username, message);
     }
-    // You might want to add a notification for messages from non-selected users
   });
 
   socket.on('game_invite', ({ username }) => {
@@ -110,8 +156,26 @@ export function renderChat(socket: Socket): () => void {
     appendMessage('Tournament', `Next match: ${data.player1} vs ${data.player2}`);
   });
 
-  socket.on('user_blocked', ({ message }) => {
+  socket.on('user_blocked', ({ targetUserId, message }) => {
+    blockedUserIds.add(targetUserId);
+    if (selectedUser && selectedUser.userId === targetUserId) {
+        blockBtn.textContent = 'Unblock Contact';
+        blockBtn.classList.add('unblock');
+    }
     appendMessage('System', message);
+  });
+
+  socket.on('user_unblocked', ({ targetUserId, message }) => {
+    blockedUserIds.delete(targetUserId);
+    if (selectedUser && selectedUser.userId === targetUserId) {
+        blockBtn.textContent = 'Block Contact';
+        blockBtn.classList.remove('unblock');
+    }
+    appendMessage('System', message);
+  });
+
+  socket.on('blocked_list', (ids: number[]) => {
+    blockedUserIds = new Set(ids);
   });
 
   socket.on('connect_error', (err) => {
@@ -119,19 +183,32 @@ export function renderChat(socket: Socket): () => void {
     appendMessage('System', 'Error connecting to chat server.');
   });
 
-
-  sendBtn.addEventListener('click', () => {
+  function sendMessage() {
     if (selectedUser && input.value.trim()) {
       socket.emit('private_message', { targetSocketId: selectedUser.socketId, message: input.value.trim() });
       appendMessage('Me', input.value.trim());
       input.value = '';
     }
+  }
+
+  sendBtn.addEventListener('click', sendMessage);
+
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      sendMessage();
+    }
   });
 
   blockBtn.addEventListener('click', () => {
     if (selectedUser) {
-      socket.emit('block_user', { targetUserId: selectedUser.userId });
-      // The confirmation message should come from the server via 'user_blocked' event
+        if (blockedUserIds.has(selectedUser.userId)) {
+            // If already blocked, unblock
+            socket.emit('unblock_user', { targetUserId: selectedUser.userId });
+        } else {
+            // If not blocked, block
+            socket.emit('block_user', { targetUserId: selectedUser.userId });
+        }
     }
   });
 

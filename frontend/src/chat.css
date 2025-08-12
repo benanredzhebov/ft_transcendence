@@ -9,6 +9,28 @@
     margin-top: 1rem;
 }
 
+/* Player List Section */
+.player-list-container {
+    flex: 0 0 240px;
+    display: flex;
+    flex-direction: column;
+    background-color: rgba(0, 0, 0, 0.274);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.player-list-title {
+    padding: 1.25rem 1rem;
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-align: center;
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
 .chat-player-list {
     flex: 0 0 220px; /* Give the list a fixed width */
     padding: 1rem;
@@ -26,6 +48,17 @@
     margin-bottom: 0.5rem;
     transition: background-color 0.2s;
     color: #d1d5db;
+}
+
+.chat-user-item::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #4ade80; /* Green dot */
+    margin-right: 12px;
+    flex-shrink: 0;
 }
 
 .chat-user-item:hover {
@@ -131,6 +164,15 @@
 .chat-block-btn:hover:not(:disabled) {
     background-color: rgba(239, 68, 68, 0.4);
     border-color: #ef4444;
+}
+
+.chat-block-btn.unblock {
+    background-color: rgba(34, 197, 94, 0.2); /* Faint green for unblock */
+}
+
+.chat-block-btn.unblock:hover:not(:disabled) {
+    background-color: rgba(34, 197, 94, 0.4);
+    border-color: #22c55e;
 }
 
 .chat-invite-btn {

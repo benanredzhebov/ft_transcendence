@@ -510,6 +510,46 @@ const credentialsRoutes = (app) =>{
     }
   });
 
+  // *** NEW: Endpoint to get chat history with another user ***
+  app.get('/api/chat/history/:otherUserId', async (req, reply) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.status(401).send({ error: 'Unauthorized: No token provided' });
+    }
+
+    const token = authHeader.substring(7);
+    try {
+      const decodedToken = jwt.verify(token, JWT_SECRET);
+      const userId = decodedToken.userId;
+      const otherUserId = parseInt(req.params.otherUserId, 10);
+
+      if (isNaN(otherUserId)) {
+        return reply.status(400).send({ error: 'Invalid user ID format.' });
+      }
+
+      const messages = await DB('chat_messages')
+        .where(function() {
+          this.where('sender_id', userId).andWhere('recipient_id', otherUserId)
+        })
+        .orWhere(function() {
+          this.where('sender_id', otherUserId).andWhere('recipient_id', userId)
+        })
+        .orderBy('created_at', 'asc')
+        .join('credentialsTable as sender', 'chat_messages.sender_id', 'sender.id')
+        .select(
+          'chat_messages.message_text as text',
+          'sender.username as sender',
+          'chat_messages.created_at'
+        );
+
+      reply.send(messages);
+
+    } catch (err) {
+      console.error('Error fetching chat history:', err);
+      reply.status(500).send({ error: 'Server error while fetching chat history' });
+    }
+  });
+
 
   app.get('/username-google', async (req, reply) => {
     const { code } = req.query;
