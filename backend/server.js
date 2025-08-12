@@ -280,24 +280,41 @@ io.on('connection', (socket) => {
         }
 	});
 
-    socket.on('private_message', ({ targetSocketId, message }) => {
+    socket.on('private_message', async ({ targetSocketId, message }) => { // Make handler async
             const sender = onlineUsers.get(socket.id);
             const recipient = onlineUsers.get(targetSocketId);
             if (!sender || !recipient) return;
             if (recipient.blocked && recipient.blocked.has(sender.userId)) return;
-            io.to(targetSocketId).emit('private_message', { from: socket.id, message, alias: sender.alias, userId: sender.userId });
+
+            try {
+                await DB('chat_messages').insert({
+                    sender_id: sender.userId,
+                    recipient_id: recipient.userId,
+                    message_text: message
+                });
+            } catch (error) {
+                console.error('Failed to save chat message:', error);
+            }
+
+            io.to(targetSocketId).emit('private_message', { from: socket.id, message, username: sender.username, userId: sender.userId });
     });
 
     socket.on('block_user', ({ targetUserId }) => {
             const user = onlineUsers.get(socket.id);
             if (user) {
                     user.blocked.add(targetUserId);
+                    // Notify the client that the user was blocked
+                    socket.emit('user_blocked', { targetUserId, message: `You have blocked this user.` });
             }
     });
 
     socket.on('unblock_user', ({ targetUserId }) => {
             const user = onlineUsers.get(socket.id);
-            if (user) user.blocked.delete(targetUserId);
+            if (user) {
+                user.blocked.delete(targetUserId);
+                // Notify the client that the user was unblocked
+                socket.emit('user_unblocked', { targetUserId, message: `You have unblocked this user.` });
+            }
     });
 
     socket.on('invite_to_game', ({ targetSocketId }) => {
