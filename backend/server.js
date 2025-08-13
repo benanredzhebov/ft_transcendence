@@ -55,7 +55,7 @@ if (!fs.existsSync(avatarsDir)) {
 	fs.mkdirSync(avatarsDir, { recursive: true });
 }
 
-const PORT = 3000;
+const PORT = 8443;
 const HOST = '0.0.0.0'; // Bind to all network interfaces
 
 // Load SSL certificates
@@ -247,9 +247,10 @@ io.on('connection', (socket) => {
             socket.emit('alias_registered', { success });
 
             if (success) {
-                onlineUsers.set(socket.id, { userId: user.userId, username: user.username, alias, blocked: new Set() });
-                const onlineList = Array.from(onlineUsers.entries()).map(([id, u]) => ({ socketId: id, alias: u.alias, userId: u.userId, username: u.username }));
-                io.emit('online_users', onlineList);
+				// *** to avoid repeated socket in chat ***
+                // onlineUsers.set(socket.id, { userId: user.userId, username: user.username, alias, blocked: new Set() });
+                // const onlineList = Array.from(onlineUsers.entries()).map(([id, u]) => ({ socketId: id, alias: u.alias, userId: u.userId, username: u.username }));
+                // io.emit('online_users', onlineList);
 
                 const playerList = Array.from(tournament.players.entries()).map(([socketId, {alias, userId, username}]) => ({
                     socketId,
