@@ -718,11 +718,13 @@ export function renderGame(containerId: string = 'app') {
     const tournamentMode = urlParams.get('tournament') === 'true'
     const aiMode = urlParams.get('mode') === 'ai';
 
-    // Socket connection
-    socket = io(`${import.meta.env.VITE_URL}`, {
-        transports: ['websocket'],
-        secure: true,
+    // Socket connection to connect with Remote players
+    const backendUrl = `https://${window.location.hostname}:8443`;
+    socket = io(backendUrl, {
+        // transports: ['websocket'],
+        // secure: true,
         query: {
+			token: localStorage.getItem('jwtToken'),
             local: (!tournamentMode && !aiMode).toString(), // "true" for local, "false" for tournament or AI
             mode: aiMode ? 'ai' : (tournamentMode ? 'tournament' : 'local')
         }
