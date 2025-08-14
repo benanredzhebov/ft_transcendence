@@ -137,17 +137,28 @@ function setupTournamentHandlers() {
 		});
 	});
 
-	socket.on('alias_registered', ({ success }) => {
+	socket.on('alias_registered', ({ success, message }) => {
 		if (success) {
 			aliasRegistered = true;
 			inTournament = true;
 			showTournamentDialog('Registered! Waiting for tournament to start...');
 		} else {
-			showTournamentDialog('Alias already taken. Please try another name.', {
-				confirmText: 'Try Again'
+			const errorMessage = message || 'Alias already taken. Please try another name.';
+			if (message === 'You are already registered in this tournament.') {
+				const dialog = showTournamentDialog(errorMessage, {
+					confirmText: 'Back to Dashboard'
+				});
+				dialog.querySelector('button')!.onclick = () => {
+					// Redirect to dashboard
+					window.location.href = '/dashboard';
+				};
+			} else {
+				showTournamentDialog(errorMessage, {
+					confirmText: 'Try Again'
 				}).querySelector('button')!.onclick = () => {
 					promptAliasRegistration();
-			};
+				};
+			}
 		}
 	});
 
@@ -278,6 +289,13 @@ function setupTournamentHandlers() {
 		updateCountdownDisplay(remaining);
 	});
 
+	socket.on('countdown_cancelled', () => {
+		// Remove countdown dialog if it exists
+		const dialog = document.querySelector('.tournament-dialog');
+		if (dialog) dialog.remove();
+		countDownActive = false;
+	});
+
 	socket.on('match_announcement', (match: { player1: string, player2: string }) => {
 		currentMatch = [match.player1, match.player2];
 		showMatchInfo(match.player1, match.player2, 0, 0);
@@ -298,16 +316,57 @@ function setupTournamentHandlers() {
 
 	socket.on('tournament_over', ({ winner, allMatches }: { winner: any, allMatches: string[] }) => {
 		const winnerName = typeof winner === 'object' && winner !== null ? winner.alias : winner;
-		const dialog = showTournamentDialog(`Tournament winner: ${winnerName}!`, {
-			confirmText: 'Return to Lobby'
-		});
-		dialog.querySelector('button')!.onclick = () => {
-			dialog.remove();
-			showTournamentResults(winnerName, allMatches);
-			inTournament = false;
-			currentMatch = null;
-			assignedPlayerId = null;
-		};
+		
+		// Instead of showing the simple overlay, enhance the existing tournament bracket
+		const bracketDiv = document.getElementById('tournament-bracket');
+		if (bracketDiv) {
+			// Make sure the bracket is visible
+			bracketDiv.style.display = 'block';
+			
+			// Add a "Return to Lobby" button to the tournament bracket
+			let lobbyBtn = bracketDiv.querySelector('#return-to-lobby') as HTMLButtonElement;
+			if (!lobbyBtn) {
+				lobbyBtn = document.createElement('button');
+				lobbyBtn.id = 'return-to-lobby';
+				lobbyBtn.textContent = 'Return to Lobby';
+				lobbyBtn.style.cssText = `
+					background: #4CAF50; 
+					color: white; 
+					border: none; 
+					padding: 10px 20px; 
+					border-radius: 4px; 
+					cursor: pointer; 
+					font-size: 16px; 
+					margin-top: 15px; 
+					display: block; 
+					margin-left: auto; 
+					margin-right: auto;
+				`;
+				lobbyBtn.onclick = () => {
+					// Remove tournament bracket and reset state
+					bracketDiv.remove();
+					inTournament = false;
+					currentMatch = null;
+					assignedPlayerId = null;
+					
+					// Show the simple results overlay for final summary
+					showTournamentResults(winnerName, allMatches);
+				};
+				bracketDiv.appendChild(lobbyBtn);
+			}
+		} else {
+			// Fallback: if no bracket exists, show the simple dialog
+			const dialog = showTournamentDialog(`Tournament winner: ${winnerName}!`, {
+				confirmText: 'Return to Lobby'
+			});
+			dialog.querySelector('button')!.onclick = () => {
+				dialog.remove();
+				showTournamentResults(winnerName, allMatches);
+				inTournament = false;
+				currentMatch = null;
+				assignedPlayerId = null;
+			};
+		}
 	});
 
 	socket.on('match_forfeit', ({ winner, loser, reason }: { winner: string, loser: string, reason: string }) => {
