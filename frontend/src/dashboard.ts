@@ -213,22 +213,24 @@ async function showUserProfileModal(userId: number) {
     const profile = await profileResponse.json();
     const friendship = statusResponse.ok ? await statusResponse.json() : { status: 'none' };
 
-    let matchHistoryHtml = '<p>No match history found.</p>';
+    let matchHistoryHtml = '<div class="match-history-container-modal"><p>No match history found.</p></div>';
     if (profile.matches && profile.matches.length > 0) {
       matchHistoryHtml = `
-        <ul class="match-history-list-modal">
-          ${profile.matches.map((match: any) => {
-            const isWinner = match.winner_id === profile.userId;
-            const resultClass = isWinner ? 'win' : 'loss';
-            const resultText = isWinner ? 'Win' : 'Loss';
-            return `
-              <li>
-                <span>${match.player1_username} vs ${match.player2_username} (${match.player1_score}-${match.player2_score})</span>
-                <strong class="${resultClass}">${resultText}</strong>
-              </li>
-            `;
-          }).join('')}
-        </ul>
+        <div class="match-history-container-modal">
+          <ul class="match-history-list-modal">
+            ${profile.matches.map((match: any) => {
+              const isWinner = match.winner_id === profile.userId;
+              const resultClass = isWinner ? 'win' : 'loss';
+              const resultText = isWinner ? 'Win' : 'Loss';
+              return `
+                <li>
+                  <span>${match.player1_username} vs ${match.player2_username} (${match.player1_score}-${match.player2_score})</span>
+                  <strong class="${resultClass}">${resultText}</strong>
+                </li>
+              `;
+            }).join('')}
+          </ul>
+        </div>
       `;
     }
 
@@ -248,10 +250,18 @@ async function showUserProfileModal(userId: number) {
         ${friendButtonHtml}
       </div>
       <div class="profile-view-modal-section">
-        <h4>Match History</h4>
         ${matchHistoryHtml}
       </div>
     `;
+
+    const modal = document.getElementById('profile-view-modal');
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          closeModal();
+        }
+      });
+    }
 
     // The modal can still be closed by clicking the overlay, so this button is removed per your request.
     // content.querySelector('.profile-view-modal-close-button')?.addEventListener('click', closeModal);
@@ -626,31 +636,42 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
       break;
     case 'game':
       const gameContent = document.createElement('div');
-      gameContent.className = "dashboard-game-content"; // ***new***
+      gameContent.className = "dashboard-game-content";
       gameContent.innerHTML = `<h3 class="dashboard-content-heading">Choose your Game</h3>`;
-      // Tournament Mode button
-      const tournamentBtn = document.createElement('button');
-      tournamentBtn.className = "dashboard-game-button";
-      tournamentBtn.innerHTML = `<span>Tournament Mode</span>`;
-      tournamentBtn.onclick = () => {
-	      navigateTo('/game?tournament=true'); // it will trigger tournament flow from game.ts
-      };
-      gameContent.appendChild(tournamentBtn);
 
-      // AI Match Button
-      const aiButton = document.createElement('button');
-      aiButton.className = "dashboard-game-button";
-      aiButton.innerHTML = `<span>Play against AI</span>`;
-      aiButton.addEventListener('click', () => navigateTo('/game?mode=ai'));
-      gameContent.appendChild(aiButton);
+      const gameOptionsContainer = document.createElement('div');
+      gameOptionsContainer.className = 'game-options-container';
 
-      // Local Match Button
-      const localButton = document.createElement('button');
-      localButton.className = "dashboard-game-button";
-      localButton.innerHTML = `<span>Local Match</span>`;
-      localButton.addEventListener('click', () => navigateTo('/game')); // Or a different route/logic for local
-      
-      gameContent.appendChild(localButton);
+      const gameOptions = [
+        {
+          title: 'Local Match',
+          image: '/avatars/local.png',
+          action: () => navigateTo('/game')
+        },
+        {
+          title: 'Play against AI',
+          image: '/avatars/ai.png',
+          action: () => navigateTo('/game?mode=ai')
+        },
+        {
+          title: 'Tournament',
+          image: '/avatars/tournament.png',
+          action: () => navigateTo('/game?tournament=true')
+        }
+      ];
+
+      gameOptions.forEach(option => {
+        const card = document.createElement('div');
+        card.className = 'game-option-card';
+        card.innerHTML = `
+          <img src="${option.image}" alt="${option.title}">
+          <h4>${option.title}</h4>
+        `;
+        card.addEventListener('click', option.action);
+        gameOptionsContainer.appendChild(card);
+      });
+
+      gameContent.appendChild(gameOptionsContainer);
       contentArea.appendChild(gameContent);
       break;
     case 'chat':
