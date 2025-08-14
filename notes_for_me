@@ -31,11 +31,49 @@ Benan Notes. Should to fix :
 
 5. After the 1st match if 1 player press I'm ready button the countdown starts. Should wait to all players to press the button I'm ready `FIXED`
 
+**PLAYER READY LOGIC FIX:**
+
+- **Problem**: Tournament countdown started when only 1 player clicked "I'm Ready"
+- **Root Cause**: `allPlayersReady()` checked all active players globally, not just current match players
+- **Solution**: Modified `allPlayersReady()` in Tournament.js to specifically check current match players
+- **Logic**: For real matches (player1 & player2), both must be ready. For bye matches, only the single player needs to be ready
+- **Result**: Final match now properly waits for BOTH players to click "I'm Ready" before countdown
+
 6. After the tournament has finsished -> Return to Lobby button -> Back to Dashboard button -> appears Disconnected for a while `No need no fix It's ok.`
 
 7. Next match button no need after the second match. `FIXED`
 
 8. After the first match check `I am ready button`. `FIXED`
+
+9. **COUNTDOWN DISCONNECT ISSUES + TOURNAMENT RESULTS CONSISTENCY** `FIXED`
+
+**DISCONNECT DURING COUNTDOWN:**
+
+- **Problem**: Disconnecting during countdown caused next match to start automatically without both players being ready
+- **Solution**: Added countdown cancellation when tournament players disconnect, proper ready state reset
+- **Implementation**: Both backend countdown clearing and frontend dialog removal
+
+**TOURNAMENT RESULTS DISPLAY INCONSISTENCY:**
+
+- **Problem**: Different result formats appearing (raw objects vs formatted strings)
+- **Root Cause**: Mixed usage of `tournament.allMatches` (raw objects) vs `tournament.getAllMatchResults()` (formatted strings)
+- **Solution**: Standardized ALL `tournament_over` events to use `tournament.getAllMatchResults()`
+- **Result**: Consistent bracket display showing proper formatted match results in all scenarios
+
+- **Problem**: When player disconnects during countdown, next match starts automatically without "I'm Ready" requirements
+- **Root Cause**: Countdown continued running after disconnect, triggering automatic match start
+- **Solution**: Added countdown cancellation logic when tournament player disconnects
+- **Frontend**: Added `countdown_cancelled` event handler to clear countdown dialogs
+- **Result**: Disconnects now properly cancel countdown and reset ready states
+
+10. **TOURNAMENT RESULTS DISPLAY INCONSISTENCY** `FIXED`
+
+**INCONSISTENT BRACKET FORMATS:**
+
+- **Problem**: Different tournament completion paths showed different result formats (objects vs formatted strings)
+- **Root Cause**: Some code paths used `tournament.allMatches` (raw objects), others used `tournament.getAllMatchResults()` (formatted strings)
+- **Solution**: Standardized ALL `tournament_over` emissions to use `tournament.getAllMatchResults()`
+- **Result**: Consistent, properly formatted tournament results display in all scenarios (normal completion, forfeit wins, etc.)
 
 Don't get a new socket for each alias registration.
 SOCKET CONNECTION PATTERN:
@@ -98,8 +136,8 @@ Tournament Edge Cases
 
 1. Odd Number of Players: Ensure the bracket handles byes correctly and no player is left unassigned. `OK`
 2. Single Player Tournament: Verify the system gracefully handles or prevents tournaments with only one participant. `OK`
-3. Simultaneous "I'm Ready" Presses: Multiple players press "I'm Ready" at the same time—check for race conditions or missed events.
-4. Player Disconnects Mid-Tournament: Test what happens if a player disconnects during a match or between rounds. Is the match forfeited, or does the system wait? `FIXED - FORFEIT SYSTEM + BYE HANDLING`
+3. Simultaneous "I'm Ready" Presses: Multiple players press "I'm Ready" at the same time—check for race conditions or missed events. `OK`
+4. Player Disconnects Mid-Tournament: Test what happens if a player disconnects during a match or between rounds. Is the match forfeited, or does the system wait? `FIXED - FORFEIT SYSTEM + BYE HANDLING + FINAL MATCH FIXES`
 
 **FORFEIT WITH BYE HANDLING FIX:**
 
@@ -107,7 +145,14 @@ Tournament Edge Cases
 - **Symptom**: After forfeit, tournament shows "Winner vs BYE" instead of "Winner vs ActualOpponent"
 - **Solution**: Added bye-handling loop to forfeit case to auto-advance bye matches
 - **Match Announcement**: Uses proper `getCurrentMatchPlayers()` and sends `await_player_ready` to both players
-- **Tournament Flow**: Now seamlessly handles forfeit → bye processing → next real match `FIXED - FORFEIT SYSTEM IMPLEMENTED + BUG FIXED`
+- **Tournament Flow**: Now seamlessly handles forfeit → bye processing → next real match
+
+**FINAL MATCH FORFEIT FIX:**
+
+- **Problem**: Final match disconnects caused "match cancelled" instead of forfeit
+- **Debugging**: Added comprehensive logging to track forfeit flow in all tournament stages
+- **Robustness**: Improved error handling and fallback cases for edge scenarios
+- **Consistency**: Final matches now handle disconnects same as earlier rounds (forfeit victory)
 
 **PROPER DISCONNECT BEHAVIOR:**
 
@@ -137,7 +182,20 @@ Tournament Edge Cases
 
 5. Alias Re-registration: A player tries to register a new alias after already registering one. Ensure the mapping updates or is blocked as intended.
 
-6. Multiple Tabs/Windows: Same user opens multiple tabs—does the system create duplicate sockets or aliases?
+6. Multiple Tabs/Windows: Same user opens multiple tabs—does the system create duplicate sockets or aliases? `FIXED`
+
+**DUPLICATE USER REGISTRATION FIX:**
+
+- **Problem**: Same user could register multiple aliases from different browser tabs, allowing one person to participate as multiple "players" in a tournament
+- **Security Issue**: Tournament integrity compromised - one user could control multiple tournament slots
+- **Root Cause**: System only checked for duplicate aliases, not duplicate userIds
+- **Solution**: Added userId validation in `registerPlayer()` method to prevent same user from registering multiple times
+- **Implementation**:
+  - Backend: Enhanced `Tournament.registerPlayer()` to check both alias and userId uniqueness
+  - Server: Improved error messages to distinguish between "alias taken" vs "user already registered"
+  - Frontend: Updated error handling to display specific error messages
+- **Result**: Each authenticated user can only register once per tournament, maintaining fair play and tournament integrity
+
 7. Tournament Reset During Active Match: Admin or system triggers a reset while a match is ongoing. Ensure all states are cleared and no orphaned matches remain.
 8. Rapid Tournament Start/Stop: Start and immediately stop tournaments repeatedly to check for memory leaks or lingering state.
 9. Bracket Visibility: Changing browser tab/window during registration or matches—ensure bracket and state persist or recover correctly.

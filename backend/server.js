@@ -248,9 +248,9 @@ io.on('connection', (socket) => {
             if (!tournament) tournament = new Tournament();
         
             const success = tournament.registerPlayer(socket.id, alias, user);
-            socket.emit('alias_registered', { success });
-
+            
             if (success) {
+                socket.emit('alias_registered', { success: true });
                 onlineUsers.set(socket.id, { userId: user.userId, username: user.username, alias, blocked: new Set() });
                 const onlineList = Array.from(onlineUsers.entries()).map(([id, u]) => ({ socketId: id, alias: u.alias, userId: u.userId, username: u.username }));
                 io.emit('online_users', onlineList);
@@ -264,20 +264,26 @@ io.on('connection', (socket) => {
                 io.emit('player_list_updated', playerList);
 
                 console.log('Players in lobby:', Array.from(tournament.players.values()).map(p => p.alias)); // Del
-            
+                
                 // Only show the lobby dialog, do not start the match yet
                 io.emit('tournament_lobby', {
-                        message: tournament.canStartTournament() && tournament.rounds.length === 0
-                            ? 'Ready to start tournament?'
-                            : 'Waiting for more players to join...',
-                        players: Array.from(tournament.players.values()).map(p => p.alias)
-                    });
-                }
-            else {
-                socket.emit('tournament_waiting', {
-                    message: 'Waiting for more players to join...',
-                    playersNeeded: 2 - tournament.players.size
+                    message: tournament.canStartTournament() && tournament.rounds.length === 0
+                        ? 'Ready to start tournament?'
+                        : 'Waiting for more players to join...',
+                    players: Array.from(tournament.players.values()).map(p => p.alias)
                 });
+            } else {
+                // Check if it's a duplicate user or duplicate alias
+                const existingUserIds = [...tournament.players.values()].map(p => p.userId);
+                const existingAliases = [...tournament.players.values()].map(p => p.alias);
+                
+                if (existingUserIds.includes(user.userId)) {
+                    socket.emit('alias_registered', { success: false, message: 'You are already registered in this tournament.' });
+                } else if (existingAliases.includes(alias)) {
+                    socket.emit('alias_registered', { success: false, message: 'Alias already taken. Please choose another name.' });
+                } else {
+                    socket.emit('alias_registered', { success: false, message: 'Registration failed.' });
+                }
             }
         } catch (e) {
             socket.emit('alias_registered', { success: false, message: 'Invalid token.' });
@@ -317,6 +323,7 @@ io.on('connection', (socket) => {
 		if (tournament.rounds.length === 0) {
 			try {
 				tournament.generateInitialBracket();
+				console.log('Tournament bracket generated successfully');
 			} catch (e) {
 				// Notify the client about the error, do not crash the server
 				socket.emit('tournament_error', { message: e.message });
@@ -326,6 +333,11 @@ io.on('connection', (socket) => {
 			}
 			
 			const currentMatch = tournament.getCurrentMatchPlayers();
+			console.log('Current match players:', {
+				player1: currentMatch.player1 ? `${currentMatch.player1.alias} (${currentMatch.player1.socketId})` : null,
+				player2: currentMatch.player2 ? `${currentMatch.player2.alias} (${currentMatch.player2.socketId})` : null
+			});
+			
 			game.prepareForMatch();
 			
 			// Emit the dynamic bracket to all clients
@@ -336,15 +348,34 @@ io.on('connection', (socket) => {
 				player1: currentMatch.player1.alias,
 				player2: currentMatch.player2 ? currentMatch.player2.alias : 'Bye'
 			});
-			io.emit('await_player_ready');
+			
+			// Send ready prompt only to the players in the current match
+			if (currentMatch.player1) {
+				io.to(currentMatch.player1.socketId).emit('await_player_ready');
+			}
+			if (currentMatch.player2) {
+				io.to(currentMatch.player2.socketId).emit('await_player_ready');
+			}
 		}
 	});
 
 	socket.on('player_ready', () => {
 		if (!tournament) return;
+		
+		const player = tournament.players.get(socket.id);
+		console.log(`Player ready: ${player ? player.alias : 'Unknown'} (${socket.id})`);
+		
 		tournament.markPlayerReady(socket.id);
+		
+		const currentMatch = tournament.getCurrentMatchPlayers();
+		console.log('Current match ready status:', {
+			player1: currentMatch.player1 ? `${currentMatch.player1.alias}: ${currentMatch.player1.isReady}` : null,
+			player2: currentMatch.player2 ? `${currentMatch.player2.alias}: ${currentMatch.player2.isReady}` : null,
+			allReady: tournament.allPlayersReady()
+		});
 	
 		if (tournament.allPlayersReady() ) {
+			console.log('All players ready! Starting countdown...');
 			const currentMatch = tournament.getCurrentMatchPlayers();
 			if (currentMatch.player1) 
 				io.to(currentMatch.player1.socketId).emit('assign_controls', 'player1');
@@ -447,11 +478,14 @@ io.on('connection', (socket) => {
             const finalWinnerData = tournament.winners[0];
             const finalWinnerAlias = finalWinnerData && finalWinnerData[1] ? finalWinnerData[1] : 'Unknown';
             const allMatchResults = tournament.getAllMatchResults();
-            io.emit('tournament_over', { 
-                winner: finalWinnerAlias,
-                allMatches: allMatchResults 
-            });
-            tournament.reset(); // Reset for the next tournament
+				// Emit the final bracket with completed state and champion before tournament_over
+				const finalBracket = tournament.getDynamicBracket();
+				io.emit('tournament_bracket', finalBracket);
+				io.emit('tournament_over', { 
+					winner: finalWinnerAlias,
+					allMatches: allMatchResults 
+				});
+				tournament.reset(); // Reset for the next tournament
         }
     });
 
@@ -465,16 +499,47 @@ io.on('connection', (socket) => {
 		if (tournament) {
 			const disconnectedPlayer = tournament.players.get(socket.id);
 			
+			// If player is not in tournament, skip tournament logic
+			if (!disconnectedPlayer) {
+				return;
+			}
+			
+			console.log(`Tournament player ${disconnectedPlayer.alias} (${socket.id}) disconnecting. Tournament finished: ${tournament.isFinished}, Players remaining: ${tournament.players.size}`);
+			
+			// If tournament is already finished, just clean up silently
+			if (tournament.isFinished) {
+				console.log('Tournament already finished, removing player silently');
+				tournament.removePlayer(socket.id);
+				
+				// Only reset tournament when ALL players have left a finished tournament
+				if (tournament.players.size === 0) {
+					console.log('All players left finished tournament, cleaning up');
+					tournament.reset();
+				}
+				return; // Exit early for finished tournaments
+			}
+			
+			// Cancel any active countdown if a tournament player disconnects
+			if (countdownInterval) {
+				clearInterval(countdownInterval);
+				countdownInterval = null;
+				io.emit('countdown_cancelled');
+			}
+			
 			// Check if current match player disconnected
 			if (tournament.currentMatch) {
 				const [p1, p2] = tournament.currentMatch;
 				const isPlayerInMatch = socket.id === p1[0] || socket.id === p2?.[0];
 				
 				if (isPlayerInMatch) {
+					console.log('Player in match disconnected:', socket.id, 'Match:', p1, p2);
+					
 					// Determine the winner (the opponent who didn't disconnect)
 					const winnerSocketId = socket.id === p1[0] ? p2?.[0] : p1[0];
 					const winnerData = winnerSocketId ? tournament.players.get(winnerSocketId) : null;
 					const loserAlias = disconnectedPlayer?.alias || 'Unknown Player';
+					
+					console.log('Forfeit details:', { winnerSocketId, winnerData: winnerData?.alias, loserAlias });
 					
 					if (winnerData && winnerSocketId) {
 						try {
@@ -509,9 +574,12 @@ io.on('connection', (socket) => {
 							
 							// Add delay to show forfeit message before proceeding
 							setTimeout(() => {
+								// Remove player from tournament AFTER forfeit processing
+								tournament.removePlayer(socket.id);
+								
 								if (tournament.isFinished) {
 									const finalWinnerAlias = tournament.tournamentWinner?.[1] || 'Unknown';
-									const allMatchResults = tournament.allMatches;
+									const allMatchResults = tournament.getAllMatchResults();
 									io.emit('tournament_over', { 
 										winner: finalWinnerAlias,
 										allMatches: allMatchResults 
@@ -533,6 +601,31 @@ io.on('connection', (socket) => {
 										io.to(nextP1.socketId).emit('await_player_ready');
 										io.to(nextP2.socketId).emit('await_player_ready');
 									}
+								} else {
+									// Check if this was the final match (only 1 player left after disconnect)
+									if (tournament.players.size === 1) {
+										// If only 1 player remains and tournament was in progress, they win by forfeit
+										const remainingPlayer = Array.from(tournament.players.values())[0];
+										if (remainingPlayer) {
+											tournament.isFinished = true;
+											tournament.tournamentWinner = [remainingPlayer.userId, remainingPlayer.alias];
+											const allMatchResults = tournament.getAllMatchResults();
+											io.emit('tournament_over', { 
+												winner: remainingPlayer.alias,
+												allMatches: allMatchResults 
+											});
+											tournament.reset();
+										}
+									} else if (tournament.players.size < 2 && !tournament.isFinished) {
+										// Less than 2 players and tournament not finished = cancel
+										tournament.reset();
+										io.emit('tournament_cancelled', {
+											reason: 'Not enough players remaining'
+										});
+									} else if (tournament.players.size === 0 && tournament.isFinished) {
+										// All players have left a finished tournament, clean up
+										tournament.reset();
+									}
 								}
 							}, 3000); // 3 second delay to show forfeit message
 						} catch (error) {
@@ -542,41 +635,75 @@ io.on('connection', (socket) => {
 							io.emit('match_cancelled', {
 								reason: 'Error processing forfeit: ' + error.message
 							});
+							// Remove player even on error
+							tournament.removePlayer(socket.id);
 						}
 					} else {
 						// No valid opponent found, cancel match
+						console.log('No valid opponent found for forfeit:', { winnerSocketId, winnerData: winnerData?.alias, p1, p2 });
 						game.paused = true;
 						game.resetGame();
 						io.emit('match_cancelled', {
 							reason: 'Player disconnected, no valid opponent'
 						});
+						// Remove player when no opponent found
+						tournament.removePlayer(socket.id);
+					}
+				} else {
+					// Player disconnected but not in current match - just remove them
+					tournament.removePlayer(socket.id);
+					
+					// Check if tournament should continue or be cancelled
+					if (tournament.players.size === 1) {
+						// If only 1 player remains and tournament was in progress, they win by forfeit
+						const remainingPlayer = Array.from(tournament.players.values())[0];
+						if (remainingPlayer) {
+							tournament.isFinished = true;
+							tournament.tournamentWinner = [remainingPlayer.userId, remainingPlayer.alias];
+							const allMatchResults = tournament.getAllMatchResults();
+							io.emit('tournament_over', { 
+								winner: remainingPlayer.alias,
+								allMatches: allMatchResults 
+							});
+							tournament.reset();
+						}
+					} else if (tournament.players.size < 2 && !tournament.isFinished) {
+						// Less than 2 players and tournament not finished = cancel
+						tournament.reset();
+						io.emit('tournament_cancelled', {
+							reason: 'Not enough players remaining'
+						});
+					} else if (tournament.players.size === 0 && tournament.isFinished) {
+						// All players have left a finished tournament, clean up
+						tournament.reset();
 					}
 				}
-			}
-			
-			// Remove player from tournament AFTER handling the match
-			tournament.removePlayer(socket.id);
-			
-			// Check if this was the final match (only 2 players left before disconnect)
-			if (tournament.players.size === 1) {
-				// If only 1 player remains and tournament was in progress, they win by forfeit
-				const remainingPlayer = Array.from(tournament.players.values())[0];
-				if (remainingPlayer) {
-					tournament.isFinished = true;
-					tournament.tournamentWinner = [remainingPlayer.userId, remainingPlayer.alias];
-					const allMatchResults = tournament.allMatches;
-					io.emit('tournament_over', { 
-						winner: remainingPlayer.alias,
-						allMatches: allMatchResults 
+			} else {
+				// No current match - just remove the player
+				tournament.removePlayer(socket.id);
+				
+				// Check if tournament should continue or be cancelled  
+				if (tournament.players.size === 1) {
+					const remainingPlayer = Array.from(tournament.players.values())[0];
+					if (remainingPlayer) {
+						tournament.isFinished = true;
+						tournament.tournamentWinner = [remainingPlayer.userId, remainingPlayer.alias];
+						const allMatchResults = tournament.getAllMatchResults();
+						io.emit('tournament_over', { 
+							winner: remainingPlayer.alias,
+							allMatches: allMatchResults 
+						});
+						tournament.reset();
+					}
+				} else if (tournament.players.size < 2 && !tournament.isFinished) {
+					tournament.reset();
+					io.emit('tournament_cancelled', {
+						reason: 'Not enough players remaining'
 					});
+				} else if (tournament.players.size === 0 && tournament.isFinished) {
+					// All players have left a finished tournament, clean up
 					tournament.reset();
 				}
-			} else if (tournament.players.size < 2) {
-				// Less than 2 players and tournament not finished = cancel
-				tournament.reset();
-				io.emit('tournament_cancelled', {
-					reason: 'Not enough players remaining'
-				});
 			}
 		}
 	});
