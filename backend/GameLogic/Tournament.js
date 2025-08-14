@@ -24,10 +24,15 @@ class Tournament {
 	this.tournamentWinner = null;	//
   }
   
-  // it checks if the alias is registered
+  // it checks if the alias is registered and prevents duplicate user registration
   registerPlayer(socketId, alias, user) {
+	// Check if alias is already taken
 	const aliases = [...this.players.values()].map(p => p.alias);
 	if (aliases.includes(alias)) return false;
+
+	// Check if this user (by userId) is already registered in the tournament
+	const userIds = [...this.players.values()].map(p => p.userId);
+	if (userIds.includes(user.userId)) return false;
 
 	this.players.set(socketId, {
 	  alias,
@@ -65,6 +70,20 @@ class Tournament {
   }
 
   allPlayersReady() {
+	// Get the current match players specifically
+	const { player1, player2 } = this.getCurrentMatchPlayers();
+	
+	// For a real match (not bye), both players must be ready
+	if (player1 && player2) {
+		return player1.isReady && player2.isReady;
+	}
+	
+	// For bye matches or single player scenarios, just check if the single player is ready
+	if (player1 && !player2) {
+		return player1.isReady;
+	}
+	
+	// Should not happen, but fallback to old logic
 	const activePlayers = [...this.players.keys()].filter(
 	  id => !this.byes.has(id)
 	);
@@ -188,6 +207,24 @@ class Tournament {
 
 	// Generate next round
 	return this.generateNextRound();
+  }
+
+  getNextMatch() {
+	// Check if there are more matches in current round
+	if (this.currentMatchIndex + 1 < this.rounds[this.currentRound].length) {
+	  return this.rounds[this.currentRound][this.currentMatchIndex + 1];
+	}
+	
+	// Check if we can generate next round
+	if (this.winners.length > 1) {
+	  // Simulate next round generation to see what the next match would be
+	  const winnersCopy = [...this.winners];
+	  if (winnersCopy.length >= 2) {
+		return [winnersCopy.pop(), winnersCopy.pop()];
+	  }
+	}
+	
+	return null; // No more matches
   }
 
   generateNextRound() {
