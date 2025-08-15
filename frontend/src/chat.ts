@@ -75,7 +75,7 @@ export function renderChat(socket: Socket): () => void {
     messagesDiv.scrollTop = messagesDiv.scrollHeight; // Auto-scroll
   }
 
-  // --- FIXED ISSUE: Show OnlineUser List - Authenticate the user for the chat ---
+  // --- Show OnlineUser List - Authenticate the user for the chat ---
   const token = sessionStorage.getItem('authToken');
   if (token) {
     socket.emit('authenticate_chat', token);
@@ -148,12 +148,30 @@ export function renderChat(socket: Socket): () => void {
     }
   });
 
-  socket.on('game_invite', ({ username }) => {
-    appendMessage('System', `${username} invited you to a game.`);
+  socket.on('receive_public_tournament_invite', ({ senderAlias }) => {
+    const inviteEl = document.createElement('div');
+    inviteEl.className = 'chat-message system-invite'; // Style this class for a distinct look
+    
+    const text = document.createElement('p');
+    text.innerHTML = `<strong>${senderAlias}</strong> sent an invitation to join the public tournament.`;
+
+    const joinButton = document.createElement('button');
+    joinButton.textContent = 'Join Lobby';
+    joinButton.className = 'btn-join-tournament'; // Style this button
+    joinButton.onclick = () => {
+        // This uses a global navigateTo function, assuming it's available
+        // from your router setup.
+        window.location.href = '/game?tournament=true';
+    };
+
+    inviteEl.appendChild(text);
+    inviteEl.appendChild(joinButton);
+    messagesDiv.appendChild(inviteEl);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to the new message
   });
 
-  socket.on('match_announcement', (data: { player1: string; player2: string }) => {
-    appendMessage('Tournament', `Next match: ${data.player1} vs ${data.player2}`);
+  socket.on('game_invite', ({ username }) => {
+    appendMessage('System', `${username} invited you to a game.`);
   });
 
   socket.on('user_blocked', ({ targetUserId, message }) => {
@@ -200,6 +218,13 @@ export function renderChat(socket: Socket): () => void {
     }
   });
 
+  inviteBtn.addEventListener('click', () => {
+    if (selectedUser) {
+      socket.emit('send_public_tournament_invite', { targetSocketId: selectedUser.socketId });
+      appendMessage('System', `Tournament invite sent to ${selectedUser.username}`);
+    }
+  });
+
   blockBtn.addEventListener('click', () => {
     if (selectedUser) {
         if (blockedUserIds.has(selectedUser.userId)) {
@@ -223,10 +248,7 @@ export function renderChat(socket: Socket): () => void {
   const root = document.querySelector('#dashboard-content');
   root?.appendChild(container);
 
-  // Return a cleanup function
   return () => {
-    // CRITICAL: Do NOT disconnect the socket here.
-    // The socket is persistent and managed by the dashboard.
     container.remove();
   };
 }
