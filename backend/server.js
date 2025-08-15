@@ -89,6 +89,22 @@ const game = new GameEngine();
 // Map of online users: socketId -> { userId, username, alias, blocked:Set }
 const onlineUsers = new Map();
 
+// Server startup cleanup
+function initializeServer() {
+	// Reset any existing tournament state on server restart
+	if (tournament) {
+		console.log('Server restart detected - resetting tournament state');
+		tournament.reset();
+		tournament = null;
+	}
+	// Reset game state
+	game.resetGame();
+	console.log('Server initialized - all states reset');
+}
+
+// Call initialization on server start
+initializeServer();
+
 // Improved countdown function with cleanup
 function startSynchronizedCountdown(io, duration = 10) {
 	let remaining = duration;
@@ -132,6 +148,17 @@ io.on('connection', (socket) => {
 		socket.handshake.query.local === true;
 	const gameMode = socket.handshake.query.mode || 'local';
 	game.setTournamentMode(!isLocalMatch, gameMode);
+	
+	// Check if client might have been in a tournament before server restart
+	if (gameMode === 'tournament') {
+		// If no tournament exists on server but client is connecting in tournament mode,
+		// it likely means server was restarted during a tournament
+		if (!tournament) {
+			socket.emit('tournament_reset', { 
+				reason: 'Server was restarted during tournament. All tournament states have been cleared.' 
+			});
+		}
+	}
 	
 	// Add player with error handling CHECK THIS LATER!
 	if (isLocalMatch) {
@@ -315,6 +342,46 @@ io.on('connection', (socket) => {
             if (!sender) return;
             io.to(targetSocketId).emit('game_invite', { from: socket.id, alias: sender.alias, userId: sender.userId });
     });
+
+	// Administrative tournament reset - can be triggered for testing or emergency cleanup
+	socket.on('admin_reset_tournament', ({ token }) => {
+		if (!token) return;
+		
+		try {
+			const decodedToken = jwt.verify(token, JWT_SECRET);
+			// Add admin check here if needed - for now any authenticated user can reset
+			
+			console.log(`Tournament reset requested by user ${decodedToken.username} (${socket.id})`);
+			
+			if (tournament) {
+				// Cancel any active countdown
+				if (countdownInterval) {
+					clearInterval(countdownInterval);
+					countdownInterval = null;
+					io.emit('countdown_cancelled');
+				}
+				
+				// Notify all clients about the reset
+				io.emit('tournament_reset', { 
+					reason: 'Tournament was manually reset by administrator' 
+				});
+				
+				// Reset tournament state
+				tournament.reset();
+				tournament = null;
+				
+				// Reset game state
+				game.resetGame();
+				game.pause();
+				
+				console.log('Tournament has been manually reset');
+			} else {
+				socket.emit('admin_response', { message: 'No active tournament to reset' });
+			}
+		} catch (e) {
+			socket.emit('admin_response', { message: 'Invalid authentication for admin action' });
+		}
+	});
 
 	// Start tournament when someone clicks "Start Tournament"
 	socket.on('start_tournament', () => {
