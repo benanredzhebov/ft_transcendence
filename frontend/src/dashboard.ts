@@ -86,6 +86,11 @@ export function renderDashboard() {
     chatSocket = io('https://127.0.0.1:3000', {
       transports: ['websocket'],
       secure: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
     });
 
     chatSocket.on('connect', () => {
@@ -95,6 +100,15 @@ export function renderDashboard() {
 
     chatSocket.on('disconnect', () => {
       console.log('Chat socket disconnected.');
+    });
+    
+    // Add reconnection event handlers
+    chatSocket.on('reconnect', (attemptNumber) => {
+      console.log(`Chat socket reconnected after ${attemptNumber} attempts`);
+    });
+    
+    chatSocket.on('reconnect_failed', () => {
+      console.log('Chat socket failed to reconnect');
     });
   }
 

@@ -196,7 +196,37 @@ Tournament Edge Cases
   - Frontend: Updated error handling to display specific error messages
 - **Result**: Each authenticated user can only register once per tournament, maintaining fair play and tournament integrity
 
-7. Tournament Reset During Active Match: Admin or system triggers a reset while a match is ongoing. Ensure all states are cleared and no orphaned matches remain.
+7. Tournament Reset During Active Match: Admin or system triggers a reset while a match is ongoing. Ensure all states are cleared and no orphaned matches remain. `FIXED`
+
+**TOURNAMENT RESET DURING ACTIVE MATCH FIX:**
+
+- **Problem**: Server restart during active tournament match caused inconsistent states, connection lost messages, and orphaned matches
+- **Root Issues**:
+  - No automatic socket reconnection configured
+  - Poor disconnect/reconnect UX with simple page reload
+  - No server restart detection or tournament state recovery
+  - Missing administrative reset capability
+- **Solution**: Comprehensive tournament reset and reconnection system
+- **Backend Changes**:
+  - Added server initialization cleanup to reset states on startup
+  - Enhanced connection handler to detect tournament clients after server restart
+  - Added `admin_reset_tournament` handler for manual resets
+  - Proper tournament state cleanup and client notification
+- **Frontend Changes**:
+  - Added automatic socket reconnection with configurable attempts and delays
+  - Enhanced disconnect handling with status updates and different messages
+  - Tournament state preservation in sessionStorage for reconnection scenarios
+  - Added `tournament_reset` event handler for server restart notifications
+  - Improved reconnection logic with proper state restoration
+- **User Experience**:
+  - Clear "Tournament reset due to server restart" messages
+  - Automatic reconnection attempts with progress display
+  - Clean state reset with no orphaned matches
+  - Proper redirect to dashboard with session validation
+- **Testing**: Created admin testing utilities for manual reset triggers and connection simulation
+- **Edge Cases Covered**: Dual socket architecture, session management, state synchronization, various disconnect scenarios
+- **Result**: Server restarts during tournaments now properly notify all players, reset all states, and allow clean restart of new tournaments
+
 8. Rapid Tournament Start/Stop: Start and immediately stop tournaments repeatedly to check for memory leaks or lingering state.
 9. Bracket Visibility: Changing browser tab/window during registration or matches—ensure bracket and state persist or recover correctly.
 10. Return to Lobby/Back to Dashboard: After tournament ends, test navigation to lobby/dashboard and verify results/history are displayed and not mixed with previous tournaments. `FIXED - DASHBOARD REDIRECT + FINAL MATCH FORFEIT`
