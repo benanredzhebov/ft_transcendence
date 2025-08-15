@@ -125,7 +125,6 @@ function startSynchronizedCountdown(io, duration = 10) {
 
 io.on('connection', (socket) => {
 	console.log('Client connected:', socket.id);
-	// console.log('Handshake query:', socket.handshake.query);
 	
 	// Detect if it's local match
 	const isLocalMatch = 
@@ -174,10 +173,10 @@ io.on('connection', (socket) => {
     	    const user = {
     	        userId: decoded.userId,
     	        username: decoded.username,
-    	        alias: decoded.username, // Default alias to username
+    	        alias: decoded.username,
     	        blocked: new Set(),
     	    };
-    	    onlineUsers.set(socket.id, user);
+    	    onlineUsers.set(socket.id, user); // <-- Add User
     	    console.log(`User authenticated for session: ${user.username} (${socket.id})`);
 
     	    // Notify all clients about the updated user list (excluding themselves)
@@ -246,14 +245,11 @@ io.on('connection', (socket) => {
             const success = tournament.registerPlayer(socket.id, alias, user);
             
             if (success) {
-				// *** to avoid repeated socket in chat ***
+				// *** i deleted this part because onlineUsers is already populated in authenticate_chat, in Dashboard ***
+                socket.emit('alias_registered', { success: true });
                 // onlineUsers.set(socket.id, { userId: user.userId, username: user.username, alias, blocked: new Set() });
                 // const onlineList = Array.from(onlineUsers.entries()).map(([id, u]) => ({ socketId: id, alias: u.alias, userId: u.userId, username: u.username }));
                 // io.emit('online_users', onlineList);
-                socket.emit('alias_registered', { success: true });
-                onlineUsers.set(socket.id, { userId: user.userId, username: user.username, alias, blocked: new Set() });
-                const onlineList = Array.from(onlineUsers.entries()).map(([id, u]) => ({ socketId: id, alias: u.alias, userId: u.userId, username: u.username }));
-                io.emit('online_users', onlineList);
 
                 const playerList = Array.from(tournament.players.entries()).map(([socketId, {alias, userId, username}]) => ({
                     socketId,
@@ -331,6 +327,25 @@ io.on('connection', (socket) => {
             const sender = onlineUsers.get(socket.id);
             if (!sender) return;
             io.to(targetSocketId).emit('game_invite', { from: socket.id, alias: sender.alias, userId: sender.userId });
+    });
+
+
+	socket.on('send_public_tournament_invite', ({ targetSocketId }) => {
+        const sender = onlineUsers.get(socket.id);
+        const recipient = onlineUsers.get(targetSocketId);
+
+        if (!sender || !recipient) {
+            console.log('Could not find sender or recipient for tournament invite.');
+            return;
+        }
+
+        const payload = {
+            senderAlias: sender.alias
+        };
+
+        // Send the special invite message to both users' chat windows
+        io.to(socket.id).emit('receive_public_tournament_invite', payload);
+        io.to(targetSocketId).emit('receive_public_tournament_invite', payload);
     });
 
 	// Start tournament when someone clicks "Start Tournament"

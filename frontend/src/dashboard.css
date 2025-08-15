@@ -674,6 +674,48 @@
 }
 /* --- END NEW --- */
 
+/* --- NEW: Chat Tournament Invite Styles --- */
+.chat-message.system-invite {
+    background-color: rgba(14, 116, 144, 0.15); /* Faded cyan background */
+    border-left: 3px solid #0e7490; /* Cyan accent border */
+    padding: 0.75rem 1rem;
+    margin: 0.5rem 0;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}
+
+.system-invite p {
+    margin: 0;
+    color: #d1d5db; /* Light gray text */
+    font-size: 0.9rem;
+}
+
+.system-invite p strong {
+    color: #fff;
+    font-weight: 600;
+}
+
+.btn-join-tournament {
+    background-color: #0e7490; /* Cyan */
+    color: white;
+    padding: 0.5rem 0.8rem;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    transition: background-color 0.2s;
+}
+
+.btn-join-tournament:hover {
+    background-color: #0891b2; /* Lighter cyan on hover */
+}
+/* --- END: Chat Tournament Invite Styles --- */
+
 .profile-view-modal-avatar {
     width: 100px;
     height: 100px;
