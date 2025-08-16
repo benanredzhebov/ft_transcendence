@@ -180,7 +180,7 @@ Tournament Edge Cases
 - **ADDITIONAL FIX**: Added game pause and reset to prevent background game from continuing during forfeit
 - **ADDITIONAL FIX**: Proper null checking for `player2` in match announcements
 
-5. Alias Re-registration: A player tries to register a new alias after already registering one. Ensure the mapping updates or is blocked as intended.
+5. Alias Re-registration: A player tries to register a new alias after already registering one. Ensure the mapping updates or is blocked as intended. `FIXED`
 
 6. Multiple Tabs/Windows: Same user opens multiple tabs—does the system create duplicate sockets or aliases? `FIXED`
 
@@ -228,7 +228,7 @@ Tournament Edge Cases
 - **Result**: Server restarts during tournaments now properly notify all players, reset all states, and allow clean restart of new tournaments
 
 8. Rapid Tournament Start/Stop: Start and immediately stop tournaments repeatedly to check for memory leaks or lingering state.
-9. Bracket Visibility: Changing browser tab/window during registration or matches—ensure bracket and state persist or recover correctly.
+9. Bracket Visibility: Changing browser tab/window during registration or matches—ensure bracket and state persist or recover correctly.  `OK`
 10. Return to Lobby/Back to Dashboard: After tournament ends, test navigation to lobby/dashboard and verify results/history are displayed and not mixed with previous tournaments. `FIXED - DASHBOARD REDIRECT + FINAL MATCH FORFEIT`
 
 **DASHBOARD REDIRECT FIX:**
