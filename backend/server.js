@@ -317,6 +317,65 @@ io.on('connection', (socket) => {
         }
 	});
 
+
+	socket.on('leave_tournament', () => {
+		if (tournament && tournament.players.has(socket.id)) {
+			const player = tournament.players.get(socket.id);
+			console.log(`Player ${player?.alias} leaving tournament`);
+
+			// Remove player from tournament
+			tournament.removePlayer(socket.id);
+
+			// Update player list for remaining players
+			const playerList = Array.from(tournament.players.entries()).map(([socketId, {alias, userId, username}]) => ({
+				socketId,
+				alias,
+				userId,
+				username
+			}));
+
+			io.emit('player_list_updated', playerList);
+
+			// Update lobby status
+			if (tournament.players.size === 0) {
+				// No players left, reset tournament
+				tournament.reset();
+				tournament = null;
+				io.emit('tournament_lobby_closed');
+			} else {
+				// Update lobby message for remaining players
+				io.emit('tournament_lobby', {
+				message: tournament.canStartTournament() && tournament.rounds.length === 0
+					? 'Ready to start tournament?'
+					: 'Waiting for more players to join...',
+				players: Array.from(tournament.players.values()).map(p => p.alias)
+			});
+		}
+
+		// Remove from online users alias
+		const user = onlineUsers.get(socket.id);
+		if (user) {
+			delete user.alias;
+			onlineUsers.set(socket.id, user);
+		}
+
+		// Update online users list
+		const onlineList = Array.from(onlineUsers.entries()).map(([id, u]) => ({
+			socketId: id,
+			alias: u.alias,
+			userId: u.userId,
+			username: u.username
+		}));
+		io.emit('online_users', onlineList);
+	}
+});
+
+socket.on('player_inactive', () => {
+	// Optional: Handle tab switching - you might want to keep player registered
+	// or remove them after a timeout
+	console.log(`Player ${socket.id} became inactive`);
+});
+
     socket.on('private_message', ({ targetSocketId, message }) => {
             const sender = onlineUsers.get(socket.id);
             const recipient = onlineUsers.get(targetSocketId);

@@ -6,8 +6,9 @@ import { renderChat } from './chat';
 let chatSocket: Socket | null = null; // module-level variable for the chat socket
 
 
-
 export function renderDashboard() {
+  document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
+
   const appElement = document.querySelector<HTMLDivElement>('#app');
   if (!appElement) {
     throw new Error('App root element (#app) not found!');
