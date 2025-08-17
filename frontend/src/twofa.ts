@@ -1,6 +1,12 @@
 import { navigateTo } from './main';  // Adjust the path if needed
 
 export function renderTwoFA() {
+	const urlParams = new URLSearchParams(window.location.search);
+	const tempTokenFromUrl = urlParams.get('tempToken');
+	if (tempTokenFromUrl) {
+	  sessionStorage.setItem('tempToken', tempTokenFromUrl);
+	}
+  
 	const app = document.querySelector<HTMLDivElement>('#app');
 	if (!app) {
 	  throw new Error('App root element (#app) not found!');
@@ -59,5 +65,4 @@ export function renderTwoFA() {
 	  }
 	});
   }
-  
   

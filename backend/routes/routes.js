@@ -16,17 +16,6 @@ const __dirname = path.dirname(__filename);
 const JWT_SECRET = process.env.JWT_SECRET || 'hbj2io4@@#!v7946h3&^*2cn9!@09*@B627B^*N39&^847,1';
 
 
-// const noHandlerRoute = (app) => {
-// 	app.setNotFoundHandler((req, reply) => {
-// 	reply.sendFile('index.html'); // Serve index.html from the root specified in fastifyStatic
-// });
-// }
-
-// Fallback for SPA routing
-// app.setNotFoundHandler((req, reply) => {
-// 	reply.sendFile('index.html'); // Serve index.html from the root specified in fastifyStatic
-// });
-
 
 const developerRoutes = (app) => {
   //2FA --test
@@ -496,11 +485,11 @@ const credentialsRoutes = (app) =>{
 
   app.get('/username-google', async (req, reply) => {
     const { code } = req.query;
-
+  
     if (!code) {
       return reply.redirect('/login?error=google_auth_missing_code');
     }
-
+  
     try {
       const tokenResponse = await exchangeCodeForToken(code);
       if (!tokenResponse || !tokenResponse.access_token) {
@@ -512,37 +501,44 @@ const credentialsRoutes = (app) =>{
         console.error('Failed to fetch user info from Google or email missing:', userInfo);
         return reply.redirect('/login?error=google_user_info_failed');
       }
-
-      const {email, name} = userInfo;
+  
+      const { email, name } = userInfo;
       let user = await DB('credentialsTable').where({ email }).first();
-
+  
       if (!user) {
-        const username = name || `user_${Date.now()}`; // Use Google name or a fallback
-        // For Google-authenticated users, you might use a placeholder password
-        // or a flag indicating Google auth, as they won't use this password to log in.
+        const username = name || `user_${Date.now()}`;
         const placeholderPassword = hashPassword(`google_auth_${email}_${Date.now()}`);
-        const [id] =  await DB('credentialsTable').insert({
-            email,
-            username,
-            password: placeholderPassword
-            // Consider adding a field like 'auth_provider' and set it to 'google'
+        const [id] = await DB('credentialsTable').insert({
+          email,
+          username,
+          password: placeholderPassword,
         });
-        user = { id, email, username }; // Use the newly created user's details
+        user = { id, email, username };
       }
-
+  
+      // Check if the user has 2FA enabled
+      if (user.two_factor_secret) {
+        // Generate a temporary token for 2FA verification
+        const tempToken = jwt.sign(
+          { userId: user.id, twoFAPending: true },
+          JWT_SECRET,
+          { expiresIn: '5m' } // Short lifespan
+        );
+  
+        return tempToken, reply.redirect(`/2fa?tempToken=${tempToken}`);
+      }
+  
       // Generate JWT token for the user
       const tokenPayload = {
         userId: user.id,
         email: user.email,
-        username: user.username
+        username: user.username,
       };
       const jwtAuthToken = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '1h' });
-
+  
       reply.redirect(`/google-auth-handler?token=${jwtAuthToken}`);
-
     } catch (e) {
       console.error('Error during Google OAuth callback:', e);
-      // Redirect to frontend login with a generic error
       reply.redirect('/login?error=google_auth_failed');
     }
   });

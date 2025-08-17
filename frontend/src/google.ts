@@ -1,4 +1,5 @@
-import './google.css'; // Import the CSS file
+import './google.css'; 
+import { navigateTo } from './main';
 
 export function renderGoogle() {
   const app = document.querySelector<HTMLDivElement>('#app');
@@ -30,11 +31,8 @@ export function renderGoogle() {
   usernameInput.type = "text";
   usernameInput.id = "google-username-input";
   usernameInput.name = "username";
-  usernameInput.className = "google-username-input-field";
   usernameInput.placeholder = "Enter your desired username";
   usernameInput.required = true;
-  usernameInput.autocomplete = "username";
-
 
   const errorMessageDiv = document.createElement('div');
   errorMessageDiv.id = "google-username-error";
@@ -70,14 +68,25 @@ export function renderGoogle() {
       return;
     }
 
-    // Implement the logic to send the username to your backend
-    // This might involve fetching the Google email/ID stored temporarily (e.g., in sessionStorage)
-    // and then making a POST request to a new backend endpoint.
-    console.log("Username submitted:", username);
     try {
-      alert(`Username "${username}" would be processed here. Implement backend call.`);
-      window.location.hash = '/dashboard';
+      const response = await fetch('/api/google/set-username', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username }),
+      });
 
+      const data = await response.json();
+      if (response.ok) {
+        if (data.requires2FA) {
+          sessionStorage.setItem('tempToken', data.tempToken);
+          navigateTo('/2fa'); // Redirect to 2FA page
+        } else {
+          sessionStorage.setItem('authToken', data.token);
+          navigateTo('/dashboard'); // Redirect to dashboard
+        }
+      } else {
+        throw new Error(data.error || 'Failed to set username.');
+      }
     } catch (error: any) {
       console.error('Error setting username:', error);
       errorMessageDiv.textContent = error.message || "An error occurred.";
