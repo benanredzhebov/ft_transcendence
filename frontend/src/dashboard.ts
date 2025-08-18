@@ -646,7 +646,7 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
         {
           title: 'Local Match',
           image: '/avatars/local.png',
-          action: () => navigateTo('/game')
+          action: () => navigateTo('/game?localTournament=true')
         },
         {
           title: 'Play against AI',

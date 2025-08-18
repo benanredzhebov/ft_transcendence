@@ -224,13 +224,84 @@ io.on('connection', (socket) => {
 	});
 	
 	socket.on('restart_game', () => {
-		game.resetGame();
-		game.resume();
-		io.emit('state_update', game.getState());
-	});
+        game.resetGame();
+        game.resume();
+        io.emit('state_update', game.getState());
+    });
 
-	// ***new: added token + data for Match Data***
-	socket.on('register_alias', ({ alias, token }) => { // + token
+    socket.on('create_local_tournament', ({ aliases }) => {
+        if (!aliases || aliases.length < 2) {
+            socket.emit('tournament_error', { message: 'At least 2 players are required for a local tournament.' });
+            return;
+        }
+
+        // Create a temporary, non-global tournament object for this client
+        const localTournament = new Tournament();
+        localTournament.isLocal = true;
+
+        aliases.forEach((alias, index) => {
+            const user = {
+                userId: `local_player_${index + 1}`, // Dummy user ID
+                username: alias,
+                isLocal: true
+            };
+            localTournament.registerPlayer(alias, alias, user);
+        });
+
+        try {
+            localTournament.generateInitialBracket();
+            const dynamicBracket = localTournament.getDynamicBracket();
+            
+            // Send the generated bracket back to only the requesting client
+            socket.emit('local_tournament_created', { bracket: dynamicBracket });
+
+        } catch (e) {
+            socket.emit('tournament_error', { message: e.message });
+        }
+    });
+
+    socket.on('start_local_match', () => {
+        // This event is just for the local tournament flow.
+        // It tells the server to start the countdown for the single client.
+        game.prepareForMatch();
+        io.to(socket.id).emit('assign_controls', 'local'); // Assign controls for a local game
+        startSynchronizedCountdown(io, 5); // Start a 5-second countdown
+    });
+
+    socket.on('local_match_winner_declared', ({ winnerAlias, bracket }) => {
+        if (!winnerAlias || !bracket) {
+            console.warn('Received invalid local_match_winner_declared event.');
+            return;
+        }
+
+        // Re-create the tournament state from the bracket sent by the client
+        const localTournament = new Tournament();
+        localTournament.rehydrateFromBracket(bracket); // A new method we will add to Tournament.js
+        localTournament.isLocal = true;
+
+        let nextMatch = localTournament.recordWinner(winnerAlias, { player1: 5, player2: 0 }); // Dummy scores
+
+        // Handle byes
+        while (nextMatch && (!nextMatch[0] || !nextMatch[1])) {
+            const autoWinner = nextMatch[0] ? nextMatch[0][0] : nextMatch[1][0];
+            nextMatch = localTournament.recordWinner(autoWinner);
+        }
+
+        const dynamicBracket = localTournament.getDynamicBracket();
+        
+        if (localTournament.isFinished) {
+            socket.emit('tournament_over', {
+                winner: localTournament.tournamentWinner ? localTournament.tournamentWinner[1] : 'Unknown',
+                allMatches: localTournament.getAllMatchResults()
+            });
+        } else {
+            // Send the updated bracket back to the client
+            socket.emit('local_tournament_updated', { bracket: dynamicBracket });
+        }
+    });
+
+    // ***new: added token + data for Match Data***
+    socket.on('register_alias', ({ alias, token }) => { // + token
         if (!token) {
             socket.emit('alias_registered', { success: false, message: 'Authentication required.' });
             return;

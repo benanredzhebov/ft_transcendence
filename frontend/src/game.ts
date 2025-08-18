@@ -28,6 +28,23 @@ let movePlayersFrame: number | null = null;
 let countDownActive = false;
 let aliasRegistered = false;
 let tournamentResults: { player1: string, player2: string, score1: number, score2: number}[] = [];
+let localTournamentBracket: any = null; // New: To store local tournament state
+
+// New Type Definition for Bracket Data
+type BracketData = {
+    rounds: {
+        player1: string | null,
+        player2: string | null,
+        winner: string | null,
+        scores: { player1: number, player2: number } | null,
+        isComplete: boolean,
+        isCurrent: boolean,
+        isBye: boolean
+    }[][],
+    currentRound: number,
+    isFinished: boolean,
+    tournamentWinner: string | null
+};
 
 // Game State Interfaces
 interface PaddleState {
@@ -77,7 +94,7 @@ function removeOverlays() {
 }
 
 function showTournamentDialog(message: string, 
-	options?: { confirmText?: string, timer?: number, onConfirm?: () => void }
+	options?: { confirmText?: string, timer?: number, onConfirm?: () => void,  showConfirm?: boolean  }
 ) {
 	const existing = document.querySelector('.tournament-dialog');
 	if (existing) existing.remove();
@@ -123,19 +140,147 @@ function updateCountdownDisplay(seconds: number) {
 	}
 	
 	if (seconds <= 0) {
-	setTimeout(() => dialog?.remove(), 1000);
-	}
+    setTimeout(() => dialog?.remove(), 1000);
+    }
+}
+
+// New Function: Renders the tournament bracket UI
+function renderBracket(data: BracketData) {
+    (window as any)['lastBracketData'] = data;
+    const bracketDiv = document.getElementById('tournament-bracket') || document.createElement('div');
+    bracketDiv.id = 'tournament-bracket';
+    bracketDiv.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h2 style="margin: 0;">Tournament Overview ${data.isFinished ? '- COMPLETE!' : ''}</h2>
+            <button id="close-bracket" style="background: #ff4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 14px;">×</button>
+        </div>
+    `;
+
+    data.rounds.forEach((round, roundIdx) => {
+        const roundDiv = document.createElement('div');
+        roundDiv.className = 'bracket-round';
+        
+        // Round header with status
+        const isCurrentRound = roundIdx === data.currentRound;
+        const roundStatus = isCurrentRound ? ' (Current)' : '';
+        roundDiv.innerHTML = `<strong>Round ${roundIdx + 1}${roundStatus}</strong>`;
+        
+        round.forEach(match => {
+            const matchDiv = document.createElement('div');
+            matchDiv.className = 'bracket-match';
+            
+            // Add status classes for styling
+            if (match.isComplete) {
+                matchDiv.classList.add('completed-match');
+            } else if (match.isCurrent) {
+                matchDiv.classList.add('current-match');
+            } else if (match.isBye) {
+                matchDiv.classList.add('bye-match');
+            }
+
+            // Build match display text
+            let matchText = '';
+            if (match.isBye) {
+                const nonNullPlayer = match.player1 || match.player2;
+                matchText = `${nonNullPlayer} (Bye)`;
+            } else {
+                matchText = `${match.player1 || 'TBD'} vs ${match.player2 || 'TBD'}`;
+            }
+            
+            // Add scores if match is complete
+            if (match.isComplete && match.scores) {
+                matchText += ` (${match.scores.player1} - ${match.scores.player2})`;
+            }
+            
+            // Add winner indicator
+            if (match.winner) {
+                matchText += ` → Winner: ${match.winner}`;
+            } else if (match.isCurrent) {
+                matchText += ' ← Playing Now';
+            }
+            
+            matchDiv.textContent = matchText;
+            roundDiv.appendChild(matchDiv);
+        });
+        bracketDiv.appendChild(roundDiv);
+    });
+    
+    // Add tournament winner display if finished
+    if (data.isFinished && data.tournamentWinner) {
+        const championDiv = document.createElement('div');
+        championDiv.className = 'tournament-champion';
+        championDiv.innerHTML = `<strong>🏆 CHAMPION: ${data.tournamentWinner}</strong>`;
+        bracketDiv.appendChild(championDiv);
+    }
+    
+    // Add close button functionality
+    const closeBtn = bracketDiv.querySelector('#close-bracket');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            bracketDiv.style.display = 'none';
+        });
+    }
+    
+    document.body.appendChild(bracketDiv);
 }
 
 function setupTournamentHandlers() {
-	if (!socket) return;
+    if (!socket) return;
 
-	socket.on('player_list_updated', (players: { socketId: string, alias: string }[]) => {
+    // New handler for when the local tournament is first created
+    socket.on('local_tournament_created', ({ bracket }) => {
+        localTournamentBracket = bracket;
+        inTournament = true;
+        const gameContainer = document.getElementById('game-container');
+        if (gameContainer) gameContainer.style.display = 'block';
+        
+        updateLocalTournamentUI();
+    });
+
+    // New handler for when the local tournament is updated after a match
+    socket.on('local_tournament_updated', ({ bracket }) => {
+        localTournamentBracket = bracket;
+        updateLocalTournamentUI();
+    });
+
+    socket.on('player_list_updated', (players: { socketId: string, alias: string }[]) => {
 		aliasMap = {};
 		players.forEach(player => {
 			aliasMap[player.socketId] = player.alias;
 		});
 	});
+
+    // New handler for local match announcements
+    socket.on('match_announcement', (data: { player1: string, player2: string, isLocal?: boolean }) => {
+        removeOverlays();
+        const dialog = showTournamentDialog(`Next Match: ${data.player1} vs ${data.player2}`, {
+            showConfirm: false // No button needed initially
+        });
+
+        // For local tournaments, add buttons to declare a winner
+        if (data.isLocal) {
+            const buttonContainer = document.createElement('div');
+            buttonContainer.style.marginTop = '20px';
+
+            const p1Button = document.createElement('button');
+            p1Button.textContent = `${data.player1} Wins`;
+            p1Button.onclick = () => {
+                if (socket) socket.emit('local_match_winner_declared', { winnerAlias: data.player1, bracket: localTournamentBracket });
+                dialog.remove();
+            };
+
+            const p2Button = document.createElement('button');
+            p2Button.textContent = `${data.player2} Wins`;
+            p2Button.onclick = () => {
+                if (socket) socket.emit('local_match_winner_declared', { winnerAlias: data.player2, bracket: localTournamentBracket });
+                dialog.remove();
+            };
+
+            buttonContainer.appendChild(p1Button);
+            buttonContainer.appendChild(p2Button);
+            dialog.querySelector('.dialog-content')!.appendChild(buttonContainer);
+        }
+    });
 
 	socket.on('alias_registered', ({ success, message }) => {
 		if (success) {
@@ -192,100 +337,12 @@ function setupTournamentHandlers() {
 		});
 	});
 
-	socket.on('tournament_bracket', (data: { 
-		rounds: { 
-			player1: string | null, 
-			player2: string | null,
-			winner: string | null,
-			scores: { player1: number, player2: number } | null,
-			isComplete: boolean,
-			isCurrent: boolean,
-			isBye: boolean
-		}[][], 
-		currentRound: number,
-		isFinished: boolean,
-		tournamentWinner: string | null 
-	}) => {
-		(window as any)['lastBracketData'] = data;
-		const bracketDiv = document.getElementById('tournament-bracket') || document.createElement('div');
-		bracketDiv.id = 'tournament-bracket';
-		bracketDiv.innerHTML = `
-			<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-				<h2 style="margin: 0;">Tournament Overview ${data.isFinished ? '- COMPLETE!' : ''}</h2>
-				<button id="close-bracket" style="background: #ff4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 14px;">×</button>
-			</div>
-		`;
-
-		data.rounds.forEach((round, roundIdx) => {
-			const roundDiv = document.createElement('div');
-			roundDiv.className = 'bracket-round';
-			
-			// Round header with status
-			const isCurrentRound = roundIdx === data.currentRound;
-			const roundStatus = isCurrentRound ? ' (Current)' : '';
-			roundDiv.innerHTML = `<strong>Round ${roundIdx + 1}${roundStatus}</strong>`;
-			
-			round.forEach(match => {
-				const matchDiv = document.createElement('div');
-				matchDiv.className = 'bracket-match';
-				
-				// Add status classes for styling
-				if (match.isComplete) {
-					matchDiv.classList.add('completed-match');
-				} else if (match.isCurrent) {
-					matchDiv.classList.add('current-match');
-				} else if (match.isBye) {
-					matchDiv.classList.add('bye-match');
-				}
-
-				// Build match display text
-				let matchText = '';
-				if (match.isBye) {
-					const nonNullPlayer = match.player1 || match.player2;
-					matchText = `${nonNullPlayer} (Bye)`;
-				} else {
-					matchText = `${match.player1 || 'TBD'} vs ${match.player2 || 'TBD'}`;
-				}
-				
-				// Add scores if match is complete
-				if (match.isComplete && match.scores) {
-					matchText += ` (${match.scores.player1} - ${match.scores.player2})`;
-				}
-				
-				// Add winner indicator
-				if (match.winner) {
-					matchText += ` → Winner: ${match.winner}`;
-				} else if (match.isCurrent) {
-					matchText += ' ← Playing Now';
-				}
-				
-				matchDiv.textContent = matchText;
-				roundDiv.appendChild(matchDiv);
-			});
-			bracketDiv.appendChild(roundDiv);
-		});
-		
-		// Add tournament winner display if finished
-		if (data.isFinished && data.tournamentWinner) {
-			const championDiv = document.createElement('div');
-			championDiv.className = 'tournament-champion';
-			championDiv.innerHTML = `<strong>🏆 CHAMPION: ${data.tournamentWinner}</strong>`;
-			bracketDiv.appendChild(championDiv);
-		}
-		
-		// Add close button functionality
-		const closeBtn = bracketDiv.querySelector('#close-bracket');
-		if (closeBtn) {
-			closeBtn.addEventListener('click', () => {
-				bracketDiv.style.display = 'none';
-			});
-		}
-		
-		document.body.appendChild(bracketDiv);
-	});
+    socket.on('tournament_bracket', (data: BracketData) => {
+        renderBracket(data);
+    });
 
 
-	socket.on('countdown_update', (remaining: number) => {
+    socket.on('countdown_update', (remaining: number) => {
 		updateCountdownDisplay(remaining);
 	});
 
@@ -568,37 +625,38 @@ function showGameOverScreen(winner: string | { alias: string}) {
 }
 
 function showTournamentResults(winnerName: string, allMatches?: string[]) {
-	removeOverlays();
+    removeOverlays();
+    localTournamentBracket = null; // Clear local tournament state
 
-	// Debug: log the results before rendering
-	// console.log('Tournament Results:', tournamentResults);
+    // Debug: log the results before rendering
+    // console.log('Tournament Results:', tournamentResults);
 
-	const overlay = document.createElement('div');
-	overlay.className = 'game-overlay';
+    const overlay = document.createElement('div');
+    overlay.className = 'game-overlay';
 
-	const message = document.createElement('div');
-	message.className = 'game-message';
-	message.innerHTML = `<h2>🏆 Tournament Champion: ${winnerName}</h2>`;
+    const message = document.createElement('div');
+    message.className = 'game-message';
+    message.innerHTML = `<h2>🏆 Tournament Champion: ${winnerName}</h2>`;
 
-	// Show all match results if provided
-	if (allMatches && allMatches.length > 0) {
-		const matchResultsDiv = document.createElement('div');
-		matchResultsDiv.id = 'all-match-results';
-		matchResultsDiv.innerHTML = '<h3>Complete Tournament Results</h3>';
-		
-		const resultsList = document.createElement('div');
-		resultsList.className = 'match-results-list';
-		
-		allMatches.forEach(matchResult => {
-			const matchDiv = document.createElement('div');
-			matchDiv.className = 'match-result-item';
-			matchDiv.textContent = matchResult;
-			resultsList.appendChild(matchDiv);
-		});
-		
-		matchResultsDiv.appendChild(resultsList);
-		overlay.appendChild(matchResultsDiv);
-	}
+    // Show all match results if provided
+    if (allMatches && allMatches.length > 0) {
+        const matchResultsDiv = document.createElement('div');
+        matchResultsDiv.id = 'all-match-results';
+        matchResultsDiv.innerHTML = '<h3>Complete Tournament Results</h3>';
+        
+        const resultsList = document.createElement('div');
+        resultsList.className = 'match-results-list';
+        
+        allMatches.forEach(matchResult => {
+            const matchDiv = document.createElement('div');
+            matchDiv.className = 'match-result-item';
+            matchDiv.textContent = matchResult;
+            resultsList.appendChild(matchDiv);
+        });
+        
+        matchResultsDiv.appendChild(resultsList);
+        overlay.appendChild(matchResultsDiv);
+    }
 
     const dashboardBtn = document.createElement('button');
     dashboardBtn.textContent = 'Back to Dashboard';
@@ -721,31 +779,39 @@ function handleResize(container: HTMLElement) {
 
 // Game Control Functions
 function movePlayers() {
-	console.log('movePlayers running', Array.from(pressedKeys));
-	if (!socket || gameEnded || (inTournament && !matchStarted)) return;
+    console.log('movePlayers running', Array.from(pressedKeys));
+    if (!socket || gameEnded || (inTournament && !matchStarted)) return;
 
-	//For tournament mode, check if match has started
-	if (inTournament && !matchStarted) return;
+    //For tournament mode, check if match has started
+    if (inTournament && !matchStarted) return;
 
-	if (inTournament) {
-		if (assignedPlayerId === 'player1') {
-			// console.log('1assignedPlayerId', assignedPlayerId);
-			if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
-			if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
-		} else if (assignedPlayerId === 'player2') {
-			// console.log('2assignedPlayerId', assignedPlayerId);
-			if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
-			if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
-		}
-		} else {
-			// Local match controls
-			if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
-			if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
-			if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
-			if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
-			}
-			movePlayersFrame = requestAnimationFrame(movePlayers);
-		}
+    if (inTournament) {
+        // For REMOTE tournaments, controls are assigned to one player
+        if (assignedPlayerId === 'player1') {
+            // console.log('1assignedPlayerId', assignedPlayerId);
+            if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
+            if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
+        } else if (assignedPlayerId === 'player2') {
+            // console.log('2assignedPlayerId', assignedPlayerId);
+            if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
+            if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
+        }
+        // For LOCAL tournaments, one client controls both players
+        else if (assignedPlayerId === 'local') {
+            if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
+            if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
+            if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
+            if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
+        }
+    } else {
+        // Local match controls (non-tournament)
+        if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
+        if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
+        if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
+        if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
+    }
+    movePlayersFrame = requestAnimationFrame(movePlayers);
+}
 
 function handleKeyDown(e: KeyboardEvent) {
 	if (gameEnded) return;
@@ -852,18 +918,17 @@ export function renderGame(containerId: string = 'app') {
 
 	// Detect tournament mode from URL
     const urlParams = new URLSearchParams(window.location.search);
-    const tournamentMode = urlParams.get('tournament') === 'true'
+    const tournamentMode = urlParams.get('tournament') === 'true';
+    const localTournamentMode = urlParams.get('localTournament') === 'true';
     const aiMode = urlParams.get('mode') === 'ai';
 
     // Socket connection to connect with Remote players
     const backendUrl = `https://${window.location.hostname}:3000`;
     socket = io(backendUrl, {
-        // transports: ['websocket'],
-        // secure: true,
         query: {
-			token: localStorage.getItem('jwtToken'),
-            local: (!tournamentMode && !aiMode).toString(), // "true" for local, "false" for tournament or AI
-            mode: aiMode ? 'ai' : (tournamentMode ? 'tournament' : 'local')
+            token: localStorage.getItem('jwtToken'),
+            local: (!tournamentMode && !aiMode).toString(),
+            mode: aiMode ? 'ai' : (tournamentMode || localTournamentMode ? 'tournament' : 'local')
         }
     });
 
@@ -871,20 +936,26 @@ export function renderGame(containerId: string = 'app') {
     setupTournamentHandlers();
 
     // Socket event handlers
-	socket.on('connect', () => {
-		console.log('✅ Connected:', socket!.id);
-	
-		if (!tournamentMode) {
-			socket!.emit('restart_game');
-			gameEnded = false;
-			matchStarted = true;
-			if (movePlayersFrame === null) movePlayers();
-		} else {
-			if (!aliasRegistered) {
-				promptAliasRegistration();
-			}
-		}
-	});
+    socket.on('connect', () => {
+        console.log('Connected to server:', socket?.id);
+        loading.remove();
+
+        // If it's a remote tournament, prompt for alias
+        if (tournamentMode) {
+            inTournament = true;
+            promptAliasRegistration();
+        }
+        // If it's a local tournament, start the setup flow
+        else if (localTournamentMode) {
+            startLocalTournament();
+        }
+        // For other modes, start the game loop immediately
+        else {
+            if (movePlayersFrame === null) {
+                movePlayers();
+            }
+        }
+    });
 
 	socket.on('connect_error', (err) => {
 		console.error('Connection error:', err.message);
@@ -975,4 +1046,104 @@ export function renderGame(containerId: string = 'app') {
 			}
 		}
 	});
+}
+
+// This is a new helper function you can add to your game.ts
+export function startLocalTournament() {
+    if (!socket) {
+        alert('Not connected to server.');
+        return;
+    }
+
+    const numPlayersStr = prompt("Enter number of players (2-8):");
+    if (!numPlayersStr) return;
+
+    const numPlayers = parseInt(numPlayersStr, 10);
+    if (isNaN(numPlayers) || numPlayers < 2 || numPlayers > 8) {
+        alert("Invalid number of players. Please enter a number between 2 and 8.");
+        return;
+    }
+
+    const aliases: string[] = [];
+    for (let i = 0; i < numPlayers; i++) {
+        const alias = prompt(`Enter alias for Player ${i + 1}:`);
+        if (!alias || aliases.includes(alias)) {
+            alert("Invalid or duplicate alias. Please start over.");
+            return;
+        }
+        aliases.push(alias);
+    }
+
+    socket.emit('create_local_tournament', { aliases });
+    inTournament = true; // Set flag to true
+    const gameContainer = document.getElementById('game-container');
+    if (gameContainer) gameContainer.style.display = 'block';
+    const bracketDiv = document.getElementById('tournament-bracket');
+    if (bracketDiv) bracketDiv.style.display = 'block';
+}
+
+// New UI helper for local tournaments
+function updateLocalTournamentUI() {
+    if (!localTournamentBracket) return;
+
+    // Render the bracket and make it visible
+    renderBracket(localTournamentBracket);
+    const bracketDiv = document.getElementById('tournament-bracket');
+    if (bracketDiv) bracketDiv.style.display = 'block';
+
+    // Find the current match from the bracket data
+    let currentMatchInfo = null;
+    for (const round of localTournamentBracket.rounds) {
+        const match = round.find((m: any) => m.isCurrent);
+        if (match) {
+            currentMatchInfo = match;
+            break;
+        }
+    }
+
+    if (currentMatchInfo && !currentMatchInfo.isComplete) {
+        // 1. Show a "Start Match" dialog first
+        removeOverlays();
+        showTournamentDialog(`Next Match: ${currentMatchInfo.player1} vs ${currentMatchInfo.player2}`, {
+            confirmText: 'Start Match',
+            onConfirm: () => {
+                // 2. When "Start Match" is clicked, tell the server to begin
+                if (socket) {
+                    socket.emit('start_local_match');
+                }
+
+                // 3. Show a persistent "Declare Winner" button on the screen
+                const declareWinnerBtn = document.createElement('button');
+                declareWinnerBtn.id = 'declare-winner-btn';
+                declareWinnerBtn.textContent = 'End Match & Declare Winner';
+                declareWinnerBtn.onclick = () => {
+                    // 4. When this button is clicked, show the final winner dialog
+                    const winnerDialog = showTournamentDialog(`Who won the match?`, { showConfirm: false });
+                    const buttonContainer = document.createElement('div');
+                    buttonContainer.style.marginTop = '20px';
+
+                    const p1Button = document.createElement('button');
+                    p1Button.textContent = `${currentMatchInfo.player1} Wins`;
+                    p1Button.onclick = () => {
+                        if (socket) socket.emit('local_match_winner_declared', { winnerAlias: currentMatchInfo.player1, bracket: localTournamentBracket });
+                        winnerDialog.remove();
+                        declareWinnerBtn.remove();
+                    };
+
+                    const p2Button = document.createElement('button');
+                    p2Button.textContent = `${currentMatchInfo.player2} Wins`;
+                    p2Button.onclick = () => {
+                        if (socket) socket.emit('local_match_winner_declared', { winnerAlias: currentMatchInfo.player2, bracket: localTournamentBracket });
+                        winnerDialog.remove();
+                        declareWinnerBtn.remove();
+                    };
+
+                    buttonContainer.appendChild(p1Button);
+                    buttonContainer.appendChild(p2Button);
+                    winnerDialog.querySelector('.dialog-content')!.appendChild(buttonContainer);
+                };
+                document.body.appendChild(declareWinnerBtn);
+            }
+        });
+    }
 }

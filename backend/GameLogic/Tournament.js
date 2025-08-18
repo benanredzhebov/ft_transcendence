@@ -26,21 +26,26 @@ class Tournament {
   
   // it checks if the alias is registered and prevents duplicate user registration
   registerPlayer(socketId, alias, user) {
-	// Check if alias is already taken
-	const aliases = [...this.players.values()].map(p => p.alias);
-	if (aliases.includes(alias)) return false;
+    // For local tournaments, the 'socketId' is the alias itself.
+    const playerId = user.isLocal ? alias : socketId;
 
-	// Check if this user (by userId) is already registered in the tournament
-	const userIds = [...this.players.values()].map(p => p.userId);
-	if (userIds.includes(user.userId)) return false;
+    // Check if alias is already taken
+    const aliases = [...this.players.values()].map(p => p.alias);
+    if (aliases.includes(alias)) return false;
 
-	this.players.set(socketId, {
-	  alias,
-	  isReady: false,
-	  userId: user.userId, // ***new: to store Match data***
-	  username: user.username // ***new: to store Match data***
-	});
-	return true;
+    // Check if this user (by userId) is already registered in the tournament
+    if (!user.isLocal) {
+        const userIds = [...this.players.values()].map(p => p.userId);
+        if (userIds.includes(user.userId)) return false;
+    }
+
+    this.players.set(playerId, {
+      alias,
+      isReady: false,
+      userId: user.userId, // ***new: to store Match data***
+      username: user.username // ***new: to store Match data***
+    });
+    return true;
   }
 
   // ***new: aliases were not cleared after Tournament***
@@ -58,10 +63,54 @@ class Tournament {
 	console.log('Tournament has been reset.');
   }
 
+  // New method to rebuild tournament state from a bracket
+  rehydrateFromBracket(bracket) {
+    if (!bracket || !bracket.rounds) return;
+
+    this.rounds = [];
+    this.players = new Map();
+    let playerCounter = 0;
+
+    // Re-populate players and rounds from the bracket structure
+    bracket.rounds.forEach(round => {
+        const newRound = [];
+        round.forEach(match => {
+            const p1 = match.player1 ? { alias: match.player1, userId: `local_player_${playerCounter++}`, isLocal: true } : null;
+            const p2 = match.player2 ? { alias: match.player2, userId: `local_player_${playerCounter++}`, isLocal: true } : null;
+
+            const matchTuple = [];
+            if (p1) {
+                this.players.set(p1.alias, p1);
+                matchTuple.push([p1.alias, p1]);
+            } else {
+                matchTuple.push(null);
+            }
+
+            if (p2) {
+                this.players.set(p2.alias, p2);
+                matchTuple.push([p2.alias, p2]);
+            } else {
+                matchTuple.push(null);
+            }
+            newRound.push(matchTuple);
+        });
+        this.rounds.push(newRound);
+    });
+
+    this.currentRound = bracket.currentRound;
+    this.isFinished = bracket.isFinished;
+    // Find the current match index
+    const currentRoundMatches = bracket.rounds[this.currentRound] || [];
+    this.currentMatchIndex = currentRoundMatches.findIndex(m => m.isCurrent);
+    if (this.currentMatchIndex === -1) this.currentMatchIndex = 0;
+
+    this.currentMatch = this.rounds[this.currentRound]?.[this.currentMatchIndex];
+  }
+
   markPlayerReady(socketId) {
-	if (this.players.has(socketId)) {
-	  this.players.get(socketId).isReady = true;
-	}
+    if (this.players.has(socketId)) {
+      this.players.get(socketId).isReady = true;
+    }
   }
 
   resetPlayersReady(socketId1, socketId2) {
