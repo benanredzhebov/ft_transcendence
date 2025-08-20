@@ -63,9 +63,9 @@ let resizeObserver: ResizeObserver | null = null;
 function promptAliasRegistration() {
 	const alias = prompt("Enter your tournament alias:");
 	if (alias) {
-        const token = sessionStorage.getItem('authToken'); // ***new: to store Match data***
-        socket?.emit('register_alias', { alias, token });
-    }
+		const token = sessionStorage.getItem('authToken'); // ***new: to store Match data***
+		socket?.emit('register_alias', { alias, token });
+	}
 }
 
 // Remove all overlays
@@ -403,13 +403,25 @@ function setupTournamentHandlers() {
 	socket.on('tournament_cancelled', ({ reason }: { reason?: string }) => {
 		removeOverlays();
 		document.getElementById('tournament-bracket')?.remove();
-		const message = reason ? `Tournament cancelled: ${reason}` : 'Tournament cancelled';
+		
+		let message = reason ? `Tournament cancelled: ${reason}` : 'Tournament cancelled';
+		
+		// Special handling for server restart scenarios
+		if (reason && (reason.includes('server') || reason.includes('restart') || reason.includes('reset'))) {
+			message = `Tournament cancelled due to server restart.<br>All tournament states have been reset.<br>You can start a new tournament.`;
+		}
+		
 		const dialog = showTournamentDialog(message, { confirmText: 'Return to Dashboard' });
 		dialog.querySelector('button')!.onclick = () => {
 			dialog.remove();
 			inTournament = false;
 			currentMatch = null;
 			assignedPlayerId = null;
+			aliasRegistered = false; // Reset alias registration
+			
+			// Clear any stored tournament state
+			sessionStorage.removeItem('tournament_reconnect');
+			sessionStorage.removeItem('tournament_alias_registered');
 			
 			// Check authentication before redirecting
 			const token = sessionStorage.getItem('authToken');
@@ -422,6 +434,63 @@ function setupTournamentHandlers() {
 				window.location.href = '/dashboard';
 			}
 		};
+	});
+
+	// Add handler for server-initiated tournament reset during active match
+	socket.on('tournament_reset', ({ reason }: { reason?: string }) => {
+		removeOverlays();
+		document.getElementById('tournament-bracket')?.remove();
+		
+		const message = reason ? 
+			`Tournament has been reset: ${reason}<br><br>All players and matches have been cleared.<br>You can start a new tournament.` :
+			'Tournament has been reset by the server.<br><br>All players and matches have been cleared.<br>You can start a new tournament.';
+		
+		const dialog = showTournamentDialog(message, { confirmText: 'Return to Dashboard' });
+		dialog.querySelector('button')!.onclick = () => {
+			dialog.remove();
+			inTournament = false;
+			currentMatch = null;
+			assignedPlayerId = null;
+			aliasRegistered = false; // Reset alias registration
+			
+			// Clear any stored tournament state
+			sessionStorage.removeItem('tournament_reconnect');
+			sessionStorage.removeItem('tournament_alias_registered');
+			
+			// Redirect to dashboard
+			const token = sessionStorage.getItem('authToken');
+			if (!token) {
+				alert('Your session has expired. Please log in again.');
+				window.location.href = '/login';
+			} else {
+				window.location.href = '/dashboard';
+			}
+		};
+	});
+
+	socket.on('tournament_lobby_closed', () => {
+		console.log('Tournament lobby closed - no players remaining');
+
+		// Reset tournament UI state
+		const registerContainer = document.getElementById('register-container');
+		const tournamentLobby = document.getElementById('tournament-lobby');
+		const tournamentBracket = document.getElementById('tournament-bracket');
+
+		if (registerContainer) registerContainer.style.display = 'block';
+		if (tournamentLobby) tournamentLobby.style.display = 'none';
+		if (tournamentBracket) tournamentBracket.style.display = 'none';
+
+		aliasRegistered = false;
+		inTournament = false;
+
+		// Show a message that tournament was closed
+		showTournamentDialog('Tournament closed - no players remaining', {
+			confirmText: 'OK',
+			onConfirm: () => {
+				// Optionally redirect to dashboard
+				window.location.href = '/dashboard';
+			}
+		});
 	});
 
 	socket.on('tournament_lobby', ({ message, players, }) => {
@@ -545,21 +614,21 @@ function showGameOverScreen(winner: string | { alias: string}) {
 	const dashboardBtn = document.createElement('button');
 	dashboardBtn.textContent = 'Back to Dashboard';
 	dashboardBtn.onclick = () => {
-        // Disconnect socket and reload to ensure clean state on dashboard
-        if (socket) {
-            socket.disconnect();
-            socket = null;
-        }
-        
-        // Check authentication before redirecting
-        const token = sessionStorage.getItem('authToken');
-        if (!token) {
-            alert('Your session has expired. Please log in again.');
-            window.location.href = '/login';
-        } else {
-            window.location.href = '/dashboard';
-        }
-    };
+		// Disconnect socket and reload to ensure clean state on dashboard
+		if (socket) {
+			socket.disconnect();
+			socket = null;
+		}
+		
+		// Check authentication before redirecting
+		const token = sessionStorage.getItem('authToken');
+		if (!token) {
+			alert('Your session has expired. Please log in again.');
+			window.location.href = '/login';
+		} else {
+			window.location.href = '/dashboard';
+		}
+	};
 	buttons.appendChild(dashboardBtn);
 	
 	overlay.appendChild(message);
@@ -600,27 +669,27 @@ function showTournamentResults(winnerName: string, allMatches?: string[]) {
 		overlay.appendChild(matchResultsDiv);
 	}
 
-    const dashboardBtn = document.createElement('button');
-    dashboardBtn.textContent = 'Back to Dashboard';
-    dashboardBtn.onclick = () => {
-        // Disconnect socket and reload to ensure clean state on dashboard
-        if (socket) {
-            socket.disconnect();
-            socket = null;
-        }
-        
-        // Check authentication before redirecting
-        const token = sessionStorage.getItem('authToken');
-        if (!token) {
-            alert('Your session has expired. Please log in again.');
-            window.location.href = '/login';
-        } else {
-            window.location.href = '/dashboard';
-        }
-    };
+	const dashboardBtn = document.createElement('button');
+	dashboardBtn.textContent = 'Back to Dashboard';
+	dashboardBtn.onclick = () => {
+		// Disconnect socket and reload to ensure clean state on dashboard
+		if (socket) {
+			socket.disconnect();
+			socket = null;
+		}
+		
+		// Check authentication before redirecting
+		const token = sessionStorage.getItem('authToken');
+		if (!token) {
+			alert('Your session has expired. Please log in again.');
+			window.location.href = '/login';
+		} else {
+			window.location.href = '/dashboard';
+		}
+	};
 
-    overlay.appendChild(message);
-    overlay.appendChild(dashboardBtn);
+	overlay.appendChild(message);
+	overlay.appendChild(dashboardBtn);
 
 	document.body.appendChild(overlay);
 }
@@ -841,6 +910,17 @@ export function renderGame(containerId: string = 'app') {
 	});
 	window.addEventListener('beforeunload', cleanupGame);
 
+	window.addEventListener('beforeunload', () => {
+		if (aliasRegistered && socket && socket.connected) {
+			socket.emit('leave_tournament');
+		}
+	});
+	document.addEventListener('visibilitychange', () => {
+		if (document.visibilityState ==='hidden' && aliasRegistered && socket && socket.connected) {
+			socket.emit('player_inactive');
+		}
+	});
+
 	// Resize observer
 	if (canvas.parentElement) {
 		resizeObserver = new ResizeObserver(() => handleResize(container));
@@ -851,9 +931,20 @@ export function renderGame(containerId: string = 'app') {
 	handleResize(container);
 
 	// Detect tournament mode from URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const tournamentMode = urlParams.get('tournament') === 'true'
-    const aiMode = urlParams.get('mode') === 'ai';
+	const urlParams = new URLSearchParams(window.location.search);
+	const tournamentMode = urlParams.get('tournament') === 'true' ;
+
+	if (urlParams.get('tournament') === 'true') {
+        // Clear any existing reset dialogs immediately
+        document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
+
+        // Reset tournament state
+        aliasRegistered = false;
+        inTournament = false;
+
+        // DON'T call promptAliasRegistration() here - let the connect handler do it
+    }
+	const aiMode = urlParams.get('mode') === 'ai';
 
     // Socket connection to connect with Remote players
     const backendUrl = `https://${window.location.hostname}:3000`;
@@ -867,23 +958,38 @@ export function renderGame(containerId: string = 'app') {
         }
     });
 
-    // Setup tournament handlers
-    setupTournamentHandlers();
+	// Setup tournament handlers
+	setupTournamentHandlers();
 
-    // Socket event handlers
+	// Socket event handlers
 	socket.on('connect', () => {
 		console.log('✅ Connected:', socket!.id);
-	
+		
+		// Check if this is a reconnection after server restart
+		const wasInTournamentReconnect = sessionStorage.getItem('tournament_reconnect') === 'true';
+		const wasAliasRegistered = sessionStorage.getItem('tournament_alias_registered') === 'true';
+		
 		if (!tournamentMode) {
 			socket!.emit('restart_game');
 			gameEnded = false;
 			matchStarted = true;
 			if (movePlayersFrame === null) movePlayers();
 		} else {
+			// Tournament mode
+			if (wasInTournamentReconnect) {
+				// We were previously in a tournament before server restart
+				console.log('Detected tournament reconnection after server restart');
+				aliasRegistered = wasAliasRegistered;
+			}
+			
 			if (!aliasRegistered) {
 				promptAliasRegistration();
 			}
 		}
+		
+		// Clear reconnection flags after handling
+		sessionStorage.removeItem('tournament_reconnect');
+		sessionStorage.removeItem('tournament_alias_registered');
 	});
 
 	socket.on('connect_error', (err) => {
@@ -895,37 +1001,85 @@ export function renderGame(containerId: string = 'app') {
 		if (movePlayersFrame === null) movePlayers();
 	});
 
-	socket.on('disconnect', () => {
-	removeOverlays();
-	document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
-	document.getElementById('tournament-bracket')?.remove();
-	document.querySelectorAll('.game-loading').forEach(el => el.remove());
+	socket.on('disconnect', (reason) => {
+		console.log('Disconnected:', reason);
+		removeOverlays();
+		document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
+		document.getElementById('tournament-bracket')?.remove();
+		document.querySelectorAll('.game-loading').forEach(el => el.remove());
 
-	if (canvas?.parentElement) {
-		const overlay = document.createElement('div');
-		overlay.className = 'game-overlay';
-		overlay.style.position = 'absolute';
-		overlay.style.top = '0';
-		overlay.style.left = '0';
-		overlay.style.width = '100%';
-		overlay.style.height = '100%';
-		overlay.style.display = 'flex';
-		overlay.style.justifyContent = 'center';
-		overlay.style.alignItems = 'center';
-		overlay.style.background = 'rgba(0,0,0,0.8)';
-		overlay.style.zIndex = '1000';
-		overlay.innerHTML = `
-			<div style="color: white; font-size: 2rem; text-align: center;">
-				Disconnected from server<br>
-				<button id="reconnect-btn" style="margin-top: 1rem; padding: 0.5rem 1rem; font-size: 1rem;">Reconnect</button>
-			</div>`;
-		canvas.parentElement.appendChild(overlay);
+		if (canvas?.parentElement) {
+			const overlay = document.createElement('div');
+			overlay.className = 'game-overlay disconnect-overlay';
+			overlay.style.position = 'absolute';
+			overlay.style.top = '0';
+			overlay.style.left = '0';
+			overlay.style.width = '100%';
+			overlay.style.height = '100%';
+			overlay.style.display = 'flex';
+			overlay.style.justifyContent = 'center';
+			overlay.style.alignItems = 'center';
+			overlay.style.background = 'rgba(0,0,0,0.8)';
+			overlay.style.zIndex = '1000';
+			
+			// Show different messages based on reason
+			let message = 'Disconnected from server';
+			if (reason === 'io server disconnect') {
+				message = 'Server disconnected the connection';
+			} else if (reason === 'transport close') {
+				message = 'Connection lost to server';
+			}
+			
+			overlay.innerHTML = `
+				<div style="color: white; font-size: 2rem; text-align: center;">
+					${message}<br>
+					<div id="reconnect-status" style="font-size: 1rem; margin: 1rem 0;">
+						${socket?.connected ? 'Connected' : 'Attempting to reconnect...'}
+					</div>
+					<button id="manual-reconnect-btn" style="margin-top: 1rem; padding: 0.5rem 1rem; font-size: 1rem;">Manual Reconnect</button>
+				</div>`;
+			canvas.parentElement.appendChild(overlay);
 
-		document.getElementById('reconnect-btn')?.addEventListener('click', () => {
-			window.location.reload();
-		});
-	}
-});
+			document.getElementById('manual-reconnect-btn')?.addEventListener('click', () => {
+				// Store tournament state before reload if in tournament
+				if (inTournament) {
+					sessionStorage.setItem('tournament_reconnect', 'true');
+					sessionStorage.setItem('tournament_alias_registered', aliasRegistered.toString());
+				}
+				window.location.reload();
+			});
+		}
+	});
+
+	socket.on('reconnect_attempt', (attemptNumber) => {
+		console.log(`Reconnection attempt ${attemptNumber}`);
+		const statusDiv = document.getElementById('reconnect-status');
+		if (statusDiv) {
+			statusDiv.textContent = `Reconnection attempt ${attemptNumber}/5...`;
+		}
+	});
+
+	socket.on('reconnect', (attemptNumber) => {
+		console.log(`Reconnected after ${attemptNumber} attempts`);
+		const overlay = document.querySelector('.disconnect-overlay');
+		if (overlay) {
+			overlay.remove();
+		}
+		
+		// Restore tournament state if needed
+		if (inTournament && !aliasRegistered) {
+			promptAliasRegistration();
+		}
+	});
+
+	socket.on('reconnect_failed', () => {
+		console.log('Failed to reconnect');
+		const statusDiv = document.getElementById('reconnect-status');
+		if (statusDiv) {
+			statusDiv.textContent = 'Failed to reconnect. Please try manual reconnect.';
+			statusDiv.style.color = 'red';
+		}
+	});
 
 	socket.on('state_update', (state: GameState & { gameOver: boolean }) => {
 		// console.log("received paddle y positions:", state.paddles);

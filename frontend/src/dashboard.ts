@@ -16,6 +16,8 @@ type OnlineUser = {
 };
 
 export function renderDashboard() {
+  document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
+
   const appElement = document.querySelector<HTMLDivElement>('#app');
   if (!appElement) {
     throw new Error('App root element (#app) not found!');
@@ -97,6 +99,11 @@ export function renderDashboard() {
     chatSocket = io(`${import.meta.env.VITE_URL}`, {
       transports: ['websocket'],
       secure: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
     });
 
     chatSocket.on('connect', () => {
@@ -143,6 +150,15 @@ export function renderDashboard() {
     // Close popups when clicking elsewhere
     document.addEventListener('click', () => {
         document.querySelectorAll('.user-action-popup').forEach(p => p.remove());
+    });
+    
+    // Add reconnection event handlers
+    chatSocket.on('reconnect', (attemptNumber) => {
+      console.log(`Chat socket reconnected after ${attemptNumber} attempts`);
+    });
+    
+    chatSocket.on('reconnect_failed', () => {
+      console.log('Chat socket failed to reconnect');
     });
   }
 
