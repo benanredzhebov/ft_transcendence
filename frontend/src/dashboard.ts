@@ -673,6 +673,11 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
           title: 'Tournament',
           image: '/avatars/tournament.png',
           action: () => navigateTo('/game?tournament=true')
+        },
+        {
+          title: 'Local Tournament',
+          image: '/avatars/local2.png',
+          action: () => navigateTo('/game?tournament=local')
         }
       ];
 

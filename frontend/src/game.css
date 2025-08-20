@@ -326,3 +326,194 @@
 	background: rgba(255, 255, 255, 0.1);
 	border-radius: 4px;
 }
+
+/* Local Tournament Styles */
+.tournament-dialog .player-inputs {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin: 15px 0;
+	max-height: 200px;
+	overflow-y: auto;
+}
+
+.tournament-dialog .player-name-input {
+	padding: 8px 12px;
+	border: 2px solid #4CAF50;
+	border-radius: 6px;
+	background: rgba(0, 0, 0, 0.8);
+	color: white;
+	font-size: 16px;
+	outline: none;
+}
+
+.tournament-dialog .player-name-input:focus {
+	border-color: #FFC107;
+	box-shadow: 0 0 5px rgba(255, 193, 7, 0.3);
+}
+
+.tournament-dialog .buttons {
+	display: flex;
+	gap: 10px;
+	justify-content: center;
+	margin-top: 20px;
+	flex-wrap: wrap;
+}
+
+.tournament-dialog .buttons button {
+	padding: 10px 20px;
+	border: none;
+	border-radius: 6px;
+	font-size: 16px;
+	cursor: pointer;
+	transition: all 0.3s ease;
+}
+
+.tournament-dialog .add-player-btn {
+	background: #2196F3;
+	color: white;
+}
+
+.tournament-dialog .add-player-btn:hover {
+	background: #1976D2;
+}
+
+.tournament-dialog .add-player-btn:disabled {
+	background: #666;
+	cursor: not-allowed;
+}
+
+.tournament-dialog .start-tournament-btn {
+	background: #4CAF50;
+	color: white;
+}
+
+.tournament-dialog .start-tournament-btn:hover {
+	background: #45a049;
+}
+
+.tournament-dialog .cancel-btn {
+	background: #f44336;
+	color: white;
+}
+
+.tournament-dialog .cancel-btn:hover {
+	background: #d32f2f;
+}
+
+#local-tournament-bracket {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	background: rgba(0, 0, 0, 0.95);
+	color: #fff;
+	padding: 20px;
+	border-radius: 10px;
+	border: 2px solid #4CAF50;
+	max-width: 80vw;
+	max-height: 80vh;
+	overflow-y: auto;
+	z-index: 1000;
+	box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+#local-tournament-bracket .bracket-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 20px;
+	border-bottom: 2px solid #4CAF50;
+	padding-bottom: 10px;
+}
+
+#local-tournament-bracket h3 {
+	margin: 0;
+	color: #4CAF50;
+}
+
+#close-local-bracket {
+	background: #f44336;
+	color: white;
+	border: none;
+	border-radius: 50%;
+	width: 30px;
+	height: 30px;
+	cursor: pointer;
+	font-size: 18px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+#close-local-bracket:hover {
+	background: #d32f2f;
+}
+
+.local-tournament-controls {
+	position: fixed;
+	top: 20px;
+	right: 20px;
+	background: rgba(0, 0, 0, 0.8);
+	color: white;
+	padding: 15px;
+	border-radius: 8px;
+	border: 2px solid #4CAF50;
+	z-index: 999;
+	font-size: 14px;
+}
+
+.local-tournament-controls .controls-info {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
+
+.tournament-results .dialog-content {
+	max-width: 600px;
+	max-height: 80vh;
+	overflow-y: auto;
+}
+
+.tournament-results .match-results {
+	margin: 20px 0;
+	padding: 15px;
+	background: rgba(0, 0, 0, 0.3);
+	border-radius: 8px;
+	max-height: 300px;
+	overflow-y: auto;
+}
+
+.tournament-results .match-results ul {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+
+.tournament-results .match-results li {
+	padding: 8px 0;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+	font-size: 14px;
+}
+
+.tournament-results .match-results li:last-child {
+	border-bottom: none;
+}
+
+.tournament-results .new-tournament-btn {
+	background: #4CAF50;
+	color: white;
+}
+
+.tournament-results .new-tournament-btn:hover {
+	background: #45a049;
+}
+
+.tournament-results .dashboard-btn {
+	background: #2196F3;
+	color: white;
+}
+
+.tournament-results .dashboard-btn:hover {
+	background: #1976D2;
+}

@@ -25,6 +25,7 @@ import fastifyCors from '@fastify/cors';
 import { Server } from 'socket.io';
 import GameEngine from './GameLogic/GameEngine.js';
 import Tournament from './GameLogic/Tournament.js';
+import LocalTournamentMode from './GameLogic/LocalTournamentMode.js';
 import GameState from './GameLogic/GameState.js';
 import hashPassword from './crypto/crypto.js';
 import DB from './data_controller/dbConfig.js';
@@ -85,6 +86,7 @@ const io = new Server(server, {
 
 // ***** Game Logic (WebSocket + Game Loop)*******
 let tournament = null;
+let localTournament = null;
 const game = new GameEngine();
 
 // Map of online users: socketId -> { userId, username, alias, blocked:Set }
@@ -98,6 +100,11 @@ function initializeServer() {
 		tournament.reset();
 		tournament = null;
 	}
+	if (localTournament) {
+		console.log('Server restart detected - resetting local tournament state');
+		localTournament.reset();
+		localTournament = null;
+	}
 	// Reset game state
 	game.resetGame();
 	console.log('Server initialized - all states reset');
@@ -105,6 +112,16 @@ function initializeServer() {
 
 // Call initialization on server start
 initializeServer();
+
+// Local Tournament Game Loop
+setInterval(() => {
+	if (localTournament && localTournament.gameEngine) {
+		const updatedState = localTournament.updateGame();
+		if (updatedState && localTournament.socketId) {
+			io.to(localTournament.socketId).emit('state_update', updatedState);
+		}
+	}
+}, 16); // 60 FPS
 
 // Improved countdown function with cleanup
 function startSynchronizedCountdown(io, duration = 10) {
@@ -147,7 +164,9 @@ io.on('connection', (socket) => {
 		socket.handshake.query.local === 'true' ||
 		socket.handshake.query.local === true;
 	const gameMode = socket.handshake.query.mode || 'local';
-	game.setTournamentMode(!isLocalMatch, gameMode);
+	const isLocalTournament = gameMode === 'local_tournament';
+	
+	game.setTournamentMode(!isLocalMatch && !isLocalTournament, gameMode);
 	
 	// Check if client might have been in a tournament before server restart
 	if (gameMode === 'tournament') {
@@ -646,6 +665,109 @@ socket.on('player_inactive', () => {
 				tournament.reset(); // Reset for the next tournament
         }
     });
+
+    // ===== LOCAL TOURNAMENT HANDLERS =====
+    
+    socket.on('init_local_tournament', ({ playerNames }) => {
+        try {
+            if (!localTournament) {
+                localTournament = new LocalTournamentMode();
+            }
+            
+            localTournament.initializeTournament(socket.id, playerNames);
+            localTournament.generateInitialBracket();
+            
+            const status = localTournament.getTournamentStatus();
+            socket.emit('local_tournament_initialized', status);
+            console.log(`Local tournament initialized with ${playerNames.length} players`);
+        } catch (error) {
+            socket.emit('local_tournament_error', { message: error.message });
+        }
+    });
+
+    socket.on('start_local_tournament_match', () => {
+        try {
+            if (!localTournament || !localTournament.currentMatch) {
+                throw new Error('No active local tournament match');
+            }
+
+            const matchInfo = localTournament.startCurrentMatch();
+            
+            if (matchInfo && matchInfo.gameState) {
+                // Real match, not a bye
+                socket.emit('local_tournament_match_started', matchInfo);
+                socket.emit('state_update', matchInfo.gameState);
+            } else {
+                // Bye match was handled automatically, get updated status
+                const status = localTournament.getTournamentStatus();
+                socket.emit('local_tournament_status_update', status);
+            }
+        } catch (error) {
+            socket.emit('local_tournament_error', { message: error.message });
+        }
+    });
+
+    socket.on('local_tournament_player_move', ({ direction, playerId }) => {
+        try {
+            if (!localTournament || !localTournament.gameEngine) {
+                return;
+            }
+
+            localTournament.handleGameInput({ direction, playerId });
+            socket.emit('state_update', localTournament.getGameState());
+        } catch (error) {
+            console.error('Local tournament player move error:', error.message);
+            socket.emit('local_tournament_error', { message: error.message });
+        }
+    });
+
+    socket.on('local_tournament_match_ended', ({ winnerId, scores }) => {
+        try {
+            if (!localTournament) {
+                throw new Error('No active local tournament');
+            }
+
+            const nextMatch = localTournament.recordWinner(winnerId, scores);
+            const status = localTournament.getTournamentStatus();
+
+            if (localTournament.isFinished) {
+                socket.emit('local_tournament_finished', {
+                    winner: status.winner,
+                    allMatches: status.matchHistory,
+                    bracket: status.bracket
+                });
+            } else if (nextMatch) {
+                socket.emit('local_tournament_next_match', {
+                    match: localTournament.getCurrentMatchPlayers(),
+                    status: status
+                });
+            } else {
+                socket.emit('local_tournament_error', { message: 'No next match available' });
+            }
+        } catch (error) {
+            socket.emit('local_tournament_error', { message: error.message });
+        }
+    });
+
+    socket.on('get_local_tournament_status', () => {
+        if (localTournament) {
+            const status = localTournament.getTournamentStatus();
+            socket.emit('local_tournament_status_update', status);
+        } else {
+            socket.emit('local_tournament_error', { message: 'No active local tournament' });
+        }
+    });
+
+    socket.on('reset_local_tournament', () => {
+        if (localTournament) {
+            localTournament.reset();
+            localTournament = null;
+            socket.emit('local_tournament_reset');
+            console.log('Local tournament reset');
+        }
+    });
+
+    // ===== END LOCAL TOURNAMENT HANDLERS =====
 
     socket.on('disconnect', () => {
         console.log('Client disconnected:', socket.id);
