@@ -22,6 +22,7 @@ import fastifyCors from '@fastify/cors';
 import { Server } from 'socket.io';
 import GameEngine from './GameLogic/GameEngine.js';
 import Tournament from './GameLogic/Tournament.js';
+import LocalTournamentManager from './GameLogic/LocalTournament.js';
 import GameState from './GameLogic/GameState.js';
 import hashPassword from './crypto/crypto.js';
 import DB from './data_controller/dbConfig.js';
@@ -85,6 +86,7 @@ const io = new Server(server, {
 // ***** Game Logic (WebSocket + Game Loop)*******
 let tournament = null;
 const game = new GameEngine();
+const localTournaments = new Map(); // socketId -> LocalTournamentManager instance
 
 // Map of online users: socketId -> { userId, username, alias, blocked:Set }
 const onlineUsers = new Map();
@@ -97,8 +99,9 @@ function initializeServer() {
 		tournament.reset();
 		tournament = null;
 	}
-	// Reset game state
+	// Reset game state and pause it until players connect
 	game.resetGame();
+	game.pause(); // Ensure game doesn't run without players
 	console.log('Server initialized - all states reset');
 }
 
@@ -147,6 +150,18 @@ io.on('connection', (socket) => {
 		socket.handshake.query.local === 'true' ||
 		socket.handshake.query.local === true;
 	const gameMode = socket.handshake.query.mode || 'local';
+	
+	// Handle local tournament mode
+	if (gameMode === 'local-tournament') {
+		console.log('Client connected in local tournament mode:', socket.id);
+		const localTournament = new LocalTournamentManager();
+		localTournaments.set(socket.id, localTournament);
+		
+		// Set up local tournament event handlers
+		setupLocalTournamentHandlers(socket, localTournament);
+		return; // Don't proceed with regular game logic
+	}
+	
 	game.setTournamentMode(!isLocalMatch, gameMode);
 	
 	// Check if client might have been in a tournament before server restart
@@ -486,28 +501,53 @@ socket.on('player_inactive', () => {
 	});
 
 	socket.on('player_ready', () => {
-		if (!tournament) return;
+		console.log('Received player_ready event from socket:', socket.id);
 		
-		const player = tournament.players.get(socket.id);
-		console.log(`Player ready: ${player ? player.alias : 'Unknown'} (${socket.id})`);
-		
-		tournament.markPlayerReady(socket.id);
-		
-		const currentMatch = tournament.getCurrentMatchPlayers();
-		console.log('Current match ready status:', {
-			player1: currentMatch.player1 ? `${currentMatch.player1.alias}: ${currentMatch.player1.isReady}` : null,
-			player2: currentMatch.player2 ? `${currentMatch.player2.alias}: ${currentMatch.player2.isReady}` : null,
-			allReady: tournament.allPlayersReady()
-		});
-	
-		if (tournament.allPlayersReady() ) {
-			console.log('All players ready! Starting countdown...');
+		// Check if it's a regular online tournament
+		if (tournament) {
+			const player = tournament.players.get(socket.id);
+			console.log(`Player ready: ${player ? player.alias : 'Unknown'} (${socket.id})`);
+			
+			tournament.markPlayerReady(socket.id);
+			
 			const currentMatch = tournament.getCurrentMatchPlayers();
-			if (currentMatch.player1) 
-				io.to(currentMatch.player1.socketId).emit('assign_controls', 'player1');
-			if (currentMatch.player2)
-				io.to(currentMatch.player2.socketId).emit('assign_controls', 'player2');
+			console.log('Current match ready status:', {
+				player1: currentMatch.player1 ? `${currentMatch.player1.alias}: ${currentMatch.player1.isReady}` : null,
+				player2: currentMatch.player2 ? `${currentMatch.player2.alias}: ${currentMatch.player2.isReady}` : null,
+				allReady: tournament.allPlayersReady()
+			});
+		
+			if (tournament.allPlayersReady() ) {
+				console.log('All players ready! Starting countdown...');
+				const currentMatch = tournament.getCurrentMatchPlayers();
+				if (currentMatch.player1) 
+					io.to(currentMatch.player1.socketId).emit('assign_controls', 'player1');
+				if (currentMatch.player2)
+					io.to(currentMatch.player2.socketId).emit('assign_controls', 'player2');
+					startSynchronizedCountdown(io);
+			}
+			return;
+		}
+		
+		// Check if it's a local tournament
+		const localTournament = localTournaments.get(socket.id);
+		console.log('Looking for local tournament for socket:', socket.id);
+		console.log('Local tournament found:', !!localTournament);
+		console.log('Available local tournaments:', Array.from(localTournaments.keys()));
+		
+		if (localTournament) {
+			const currentMatch = localTournament.getCurrentMatch();
+			console.log('Current match:', currentMatch);
+			if (currentMatch && !currentMatch.isBye) {
+				console.log(`Local tournament player ready for match: ${currentMatch.player1} vs ${currentMatch.player2}`);
+				
+				// For local tournaments, use the same countdown system as regular tournaments
+				game.resetGame();
+				socket.emit('assign_controls', 'both'); // Local player controls both paddles
+				
+				// Use the same synchronized countdown as regular tournaments
 				startSynchronizedCountdown(io);
+			}
 		}
 	});
 
@@ -608,12 +648,130 @@ socket.on('player_inactive', () => {
 				const finalBracket = tournament.getDynamicBracket();
 				io.emit('tournament_bracket', finalBracket);
 				io.emit('tournament_over', { 
-					winner: finalWinnerAlias,
-					allMatches: allMatchResults 
 				});
-				tournament.reset(); // Reset for the next tournament
-        }
+		        }
     });
+
+    // Local Tournament Event Handlers
+    function setupLocalTournamentHandlers(socket, localTournament) {
+        // Register player
+        socket.on('local_tournament_register_player', ({ alias }) => {
+            const result = localTournament.registerPlayer(alias);
+            socket.emit('local_tournament_player_registered', result);
+            
+            if (result.success) {
+                socket.emit('local_tournament_players_update', {
+                    players: localTournament.getPlayers(),
+                    canStart: localTournament.canStartTournament()
+                });
+            }
+        });
+
+        // Start tournament
+        socket.on('local_tournament_start', () => {
+            console.log('Received local_tournament_start event');
+            console.log('Current players:', localTournament.getPlayers());
+            console.log('Can start tournament:', localTournament.canStartTournament());
+            
+            // Check if tournament is already started
+            if (localTournament.isStarted) {
+                console.log('Tournament already started, ignoring duplicate start request');
+                return;
+            }
+            
+            try {
+                localTournament.generateBracket();
+                localTournament.isStarted = true; // Mark as started
+                const bracket = localTournament.getBracket();
+                
+                console.log('Generated bracket:', bracket);
+                
+                // Use the same tournament_bracket event as regular tournaments
+                console.log('Emitting tournament_bracket event to socket:', socket.id);
+                socket.emit('tournament_bracket', bracket);
+                
+                // Then immediately prompt for first match using regular tournament flow
+                const firstMatch = localTournament.getCurrentMatch();
+                if (firstMatch && !firstMatch.isBye) {
+                    setTimeout(() => {
+                        console.log('Emitting await_player_ready event to socket:', socket.id);
+                        socket.emit('await_player_ready');
+                        console.log(`Local tournament first match ready: ${firstMatch.player1} vs ${firstMatch.player2}`);
+                    }, 2000); // 2 second delay to show bracket
+                }
+            } catch (error) {
+                socket.emit('local_tournament_error', { message: error.message });
+            }
+        });
+
+        // Complete match
+        socket.on('local_tournament_complete_match', ({ winner, scores }) => {
+            localTournament.completeMatch(winner, scores);
+            const bracket = localTournament.getBracket();
+            
+            // Use the same tournament_bracket event as regular tournaments
+            socket.emit('tournament_bracket', bracket);
+            
+            if (bracket.isFinished) {
+                socket.emit('tournament_over', {
+                    winner: bracket.tournamentWinner,
+                    allMatches: [] // Can add match history if needed
+                });
+            } else {
+                const nextMatch = localTournament.getCurrentMatch();
+                if (nextMatch) {
+                    // Use the same await_player_ready flow as regular tournaments
+                    setTimeout(() => {
+                        socket.emit('await_player_ready');
+                        console.log(`Next local tournament match: ${nextMatch.player1} vs ${nextMatch.player2}`);
+                    }, 2000);
+                }
+            }
+        });
+
+        // Handle player ready for local tournament matches
+        socket.on('player_ready', () => {
+            console.log('Received player_ready event from local tournament socket:', socket.id);
+            
+            const currentMatch = localTournament.getCurrentMatch();
+            console.log('Current match:', currentMatch);
+            if (currentMatch && !currentMatch.isBye) {
+                console.log(`Local tournament player ready for match: ${currentMatch.player1} vs ${currentMatch.player2}`);
+                
+                // Add the socket to the game engine so it receives state updates
+                console.log('Adding socket to game engine:', socket.id);
+                const addPlayerResult = game.addPlayer(socket.id);
+                console.log('Add player result:', addPlayerResult);
+                console.log('Game connected sockets size:', game.connectedSockets.size);
+                console.log('Game paused:', game.paused);
+                
+                // For local tournaments, use the same countdown system as regular tournaments
+                game.resetGame();
+                socket.emit('assign_controls', 'both'); // Local player controls both paddles
+                
+                // Use the same synchronized countdown as regular tournaments
+                startSynchronizedCountdown(io);
+            }
+        });
+
+        // Get tournament state
+        socket.on('local_tournament_get_state', () => {
+            const bracket = localTournament.getBracket();
+            socket.emit('local_tournament_state_update', bracket);
+        });
+
+        // Reset tournament
+        socket.on('local_tournament_reset', () => {
+            localTournament.reset();
+            socket.emit('local_tournament_reset_complete');
+        });
+
+        // Handle disconnection
+        socket.on('disconnect', () => {
+            console.log('Local tournament client disconnected:', socket.id);
+            localTournaments.delete(socket.id);
+        });
+    }
 
     socket.on('disconnect', () => {
         console.log('Client disconnected:', socket.id);
@@ -835,9 +993,14 @@ socket.on('player_inactive', () => {
 	});
 });
 
-// Game loop
+// Game loop - only run when there are connected players
 setInterval(() => {
-	if (!game.paused) {
+	// Only run game loop if there are connected players and game is not paused
+	if (!game.paused && game.connectedSockets.size > 0) {
+		// Add debug log (but limit frequency to avoid spam)
+		if (Math.random() < 0.01) { // Log ~1% of the time
+			console.log('Game loop running - connected sockets:', game.connectedSockets.size, 'paused:', game.paused);
+		}
 		game.update(1 / 60);
 		const state = game.getState();
 		io.emit('state_update', game.getState());
@@ -891,16 +1054,38 @@ app.setNotFoundHandler((req, reply) => {
 
 
 // --- Start Server ---
-const start =  async () => {
-	try{
+const start = async () => {
+	try {
 		const address = await app.listen({ port: PORT, host: HOST });
-		console.log("Server running " + address)
-	}
-	catch (e){
+		console.log("Server running " + address);
+		
+		// Keep server running
+		process.on('SIGINT', () => {
+			console.log('\nReceived SIGINT, shutting down gracefully...');
+			process.exit(0);
+		});
+		
+		process.on('SIGTERM', () => {
+			console.log('\nReceived SIGTERM, shutting down gracefully...');
+			process.exit(0);
+		});
+		
+	} catch (e) {
 		app.log.error(e);
+		console.error('Server failed to start:', e);
 		process.exit(1);
 	}
+};
 
-}
+// Add uncaught exception handlers
+process.on('uncaughtException', (err) => {
+	console.error('Uncaught Exception:', err);
+	process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+	console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+	process.exit(1);
+});
 
 start();
