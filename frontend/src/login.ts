@@ -178,7 +178,7 @@ function addLoginFormListeners() {
       const loginData = { email, password };
 
       try {
-          const response = await fetch('https://127.0.0.1:3000/login', {
+          const response = await fetch(`${import.meta.env.VITE_URL}/login`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(loginData),

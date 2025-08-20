@@ -1180,21 +1180,17 @@ export function renderGame(containerId: string = 'app') {
 
 	const aiMode = urlParams.get('mode') === 'ai';
 
-	// Socket connection
-	console.log('Attempting socket connection with mode:', localTournamentMode ? 'local-tournament' : (aiMode ? 'ai' : (tournamentMode ? 'tournament' : 'local')));
-	socket = io('https://127.0.0.1:3000', {
-		transports: ['websocket'],
-		secure: true,
-		reconnection: true,
-		reconnectionAttempts: 5,
-		reconnectionDelay: 1000,
-		reconnectionDelayMax: 5000,
-		timeout: 20000,
-		query: {
-			local: (!tournamentMode && !aiMode && !localTournamentMode).toString(),
-			mode: localTournamentMode ? 'local-tournament' : (aiMode ? 'ai' : (tournamentMode ? 'tournament' : 'local'))
-		}
-	});
+    // Socket connection to connect with Remote players
+    const backendUrl = `https://${window.location.hostname}:3000`;
+    socket = io(backendUrl, {
+        // transports: ['websocket'],
+        // secure: true,
+        query: {
+			token: localStorage.getItem('jwtToken'),
+            local: (!tournamentMode && !aiMode).toString(), // "true" for local, "false" for tournament or AI
+            mode: aiMode ? 'ai' : (tournamentMode ? 'tournament' : 'local')
+        }
+    });
 
 	// Setup tournament handlers
 	setupTournamentHandlers();

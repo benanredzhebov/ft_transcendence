@@ -4,7 +4,20 @@ const PREDEFINED_AVATARS = [
   '/avatars/girl.png',
   '/avatars/boy.png',
 	'/avatars/gojo.png',
-	'/avatars/luffy.png'
+	'/avatars/luffy.png',
+  '/avatars/squirtle.png',
+  '/avatars/charizard.png',
+  '/avatars/pikachu.png',
+  '/avatars/bulbasaur.png',
+  '/avatars/chain.png',
+  '/avatars/chainsaw.png',
+  '/avatars/halo.png',
+  '/avatars/halo2.png',
+  '/avatars/law.png',
+  '/avatars/nami.png',
+  '/avatars/nezuko.png',
+  '/avatars/sanji.png',
+  '/avatars/zoro.png'
 ];
 
 export async function openAvatarSelectionModal(

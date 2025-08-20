@@ -14,7 +14,7 @@ async function exchangeCodeForToken(code) {
 		code,
 		client_id: '532929311202-76tdduvrs9d0oied5k4ard52r7k8pq5t.apps.googleusercontent.com',
 		client_secret: "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",
-		redirect_uri: 'https://127.0.0.1:3000/username-google',
+		redirect_uri: `${process.env.APP_URL}/username-google`,
 		grant_type: 'authorization_code',
 	};
 

@@ -13,19 +13,6 @@ const __dirname = path.dirname(__filename);
 // IMPORTANT: Store it in an env.
 const JWT_SECRET = process.env.JWT_SECRET || 'hbj2io4@@#!v7946h3&^*2cn9!@09*@B627B^*N39&^847,1';
 
-
-// const noHandlerRoute = (app) => {
-// 	app.setNotFoundHandler((req, reply) => {
-// 	reply.sendFile('index.html'); // Serve index.html from the root specified in fastifyStatic
-// });
-// }
-
-// Fallback for SPA routing
-// app.setNotFoundHandler((req, reply) => {
-// 	reply.sendFile('index.html'); // Serve index.html from the root specified in fastifyStatic
-// });
-
-
 const developerRoutes = (app) => {
 
 	app.get('/data', async (req, reply) => {
@@ -132,6 +119,102 @@ const credentialsRoutes = (app) =>{
     }
   });
 
+
+  // --- UPDATE PROFILE ---
+  app.patch('/api/profile', async (req, reply) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.status(401).send({ error: 'Unauthorized: No token provided' });
+    }
+
+    const token = authHeader.substring(7);
+
+    try {
+      const decodedToken = jwt.verify(token, JWT_SECRET);
+      const userId = decodedToken.userId;
+
+      if (!userId) {
+        return reply.status(401).send({ error: 'Unauthorized: Invalid token payload' });
+      }
+
+      const { username, email, newPassword, currentPassword } = req.body;
+      const updates = {};
+
+      // Fetch the current user from the DB
+      const user = await DB('credentialsTable').where({ id: userId }).first();
+      if (!user) {
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      // Check if the user authenticated via Google
+      const isGoogleUser = user.auth_provider === 'google';
+
+      if (isGoogleUser) {
+        // Google users can only change their username.
+        if (username && username !== user.username) {
+          const existingUser = await DB('credentialsTable').where({ username }).first();
+          if (existingUser && existingUser.id !== userId) {
+            return reply.status(409).send({ error: 'Username is already taken.' });
+          }
+          updates.username = username;
+        }
+      } else {
+        // ***** NO CHECKING CURRENT PASSWORD ****
+        // // Logic for standard (local) users
+        // if (!currentPassword) {
+        //   return reply.status(403).send({ error: 'Current password is required to make changes.' });
+        // }
+
+        // // Verify current password
+        // if (user.password !== hashPassword(currentPassword)) {
+        //   return reply.status(403).send({ error: 'Incorrect current password.' });
+        // }
+
+        // Check for username update
+        if (username && username !== user.username) {
+          const existingUser = await DB('credentialsTable').where({ username }).first();
+          if (existingUser && existingUser.id !== userId) {
+            return reply.status(409).send({ error: 'Username is already taken.' });
+          }
+          updates.username = username;
+        }
+
+        // Check for email update
+        if (email && email !== user.email) {
+          const existingUser = await DB('credentialsTable').where({ email }).first();
+          if (existingUser && existingUser.id !== userId) {
+            return reply.status(409).send({ error: 'Email is already in use.' });
+          }
+          updates.email = email;
+        }
+
+        // Check for password update
+        if (newPassword) {
+          if (newPassword.length < 8) {
+            return reply.status(400).send({ error: 'New password must be at least 8 characters long.' });
+          }
+          updates.password = hashPassword(newPassword);
+        }
+      }
+
+      // If there are updates, apply them to the database
+      if (Object.keys(updates).length > 0) {
+        await DB('credentialsTable').where({ id: userId }).update(updates);
+        return reply.send({ success: true, message: 'Profile updated successfully.' });
+      }
+
+      return reply.send({ success: true, message: 'No changes detected.' });
+
+    } catch (err) {
+      if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+        return reply.status(401).send({ error: `Unauthorized: ${err.message}` });
+      }
+      console.error('Error updating profile:', err);
+      reply.status(500).send({ error: 'Server error while updating profile.' });
+    }
+  });
+
+
   app.post('/api/profile/avatar', async (req, reply) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -190,8 +273,22 @@ const credentialsRoutes = (app) =>{
     try {
       const user = await DB('credentialsTable').where({ id }).first();
       if (!user) return reply.status(404).send({ error: 'User not found' });
-      reply.send({ userId: user.id, username: user.username, avatar: user.avatar_path || null });
+
+      // Fetch match history for the user
+      const matches = await DB('matchHistory')
+        .where('player1_id', id)
+        .orWhere('player2_id', id)
+        .orderBy('match_date', 'desc')
+        .limit(20);
+
+      reply.send({ 
+        userId: user.id, 
+        username: user.username, 
+        avatar: user.avatar_path || null,
+        matches: matches
+      });
     } catch (err) {
+      console.error('Error fetching public profile:', err);
       reply.status(500).send({ error: 'Server error while fetching profile' });
     }
   });
@@ -260,6 +357,196 @@ const credentialsRoutes = (app) =>{
     } catch (e) {
       console.error(e);
       reply.status(500).send({ error: 'Login failed due to server error' });
+    }
+  });
+
+  // --- FRIENDS API ---
+
+  // Get list of friends (accepted)
+  app.get('/api/friends', async (req, reply) => {
+    const token = req.headers.authorization?.substring(7);
+    if (!token) return reply.status(401).send({ error: 'Unauthorized' });
+
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      const userId = decoded.userId;
+
+      const friends = await DB('friendships')
+        .where({ status: 'accepted' })
+        .andWhere(function() {
+          this.where('user1_id', userId).orWhere('user2_id', userId)
+        })
+        .then(rows => {
+          const friendIds = rows.map(row => row.user1_id === userId ? row.user2_id : row.user1_id);
+          return DB('credentialsTable').whereIn('id', friendIds).select('id', 'username', 'avatar_path');
+        });
+      
+      reply.send(friends);
+    } catch (err) {
+      console.error('Error fetching friends:', err);
+      reply.status(500).send({ error: 'Server error' });
+    }
+  });
+
+  // Send a friend request
+  app.post('/api/friends/add', async (req, reply) => {
+    const token = req.headers.authorization?.substring(7);
+    const { friendId } = req.body;
+    if (!token) return reply.status(401).send({ error: 'Unauthorized' });
+
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      const userId = decoded.userId;
+
+      if (userId === friendId) {
+        return reply.status(400).send({ error: 'You cannot add yourself as a friend.' });
+      }
+
+      // Ensure user IDs are ordered to prevent duplicate rows (user1 < user2)
+      const user1_id = Math.min(userId, friendId);
+      const user2_id = Math.max(userId, friendId);
+
+      const existing = await DB('friendships').where({ user1_id, user2_id }).first();
+      if (existing) {
+        return reply.status(409).send({ error: 'You are already friends.' });
+      }
+
+      await DB('friendships').insert({
+        user1_id,
+        user2_id,
+        status: 'accepted',
+        action_user_id: userId
+      });
+
+      reply.send({ success: true, message: 'Friend added successfully.' });
+    } catch (err) {
+      console.error('Error adding friend:', err);
+      reply.status(500).send({ error: 'Server error' });
+    }
+  });
+
+  // Delete a friend
+  app.post('/api/friends/delete', async (req, reply) => {
+    const token = req.headers.authorization?.substring(7);
+    const { friendId } = req.body;
+    if (!token) return reply.status(401).send({ error: 'Unauthorized' });
+
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      const userId = decoded.userId;
+
+      // Order IDs to match how they are stored in the database
+      const user1_id = Math.min(userId, friendId);
+      const user2_id = Math.max(userId, friendId);
+
+      const deletedCount = await DB('friendships').where({ user1_id, user2_id }).del();
+
+      if (deletedCount > 0) {
+        reply.send({ success: true, message: 'Friend removed successfully.' });
+      } else {
+        reply.status(404).send({ error: 'Friendship not found.' });
+      }
+    } catch (err) {
+      console.error('Error deleting friend:', err);
+      reply.status(500).send({ error: 'Server error' });
+    }
+  });
+
+
+  // Get friendship status with a specific user
+  app.get('/api/friends/status/:otherUserId', async (req, reply) => {
+    const token = req.headers.authorization?.substring(7);
+    const { otherUserId } = req.params;
+    if (!token) return reply.status(401).send({ error: 'Unauthorized' });
+
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      const userId = decoded.userId;
+
+      const user1_id = Math.min(userId, parseInt(otherUserId));
+      const user2_id = Math.max(userId, parseInt(otherUserId));
+
+      const friendship = await DB('friendships').where({ user1_id, user2_id }).first();
+
+      if (!friendship) {
+        return reply.send({ status: 'none' });
+      }
+      
+      reply.send({ 
+        status: friendship.status,
+        action_user_id: friendship.action_user_id
+      });
+
+    } catch (err) {
+      console.error('Error fetching friendship status:', err);
+      reply.status(500).send({ error: 'Server error' });
+    }
+  });
+
+  app.get('/api/users/all', async (req, reply) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      reply.status(401).send({ error: 'Unauthorized: No token provided' });
+      return;
+    }
+    const token = authHeader.split(' ')[1];
+
+    try {
+      // Verify the token to ensure the request is authenticated
+      jwt.verify(token, JWT_SECRET);
+
+      // Fetch all users from the database
+      const allUsers = await DB('credentialsTable').select('id', 'username').orderBy('username', 'asc');
+      
+      reply.send(allUsers);
+
+    } catch (err) {
+      if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+        reply.status(401).send({ error: `Unauthorized: ${err.message}` });
+      } else {
+        console.error('Error fetching all users:', err);
+        reply.status(500).send({ error: 'Server error while fetching users' });
+      }
+    }
+  });
+
+  // *** NEW: Endpoint to get chat history with another user ***
+  app.get('/api/chat/history/:otherUserId', async (req, reply) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.status(401).send({ error: 'Unauthorized: No token provided' });
+    }
+
+    const token = authHeader.substring(7);
+    try {
+      const decodedToken = jwt.verify(token, JWT_SECRET);
+      const userId = decodedToken.userId;
+      const otherUserId = parseInt(req.params.otherUserId, 10);
+
+      if (isNaN(otherUserId)) {
+        return reply.status(400).send({ error: 'Invalid user ID format.' });
+      }
+
+      const messages = await DB('chat_messages')
+        .where(function() {
+          this.where('sender_id', userId).andWhere('recipient_id', otherUserId)
+        })
+        .orWhere(function() {
+          this.where('sender_id', otherUserId).andWhere('recipient_id', userId)
+        })
+        .orderBy('created_at', 'asc')
+        .join('credentialsTable as sender', 'chat_messages.sender_id', 'sender.id')
+        .select(
+          'chat_messages.message_text as text',
+          'sender.username as sender',
+          'chat_messages.created_at'
+        );
+
+      reply.send(messages);
+
+    } catch (err) {
+      console.error('Error fetching chat history:', err);
+      reply.status(500).send({ error: 'Server error while fetching chat history' });
     }
   });
 
