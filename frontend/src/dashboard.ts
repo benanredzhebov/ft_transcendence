@@ -297,6 +297,14 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
       localButton.innerHTML = `<span>Local Match</span>`;
       localButton.addEventListener('click', () => navigateTo('/game')); // Or a different route/logic for local
       gameContent.appendChild(localButton);
+
+      // Local Match Tournament Button
+      const localTournamentBtn = document.createElement('button');
+      localTournamentBtn.className = "dashboard-game-button";
+      localTournamentBtn.innerHTML = `<span>Local Match Tournament</span>`;
+      localTournamentBtn.addEventListener('click', () => navigateTo('/game?mode=local-tournament'));
+      gameContent.appendChild(localTournamentBtn);
+
       contentArea.appendChild(gameContent);
       break;
     case 'chat':

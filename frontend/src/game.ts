@@ -71,6 +71,7 @@ function promptAliasRegistration() {
 // Remove all overlays
 function removeOverlays() {
 	document.querySelectorAll('.game-overlay').forEach(el => el.remove());
+	document.querySelectorAll('.game-loading').forEach(el => el.remove()); // Also remove loading overlays
 	// Also hide tournament bracket if it exists
 	const bracketDiv = document.getElementById('tournament-bracket');
 	if (bracketDiv) bracketDiv.style.display = 'none';
@@ -100,11 +101,30 @@ function showTournamentDialog(message: string,
 	if (options?.confirmText) {
 		dialog.querySelector('button')!.onclick = () => {
 			if (options.confirmText === "I'm Ready") {
+				console.log('Emitting player_ready event...');
 				socket?.emit('player_ready'); // Only marks ready, does NOT start countdown
 			}
 			if (options.onConfirm) options.onConfirm();
 			dialog.remove();
 		};
+	}
+
+	// Implement countdown logic if timer is provided
+	if (options?.timer) {
+		let remaining = options.timer;
+		const countdownEl = dialog.querySelector('.countdown') as HTMLElement;
+		
+		const countdownInterval = setInterval(() => {
+			remaining--;
+			if (countdownEl) {
+				countdownEl.textContent = `Starting in ${remaining}...`;
+			}
+			
+			if (remaining <= 0) {
+				clearInterval(countdownInterval);
+				dialog.remove();
+			}
+		}, 1000);
 	}
 
 	document.body.appendChild(dialog);
@@ -206,6 +226,7 @@ function setupTournamentHandlers() {
 		isFinished: boolean,
 		tournamentWinner: string | null 
 	}) => {
+		console.log('Received tournament_bracket event:', data);
 		(window as any)['lastBracketData'] = data;
 		const bracketDiv = document.getElementById('tournament-bracket') || document.createElement('div');
 		bracketDiv.id = 'tournament-bracket';
@@ -303,6 +324,7 @@ function setupTournamentHandlers() {
 	});
 
 	socket.on('start_match', () => {
+		console.log('Received start_match event - starting game!');
 		removeOverlays();
 		// Hide tournament bracket during gameplay
 		const bracketDiv = document.getElementById('tournament-bracket');
@@ -311,6 +333,7 @@ function setupTournamentHandlers() {
 		countDownActive = false; // added to start the match. Allow state updates to be rendered
 		matchStarted = true;
 		gameEnded = false;
+		console.log('Game state set: matchStarted =', matchStarted, 'gameEnded =', gameEnded);
 		if (movePlayersFrame === null) movePlayers();
 	});
 
@@ -520,6 +543,155 @@ function setupTournamentHandlers() {
 			};
 		}
 	});
+}
+
+// Local Tournament Functions (Server-side with socket communication)
+function initializeLocalTournament() {
+	showLocalTournamentRegistration();
+	setupLocalTournamentSocketHandlers();
+}
+
+function setupLocalTournamentSocketHandlers() {
+	if (!socket) return;
+	
+	socket.on('local_tournament_player_registered', (result: any) => {
+		if (result.success) {
+			// Player registered successfully
+		} else {
+			alert(result.message);
+		}
+	});
+
+	socket.on('local_tournament_players_update', (data: any) => {
+		updateLocalPlayersList(data.players);
+		updateStartTournamentButton(data.canStart, data.players.length);
+	});
+
+	socket.on('local_tournament_started', () => {
+		// Hide registration and show that tournament started
+		hideLocalTournamentRegistration();
+		console.log('Local tournament started - bracket will be shown via tournament_bracket event');
+	});
+
+	// Removed separate local tournament bracket handlers - now using regular tournament_bracket event
+	
+	socket.on('local_tournament_error', (error: any) => {
+		alert(`Tournament Error: ${error.message}`);
+	});
+}
+
+function showLocalTournamentRegistration() {
+	const registrationDiv = document.createElement('div');
+	registrationDiv.id = 'local-tournament-registration';
+	registrationDiv.className = 'tournament-dialog';
+	
+	registrationDiv.innerHTML = `
+		<div class="dialog-content">
+			<h3>Local Match Tournament</h3>
+			<p>Register players for the tournament (minimum 4 players):</p>
+			<div id="player-registration">
+				<input type="text" id="alias-input" placeholder="Enter player alias" maxlength="20">
+				<button id="add-player-btn">Add Player</button>
+			</div>
+			<div id="registered-players">
+				<h4>Registered Players:</h4>
+				<ul id="players-list"></ul>
+			</div>
+			<div id="tournament-controls">
+				<button id="start-tournament-btn" disabled>Start Tournament</button>
+				<button id="cancel-tournament-btn">Cancel</button>
+			</div>
+		</div>
+	`;
+
+	document.body.appendChild(registrationDiv);
+
+	// Add event listeners
+	const aliasInput = document.getElementById('alias-input') as HTMLInputElement;
+	const addPlayerBtn = document.getElementById('add-player-btn') as HTMLButtonElement;
+	const startTournamentBtn = document.getElementById('start-tournament-btn') as HTMLButtonElement;
+	const cancelTournamentBtn = document.getElementById('cancel-tournament-btn') as HTMLButtonElement;
+
+	addPlayerBtn.onclick = () => addPlayerToLocalTournament();
+	startTournamentBtn.onclick = () => startLocalTournament();
+	cancelTournamentBtn.onclick = () => cancelLocalTournament();
+
+	aliasInput.addEventListener('keypress', (e) => {
+		if (e.key === 'Enter') {
+			addPlayerToLocalTournament();
+		}
+	});
+
+	aliasInput.focus();
+}
+
+function addPlayerToLocalTournament() {
+	if (!socket) return;
+
+	const aliasInput = document.getElementById('alias-input') as HTMLInputElement;
+	const alias = aliasInput.value.trim();
+
+	if (!alias) {
+		alert('Please enter a player alias');
+		return;
+	}
+
+	// Send to server via socket
+	socket.emit('local_tournament_register_player', { alias });
+	aliasInput.value = '';
+	aliasInput.focus();
+}
+
+function updateLocalPlayersList(players: any[]) {
+	const playersList = document.getElementById('players-list') as HTMLUListElement;
+	if (!playersList) return;
+	
+	playersList.innerHTML = '';
+	players.forEach((player: any) => {
+		const li = document.createElement('li');
+		li.textContent = player.alias;
+		li.style.margin = '5px 0';
+		playersList.appendChild(li);
+	});
+}
+
+function updateStartTournamentButton(canStart: boolean, playerCount: number) {
+	const startBtn = document.getElementById('start-tournament-btn') as HTMLButtonElement;
+	if (!startBtn) return;
+	
+	startBtn.disabled = !canStart;
+	startBtn.textContent = canStart ? 
+		`Start Tournament (${playerCount} players)` : 
+		`Need ${4 - playerCount} more players`;
+}
+
+function startLocalTournament() {
+	console.log('Start Tournament button clicked!');
+	
+	// Disable the button immediately to prevent multiple clicks
+	const startBtn = document.getElementById('start-tournament-btn') as HTMLButtonElement;
+	if (startBtn) {
+		startBtn.disabled = true;
+		startBtn.textContent = 'Starting Tournament...';
+	}
+	
+	if (!socket) {
+		console.log('No socket connection - cannot start tournament');
+		return;
+	}
+
+	console.log('Emitting local_tournament_start event...');
+	// Send start tournament request to server
+	socket.emit('local_tournament_start');
+}
+
+function cancelLocalTournament() {
+	document.getElementById('local-tournament-registration')?.remove();
+	window.location.href = '/dashboard';
+}
+
+function hideLocalTournamentRegistration() {
+	document.getElementById('local-tournament-registration')?.remove();
 }
 
 // Game UI Functions
@@ -798,11 +970,11 @@ function movePlayers() {
 
 	if (inTournament) {
 		if (assignedPlayerId === 'player1') {
-			// console.log('1assignedPlayerId', assignedPlayerId);
+			console.log('1assignedPlayerId', assignedPlayerId);
 			if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
 			if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
 		} else if (assignedPlayerId === 'player2') {
-			// console.log('2assignedPlayerId', assignedPlayerId);
+			console.log('2assignedPlayerId', assignedPlayerId);
 			if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
 			if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
 		}
@@ -810,8 +982,10 @@ function movePlayers() {
 			// Local match controls
 			if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
 			if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
+
 			if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
 			if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
+			console.log('2assignedPlayerId', assignedPlayerId);
 			}
 			movePlayersFrame = requestAnimationFrame(movePlayers);
 		}
@@ -933,6 +1107,7 @@ export function renderGame(containerId: string = 'app') {
 	// Detect tournament mode from URL
 	const urlParams = new URLSearchParams(window.location.search);
 	const tournamentMode = urlParams.get('tournament') === 'true' ;
+	const localTournamentMode = urlParams.get('mode') === 'local-tournament';
 
 	if (urlParams.get('tournament') === 'true') {
         // Clear any existing reset dialogs immediately
@@ -944,9 +1119,69 @@ export function renderGame(containerId: string = 'app') {
 
         // DON'T call promptAliasRegistration() here - let the connect handler do it
     }
+
+	// Handle local tournament mode
+	if (localTournamentMode) {
+		// Socket connection for local tournament
+		socket = io('https://127.0.0.1:3000', {
+			transports: ['websocket'],
+			secure: true,
+			reconnection: true,
+			reconnectionAttempts: 5,
+			reconnectionDelay: 1000,
+			query: {
+				mode: 'local-tournament'
+			}
+		});
+		
+		// Setup tournament handlers for local tournament
+		setupTournamentHandlers();
+		
+		// Setup state_update handler for local tournament
+		socket.on('state_update', (state: GameState & { gameOver: boolean }) => {
+			console.log('Received state_update - countDownActive:', countDownActive, 'matchStarted:', matchStarted);
+			if (countDownActive) {
+				console.log('Ignoring state_update because countDownActive is true');
+				return;
+			}
+	
+			document.querySelector('.game-loading')?.remove();
+
+			if (canvas?.parentElement) handleResize(canvas.parentElement);
+			requestAnimationFrame(() => drawGame(state));
+
+			if (inTournament && currentMatch) {
+				const [alias1, alias2] = currentMatch;
+				showMatchInfo(alias1, alias2, state.score.player1, state.score.player2);
+			}
+
+			if (!gameEnded && state.gameOver) {
+				if (state.score.player1 === 0 && state.score.player2 === 0) return;
+
+				let winner: string | { alias: string } = 'Unknown';
+				if (state.score.player1 >= 5) {
+					winner = inTournament && currentMatch ? currentMatch[0] : 'Player 1';
+				} else if (state.score.player2 >= 5) {
+					winner = inTournament && currentMatch ? currentMatch[1] : 'Player 2';
+				}
+
+				showGameOverScreen(winner);
+				gameEnded = true;
+			}
+		});
+		
+		socket.on('connect', () => {
+			console.log('Connected in local tournament mode');
+			initializeLocalTournament();
+		});
+		
+		return; // Don't proceed with regular game initialization
+	}
+
 	const aiMode = urlParams.get('mode') === 'ai';
 
 	// Socket connection
+	console.log('Attempting socket connection with mode:', localTournamentMode ? 'local-tournament' : (aiMode ? 'ai' : (tournamentMode ? 'tournament' : 'local')));
 	socket = io('https://127.0.0.1:3000', {
 		transports: ['websocket'],
 		secure: true,
@@ -956,8 +1191,8 @@ export function renderGame(containerId: string = 'app') {
 		reconnectionDelayMax: 5000,
 		timeout: 20000,
 		query: {
-			local: (!tournamentMode && !aiMode).toString(), // "true" for local, "false" for tournament or AI
-			mode: aiMode ? 'ai' : (tournamentMode ? 'tournament' : 'local')
+			local: (!tournamentMode && !aiMode && !localTournamentMode).toString(),
+			mode: localTournamentMode ? 'local-tournament' : (aiMode ? 'ai' : (tournamentMode ? 'tournament' : 'local'))
 		}
 	});
 
@@ -967,6 +1202,9 @@ export function renderGame(containerId: string = 'app') {
 	// Socket event handlers
 	socket.on('connect', () => {
 		console.log('✅ Connected:', socket!.id);
+		console.log('Socket connection mode:', localTournamentMode ? 'local-tournament' : (aiMode ? 'ai' : (tournamentMode ? 'tournament' : 'local')));
+		console.log('Tournament handlers setup:', !!socket!.listeners('tournament_bracket').length);
+		console.log('Await player ready handlers setup:', !!socket!.listeners('await_player_ready').length);
 		
 		// Check if this is a reconnection after server restart
 		const wasInTournamentReconnect = sessionStorage.getItem('tournament_reconnect') === 'true';
@@ -1085,9 +1323,13 @@ export function renderGame(containerId: string = 'app') {
 	});
 
 	socket.on('state_update', (state: GameState & { gameOver: boolean }) => {
+		console.log('Received state_update - countDownActive:', countDownActive, 'matchStarted:', matchStarted);
 		// console.log("received paddle y positions:", state.paddles);
 		// console.log('Received state_update:', state.paddles.player1.y, state.paddles.player2.y);
-		if (countDownActive) return;
+		if (countDownActive) {
+			console.log('Ignoring state_update because countDownActive is true');
+			return;
+		}
 	
 		document.querySelector('.game-loading')?.remove();
 
