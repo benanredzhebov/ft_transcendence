@@ -27,7 +27,7 @@ export function showLobbyInviteCard(senderAlias: string, senderSocketId?: string
 
   card.innerHTML = `
     <div class="dashboard-lobby-invite-header">
-      <img src="/pong.png" alt="Tournament" class="dashboard-lobby-invite-avatar">
+      <img src="/avatars/tournament.png" alt="Tournament" class="dashboard-lobby-invite-avatar">
       <div>
         <h4>Match Invitation</h4>
         <p><strong>${senderAlias}</strong> invited you to join a Match Lobby!</p>
