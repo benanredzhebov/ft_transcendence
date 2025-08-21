@@ -124,7 +124,7 @@ setInterval(() => {
 }, 16); // 60 FPS
 
 // Improved countdown function with cleanup
-function startSynchronizedCountdown(io, duration = 10) {
+function startSynchronizedCountdown(io, duration = 5) {
 	let remaining = duration;
 	
 	// Clear any existing countdown

@@ -799,3 +799,69 @@
 .profile-view-modal-close-button:hover {
     background-color: #616e78; /* Darker gray */
 }
+
+
+/* --- showTokenExpired --- */
+
+.session-expired-card {
+  max-width: 400px;
+  margin: 60px auto;
+  border: 2px solid #fca5a5;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+  padding: 2.5rem 2rem 2rem 2rem;
+  text-align: center;
+  color: #222;
+  font-family: inherit;
+}
+
+.session-expired-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+
+.session-expired-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* background: #fff7e6; */
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  /* border: 1.5px solid #ffe0b2; */
+  margin-right: 0.75rem;
+}
+
+.session-expired-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #222;
+}
+
+.session-expired-message {
+  color: #666;
+  font-size: 1rem;
+  margin-bottom: 2rem;
+}
+
+.session-expired-login-btn {
+  display: inline-block;
+  padding: 0.6rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #114cca;
+  background: #bfcef5;
+  border: 1.5px solid #2563eb;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.session-expired-login-btn:hover,
+.session-expired-login-btn:focus {
+  background: #2563eb;
+  color: #fff;
+}
