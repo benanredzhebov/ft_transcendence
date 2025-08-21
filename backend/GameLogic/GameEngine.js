@@ -20,7 +20,9 @@ class GameEngine {
 		this.paused = false;
 		this.lastUpdateTime = Date.now();
 		this.isTournament = false;
+		this.setIntervalFlag = false; // *** new Piero: flag added in setInterval, startMatch and resetGame ---FIXED ISSUE: repeated Game Over! Final Score after Login ***
 	}
+	
 
 	// Player management
 	addPlayer(socketId) {
@@ -118,6 +120,7 @@ class GameEngine {
 
 	resetGame() {
 		this.state.resetGame();
+		this.setIntervalFlag = false;
 	}
 
 	getState() {
@@ -132,6 +135,7 @@ class GameEngine {
 
 	startMatch() {
 		this.resume();
+		this.setIntervalFlag = true;
 	}
 }
 

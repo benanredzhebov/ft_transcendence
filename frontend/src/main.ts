@@ -87,7 +87,7 @@ function router() {
 }
 
 // --- Event Listeners ---
-// Listen for popstate events (browser back/forward)
+// Go Backward/Forward
 window.addEventListener('popstate', router);
 
 // Listen for initial page load

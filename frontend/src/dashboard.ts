@@ -199,7 +199,7 @@ async function showUserProfileModal(userId: number) {
 
   const content = document.createElement('div');
   content.className = 'profile-view-modal-content';
-  content.innerHTML = '<p>Loading profile...</p>';
+  // content.innerHTML = '<p>Loading profile...</p>';
 
   overlay.appendChild(content);
   document.body.appendChild(overlay);
@@ -366,9 +366,45 @@ async function showUserProfileModal(userId: number) {
   }
 }
 
+function showTokenExpired(contentArea: HTMLElement) {
+  contentArea.innerHTML = `
+    <div class="session-expired-card">
+      <div class="session-expired-header">
+        <span class="session-expired-icon">
+          <img src="/warning.png" alt="Warning" width="42" height="42" />
+        </span>
+        <span class="session-expired-title">Your session has expired</span>
+      </div>
+      <div class="session-expired-message">
+        Please log in again to continue using the app.
+      </div>
+      <a href="/" class="session-expired-login-btn">Log in</a>
+    </div>
+  `;
+}
+
+async function fetchWithTokenCheck(
+  url: string,
+  contentArea: HTMLElement
+): Promise<Response | null> {
+  const token = sessionStorage.getItem('authToken');
+  if (!token) {
+    showTokenExpired(contentArea);
+    return null;
+  }
+  const response = await fetch(url, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  if (!response.ok && (response.status === 401 || response.status === 403)) {
+    showTokenExpired(contentArea);
+    return null;
+  }
+  return response;
+}
+
 
 async function setActiveView(view: string, buttons: HTMLButtonElement[], contentArea: HTMLDivElement) {
-  // Update button styles
+  // Side Buttons of Dashboard bright
   buttons.forEach(btn => {
     if (btn.dataset.view === view) {
       btn.classList.add('active');
@@ -377,52 +413,20 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
     }
   });
 
+  const token = sessionStorage.getItem('authToken');
+
   // Update content area
   contentArea.innerHTML = '';
   switch (view) {
     case 'profile':
-      contentArea.innerHTML = `<h3 class="dashboard-content-heading">Profile</h3><p class="dashboard-content-paragraph">Loading profile...</p>`; // Show loading state
-      // Requesh online users list when switching to profile view
+      // contentArea.innerHTML = `<h3 class="dashboard-content-heading">Profile</h3><p class="dashboard-content-paragraph">Loading profile...</p>`; // Show loading state
+      // Request online users list when switching to profile view
       if (chatSocket && chatSocket.connected) {
         chatSocket.emit('request_online_users');
       }
       try {
-        // Get the token from local storage
-        const token = sessionStorage.getItem('authToken');
-        if (!token) {
-          contentArea.innerHTML = `
-            <h3 class="dashboard-content-heading">Profile</h3>
-            <p class="dashboard-content-paragraph">Error: You are not logged in or your session has expired.</p>
-            <p class="dashboard-content-paragraph">Please <a href="/login">login</a> again.</p>
-          `;
-          return;
-        }
-        const response = await fetch('/api/profile', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        console.log('Fetch response status:', response.status);
-        console.log('Fetch response ok:', response.ok);
-        const responseText = await response.clone().text(); // Clone to read text without consuming body for json()
-        console.log('Fetch response text:', responseText); // ***JSON should be here
-
-        if (!response.ok) {
-          if (response.status === 401 || response.status === 403) {
-            contentArea.innerHTML = `
-              <h3 class="dashboard-content-heading">Profile</h3>
-              <p class="dashboard-content-paragraph">Error: Unauthorized. Your session may have expired.</p>
-              <p class="dashboard-content-paragraph">Please <a href="/login">login</a> again.</p>
-              <style> .dashboard-content-paragraph a { color: #3498db; text-decoration: underline; } </style>
-            `;
-          } else {
-			throw new Error(`API Error: ${response.status} ${response.statusText}`);
-          }
-          return;
-        }
-
+        const response = await fetchWithTokenCheck('/api/profile', contentArea);
+        if (!response) return;
         const userProfile = await response.json();
 
         // *** MODIFIED: Fetch all users for the list instead of online users ***
@@ -651,10 +655,13 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
       }
       break;
     case 'game':
+      const gameTokenCheck = await fetchWithTokenCheck('/api/profile', contentArea);
+      if (!gameTokenCheck) return;
+
       const gameContent = document.createElement('div');
       gameContent.className = "dashboard-game-content";
       gameContent.innerHTML = `<h3 class="dashboard-content-heading">Choose your Game</h3>`;
-
+      
       const gameOptionsContainer = document.createElement('div');
       gameOptionsContainer.className = 'game-options-container';
 
@@ -698,9 +705,10 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
     case 'chat':
       // Try to get username for display
       let username = 'User';
-      const token = sessionStorage.getItem('authToken');
+      const response = await fetchWithTokenCheck('/api/profile', contentArea);
+      if (!response) return;
+      
       if (token) {
-        try {
           const response = await fetch('/api/profile', {
             method: 'GET',
             headers: {
@@ -712,17 +720,17 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
             const userProfile = await response.json();
             username = userProfile.username || 'User';
           }
-        } catch (e) {
-          // Ignore error, fallback to default username
         }
-      }
+        
       contentArea.innerHTML = `
           <h3 class="dashboard-content-heading">${username}'s Messages</h3>
         `;
       if (chatSocket && chatSocket.connected) {
         renderChat(chatSocket);
       } else {
-        // add
+        contentArea.innerHTML = `
+          <h3 class="dashboard-content-heading">ChatSocket for LiveChat not connected</h3>
+        `;
       }
       break;
   }

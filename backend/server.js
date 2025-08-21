@@ -991,14 +991,16 @@ socket.on('player_inactive', () => {
 
 // Game loop
 setInterval(() => {
-	if (!game.paused) {
+	if (game.matchActive && !game.paused) {
+		// console.log('DEBUG SetInterval: game.paused=>', game.paused)
 		game.update(1 / 60);
 		const state = game.getState();
 		io.emit('state_update', game.getState());
 		
 		if (state.gameOver) {
-			console.log('Game over! Final score:', state.score);
+			console.log('***Game over! Final score:', state.score);
 			game.paused = true;
+			game.setIntervalFlag = false;
 			// game.resetGame();
 		}
 	}

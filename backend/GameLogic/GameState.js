@@ -176,7 +176,7 @@ class GameState {
 	}
 
 	resetGame() {
-		//console.log('resetGame called', 'gameOver:', this.gameOver, 'paused:', this.paused);
+		console.log('*****ResetGame called', 'gameOver:', this.gameOver, 'paused:', this.paused);
 		this.score = { player1: 0, player2: 0 };
 		this.paddles.player1.y = 250;
 		this.paddles.player2.y = 250;
@@ -184,7 +184,7 @@ class GameState {
 		this.paused = false;
 		this.lastScorer = null;
 		this.resetBall();
-		console.log('After resetGame', 'gameOver:', this.gameOver, 'paused:', this.paused);
+		console.log('*****After resetGame', 'gameOver:', this.gameOver, 'paused:', this.paused);
 	}
 
 	pause() {
