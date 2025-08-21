@@ -95,6 +95,17 @@
     word-break: break-word;
 }
 
+.chat-message.system-center {
+  text-align: center;
+  margin: 0.5rem auto;
+  background: rgba(238, 234, 234, 0.322); /* Faint blue background */
+  color: #b0880f;
+  font-weight: 600;
+  max-width: 80%;
+  box-shadow: none;
+  border: none;
+}
+
 .chat-message strong {
     color: #020f03;
     margin-right: 0.5rem;
@@ -108,7 +119,7 @@
 }
 
 .chat-message.sent {
-    background-color: #123e9b; /* Blue for sent */
+    background-color: #aa161642; /* Blue for sent */
     color: #fff;
     align-self: flex-end;
     margin-left: auto;
@@ -116,8 +127,8 @@
 }
 
 .chat-message.received {
-    background-color: #a8acb3; /* Light gray for received */
-    color: #222;
+    background-color: #095c0c45; /* Light gray for received */
+    color: #ffffff;
     align-self: flex-start;
     margin-right: auto;
     text-align: left;

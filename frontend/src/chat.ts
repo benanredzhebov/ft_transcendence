@@ -70,8 +70,13 @@ export function renderChat(socket: Socket): () => void {
 
   function appendMessage(sender: string, message: string, isOwnMessage = false) {
     const msgDiv = document.createElement('div');
-    msgDiv.className = 'chat-message ' + (isOwnMessage ? 'sent' : 'received');
-    msgDiv.innerHTML = `<strong>${sender}:</strong> ${message}`;
+    if (sender === '🤖') {
+      msgDiv.className = 'chat-message system-center';
+      msgDiv.innerHTML = `<strong>${sender}:</strong> ${message}`;
+    } else {
+      msgDiv.className = 'chat-message ' + (isOwnMessage ? 'sent' : 'received');
+      msgDiv.innerHTML = `<strong>${sender}:</strong> ${message}`;
+    }
     messagesDiv.appendChild(msgDiv);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
   }
@@ -81,7 +86,7 @@ export function renderChat(socket: Socket): () => void {
   if (token) {
     socket.emit('authenticate_chat', token);
   } else {
-    appendMessage('System', 'Authentication token not found. Chat disabled.');
+    appendMessage('🤖', 'Authentication token not found. Chat disabled.');
     console.error('Chat: No auth token found in sessionStorage.');
   }
 
@@ -123,11 +128,11 @@ export function renderChat(socket: Socket): () => void {
                         const history: { sender: string; text: string }[] = await response.json();
                         history.forEach(msg => appendMessage(msg.sender, msg.text));
                     } else {
-                        appendMessage('System', 'Failed to load message history.');
+                        appendMessage('🤖', 'Failed to load message history.');
                     }
                 } catch (error) {
                     console.error('Error fetching chat history:', error);
-                    appendMessage('System', 'Error loading messages.');
+                    appendMessage('🤖', 'Error loading messages.');
                 }
             }
 
@@ -136,6 +141,10 @@ export function renderChat(socket: Socket): () => void {
       });
       playerList.appendChild(li);
     });
+  });
+
+  socket.on('lobby_invite_dismissed', ({ message }) => {
+    appendMessage('🤖', message);
   });
 
   socket.on('private_message', ({ from, message, username, userId }) => {
@@ -149,31 +158,10 @@ export function renderChat(socket: Socket): () => void {
     }
   });
 
-  socket.on('receive_public_tournament_invite', ({ senderAlias }) => {
-    const inviteEl = document.createElement('div');
-    inviteEl.className = 'chat-message system-invite'; // Style this class for a distinct look
-    
-    const text = document.createElement('p');
-    text.innerHTML = `<strong>${senderAlias}</strong> sent an invitation to join the public tournament.`;
 
-    const joinButton = document.createElement('button');
-    joinButton.textContent = 'Join Lobby';
-    joinButton.className = 'btn-join-tournament'; // Style this button
-    joinButton.onclick = () => {
-        // This uses a global navigateTo function, assuming it's available
-        // from your router setup.
-        window.location.href = '/game?tournament=true';
-    };
-
-    inviteEl.appendChild(text);
-    inviteEl.appendChild(joinButton);
-    messagesDiv.appendChild(inviteEl);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to the new message
-  });
-
-  socket.on('game_invite', ({ username }) => {
-    appendMessage('System', `${username} invited you to a game.`);
-  });
+  // socket.on('game_invite', ({ username }) => {
+  //   appendMessage('System', `${username} invited you to a game.`);
+  // });
 
   socket.on('user_blocked', ({ targetUserId, message }) => {
     blockedUserIds.add(targetUserId);
@@ -181,7 +169,7 @@ export function renderChat(socket: Socket): () => void {
         blockBtn.textContent = 'Unblock Contact';
         blockBtn.classList.add('unblock');
     }
-    appendMessage('System', message);
+    appendMessage('🤖', message);
   });
 
   socket.on('user_unblocked', ({ targetUserId, message }) => {
@@ -190,7 +178,7 @@ export function renderChat(socket: Socket): () => void {
         blockBtn.textContent = 'Block Contact';
         blockBtn.classList.remove('unblock');
     }
-    appendMessage('System', message);
+    appendMessage('🤖', message);
   });
 
   socket.on('blocked_list', (ids: number[]) => {
@@ -199,7 +187,7 @@ export function renderChat(socket: Socket): () => void {
 
   socket.on('connect_error', (err) => {
     console.error('Socket connection error:', err.message);
-    appendMessage('System', 'Error connecting to chat server.');
+    appendMessage('🤖', 'Error connecting to chat server.');
   });
 
   function sendMessage() {
@@ -222,7 +210,7 @@ export function renderChat(socket: Socket): () => void {
   inviteBtn.addEventListener('click', () => {
     if (selectedUser) {
       socket.emit('send_public_tournament_invite', { targetSocketId: selectedUser.socketId });
-      appendMessage('System', `Tournament invite sent to ${selectedUser.username}`);
+      appendMessage('🤖', `Tournament invite sent to ${selectedUser.username}`);
     }
   });
 
@@ -241,7 +229,7 @@ export function renderChat(socket: Socket): () => void {
   inviteBtn.addEventListener('click', () => {
     if (selectedUser) {
       socket.emit('invite_to_game', { targetSocketId: selectedUser.socketId });
-      appendMessage('System', `Game invite sent to ${selectedUser.username}`);
+      // appendMessage('System', `Game invite sent to ${selectedUser.username}`);
     }
   });
 
