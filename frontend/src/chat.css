@@ -88,14 +88,15 @@
 
 .chat-message {
     padding: 0.5rem 1rem;
-    background-color: rgba(255, 255, 255, 0.05);
     border-radius: 15px;
-    max-width: 80%;
-    align-self: flex-start;
+    max-width: 70%;
+    margin-bottom: 0.5rem;
+    clear: both;
+    word-break: break-word;
 }
 
 .chat-message strong {
-    color: #06b6d4;
+    color: #020f03;
     margin-right: 0.5rem;
 }
 
@@ -104,6 +105,22 @@
     color: #888;
     margin-left: 1rem;
     float: right;
+}
+
+.chat-message.sent {
+    background-color: #123e9b; /* Blue for sent */
+    color: #fff;
+    align-self: flex-end;
+    margin-left: auto;
+    text-align: right;
+}
+
+.chat-message.received {
+    background-color: #a8acb3; /* Light gray for received */
+    color: #222;
+    align-self: flex-start;
+    margin-right: auto;
+    text-align: left;
 }
 
 .chat-form {
