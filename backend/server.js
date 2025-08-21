@@ -485,13 +485,21 @@ socket.on('player_inactive', () => {
         }
 
         const payload = {
-            senderAlias: sender.alias
+            senderAlias: sender.alias,
+			senderSocketId: socket.id
         };
 
         // Send the special invite message to both users' chat windows
         io.to(socket.id).emit('receive_public_tournament_invite', payload);
         io.to(targetSocketId).emit('receive_public_tournament_invite', payload);
     });
+
+	socket.on('dismiss_lobby_invite', ({ senderSocketId }) => {
+    	const sender = onlineUsers.get(senderSocketId);
+    	if (sender) {
+    	    io.to(senderSocketId).emit('lobby_invite_dismissed', { message: 'Your match invite was dismissed.' });
+    	}
+	});
 
 	// Start tournament when someone clicks "Start Tournament"
 	socket.on('start_tournament', () => {

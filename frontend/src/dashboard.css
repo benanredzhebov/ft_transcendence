@@ -10,6 +10,10 @@
     overflow: hidden; /* Prevent scrollbars on the body if content fits */
 }
 
+.dashboard-tournament-invite {
+  margin: 0;
+}
+
 .dashboard-card-container {
     width: 100%;
     height: 100%;
@@ -864,4 +868,102 @@
 .session-expired-login-btn:focus {
   background: #2563eb;
   color: #fff;
+}
+
+/* --- NEW: Lobby Invite Styles --- */
+.dashboard-lobby-invite-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dashboard-lobby-invite-card {
+  background: #232946;
+  color: #fff;
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  padding: 2rem 2.5rem;
+  min-width: 320px;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  animation: popIn 1s;
+}
+
+@keyframes popIn {
+  from { transform: scale(0.95); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+.dashboard-lobby-invite-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.dashboard-lobby-invite-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: #fff;
+  object-fit: cover;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+.dashboard-lobby-invite-header h4 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0e7490;
+}
+
+.dashboard-lobby-invite-header p {
+  margin: 0;
+  font-size: 1rem;
+  color: #e0e0e0;
+}
+
+.dashboard-lobby-invite-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.dashboard-lobby-join-btn {
+  background: #0e7490;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.6rem 1.2rem;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+
+.dashboard-lobby-join-btn:hover {
+  background: #0891b2;
+}
+
+.dashboard-lobby-dismiss-btn {
+  background: transparent;
+  color: #b0b0b0;
+  border: 1.5px solid #b0b0b0;
+  border-radius: 6px;
+  padding: 0.6rem 1.2rem;
+  font-weight: 500;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+
+.dashboard-lobby-dismiss-btn:hover {
+  background: #232946;
+  color: #fff;
+  border-color: #fff;
 }
