@@ -68,11 +68,12 @@ export function renderChat(socket: Socket): () => void {
   container.appendChild(playerListContainer); // Add the new container to the main layout
   container.appendChild(chatArea);
 
-  function appendMessage(sender: string, text: string) {
-    const div = document.createElement('div');
-    div.textContent = `${sender}: ${text}`;
-    messagesDiv.appendChild(div);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight; // Auto-scroll
+  function appendMessage(sender: string, message: string, isOwnMessage = false) {
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'chat-message ' + (isOwnMessage ? 'sent' : 'received');
+    msgDiv.innerHTML = `<strong>${sender}:</strong> ${message}`;
+    messagesDiv.appendChild(msgDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
   }
 
   // --- Show OnlineUser List - Authenticate the user for the chat ---
@@ -144,7 +145,7 @@ export function renderChat(socket: Socket): () => void {
         return;
     }
     if (selectedUser && from === selectedUser.socketId) {
-      appendMessage(username, message);
+      appendMessage(username, message, false); // false for received messages
     }
   });
 
@@ -204,7 +205,7 @@ export function renderChat(socket: Socket): () => void {
   function sendMessage() {
     if (selectedUser && input.value.trim()) {
       socket.emit('private_message', { targetSocketId: selectedUser.socketId, message: input.value.trim() });
-      appendMessage('Me', input.value.trim());
+      appendMessage('Me', input.value, true); // true for sent messages
       input.value = '';
     }
   }
