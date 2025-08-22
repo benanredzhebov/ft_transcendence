@@ -525,350 +525,350 @@ function setupTournamentHandlers() {
 
 // Local Tournament Functions
 function promptLocalTournamentSetup() {
-    const dialog = document.createElement('div');
-    dialog.className = 'tournament-dialog';
-    
-    dialog.innerHTML = `
-        <div class="dialog-content">
-            <h3>Local Tournament Setup</h3>
-            <p>Enter player names (2-8 players):</p>
-            <div class="player-inputs">
-                <input type="text" placeholder="Player 1" class="player-name-input" />
-                <input type="text" placeholder="Player 2" class="player-name-input" />
-            </div>
-            <div class="buttons">
-                <button class="add-player-btn">Add Player</button>
-                <button class="start-tournament-btn">Start Tournament</button>
-                <button class="cancel-btn">Cancel</button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(dialog);
-    
-    const playerInputsDiv = dialog.querySelector('.player-inputs') as HTMLDivElement;
-    const addPlayerBtn = dialog.querySelector('.add-player-btn') as HTMLButtonElement;
-    const startTournamentBtn = dialog.querySelector('.start-tournament-btn') as HTMLButtonElement;
-    const cancelBtn = dialog.querySelector('.cancel-btn') as HTMLButtonElement;
-    
-    // Add more player input fields
-    addPlayerBtn.onclick = () => {
-        const currentInputs = playerInputsDiv.querySelectorAll('.player-name-input');
-        if (currentInputs.length < 8) {
-            const newInput = document.createElement('input');
-            newInput.type = 'text';
-            newInput.placeholder = `Player ${currentInputs.length + 1}`;
-            newInput.className = 'player-name-input';
-            playerInputsDiv.appendChild(newInput);
-        }
-        
-        if (currentInputs.length >= 7) {
-            addPlayerBtn.disabled = true;
-            addPlayerBtn.textContent = 'Max 8 Players';
-        }
-    };
-    
-    // Start tournament
-    startTournamentBtn.onclick = () => {
-        const inputs = playerInputsDiv.querySelectorAll('.player-name-input') as NodeListOf<HTMLInputElement>;
-        const playerNames: string[] = [];
-        
-        inputs.forEach(input => {
-            if (input.value.trim()) {
-                playerNames.push(input.value.trim());
-            }
-        });
-        
-        if (playerNames.length < 2) {
-            alert('Please enter at least 2 player names');
-            return;
-        }
-        
-        // Check for duplicate names
-        const uniqueNames = new Set(playerNames.map(name => name.toLowerCase()));
-        if (uniqueNames.size !== playerNames.length) {
-            alert('Player names must be unique');
-            return;
-        }
-        
-        dialog.remove();
-        initializeLocalTournament(playerNames);
-    };
-    
-    // Cancel
-    cancelBtn.onclick = () => {
-        dialog.remove();
-        window.location.href = '/dashboard';
-    };
+	const dialog = document.createElement('div');
+	dialog.className = 'tournament-dialog';
+	
+	dialog.innerHTML = `
+		<div class="dialog-content">
+			<h3>Local Tournament Setup</h3>
+			<p>Enter player names (2-8 players):</p>
+			<div class="player-inputs">
+				<input type="text" placeholder="Player 1" class="player-name-input" />
+				<input type="text" placeholder="Player 2" class="player-name-input" />
+			</div>
+			<div class="buttons">
+				<button class="add-player-btn">Add Player</button>
+				<button class="start-tournament-btn">Start Tournament</button>
+				<button class="cancel-btn">Cancel</button>
+			</div>
+		</div>
+	`;
+	
+	document.body.appendChild(dialog);
+	
+	const playerInputsDiv = dialog.querySelector('.player-inputs') as HTMLDivElement;
+	const addPlayerBtn = dialog.querySelector('.add-player-btn') as HTMLButtonElement;
+	const startTournamentBtn = dialog.querySelector('.start-tournament-btn') as HTMLButtonElement;
+	const cancelBtn = dialog.querySelector('.cancel-btn') as HTMLButtonElement;
+	
+	// Add more player input fields
+	addPlayerBtn.onclick = () => {
+		const currentInputs = playerInputsDiv.querySelectorAll('.player-name-input');
+		if (currentInputs.length < 8) {
+			const newInput = document.createElement('input');
+			newInput.type = 'text';
+			newInput.placeholder = `Player ${currentInputs.length + 1}`;
+			newInput.className = 'player-name-input';
+			playerInputsDiv.appendChild(newInput);
+		}
+		
+		if (currentInputs.length >= 7) {
+			addPlayerBtn.disabled = true;
+			addPlayerBtn.textContent = 'Max 8 Players';
+		}
+	};
+	
+	// Start tournament
+	startTournamentBtn.onclick = () => {
+		const inputs = playerInputsDiv.querySelectorAll('.player-name-input') as NodeListOf<HTMLInputElement>;
+		const playerNames: string[] = [];
+		
+		inputs.forEach(input => {
+			if (input.value.trim()) {
+				playerNames.push(input.value.trim());
+			}
+		});
+		
+		if (playerNames.length < 2) {
+			alert('Please enter at least 2 player names');
+			return;
+		}
+		
+		// Check for duplicate names
+		const uniqueNames = new Set(playerNames.map(name => name.toLowerCase()));
+		if (uniqueNames.size !== playerNames.length) {
+			alert('Player names must be unique');
+			return;
+		}
+		
+		dialog.remove();
+		initializeLocalTournament(playerNames);
+	};
+	
+	// Cancel
+	cancelBtn.onclick = () => {
+		dialog.remove();
+		window.location.href = '/dashboard';
+	};
 }
 
 function initializeLocalTournament(playerNames: string[]) {
-    if (!socket) return;
-    
-    showTournamentDialog('Setting up local tournament...');
-    
-    socket.emit('init_local_tournament', { playerNames });
+	if (!socket) return;
+	
+	showTournamentDialog('Setting up local tournament...');
+	
+	socket.emit('init_local_tournament', { playerNames });
 }
 
 function setupLocalTournamentHandlers() {
-    if (!socket) return;
-    
-    socket.on('local_tournament_initialized', (status) => {
-        document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
-        showLocalTournamentBracket(status);
-        showLocalTournamentMatchDialog(status);
-    });
-    
-    socket.on('local_tournament_match_started', (matchInfo) => {
-        document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
-        removeOverlays();
-        
-        gameEnded = false;
-        matchStarted = true;
+	if (!socket) return;
+	
+	socket.on('local_tournament_initialized', (status) => {
+		document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
+		showLocalTournamentBracket(status);
+		showLocalTournamentMatchDialog(status);
+	});
+	
+	socket.on('local_tournament_match_started', (matchInfo) => {
+		document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
+		removeOverlays();
+		
+		gameEnded = false;
+		matchStarted = true;
 
 		currentMatch = [matchInfo.player1, matchInfo.player2];
-        
-        // Show match info
-        const { player1, player2 } = matchInfo;
-        showMatchInfo(player1.name, player2.name, 0, 0);
-        
-        // Start the game loop
-        if (movePlayersFrame === null) movePlayers();
-        
-        // Show controls info
-        showLocalTournamentControls();
-        
-        // Make sure bracket is visible during match
-        const bracketDiv = document.getElementById('local-tournament-bracket');
-        if (bracketDiv) {
-            bracketDiv.style.display = 'block';
-        }
-    });
-    
-    socket.on('local_tournament_status_update', (status) => {
-        updateLocalTournamentBracket(status);
-        if (!status.isActive && !status.isFinished) {
-            showLocalTournamentMatchDialog(status);
-        }
-    });
-    
-    socket.on('local_tournament_next_match', ({ status }) => {
-        updateLocalTournamentBracket(status);
-        showLocalTournamentMatchDialog(status);
-    });
-    
-    socket.on('local_tournament_finished', ({ winner, allMatches }) => {
-        document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
-        showLocalTournamentResults(winner, allMatches);
-    });
-    
-    socket.on('local_tournament_error', ({ message }) => {
-        alert(`Local Tournament Error: ${message}`);
-    });
-    
-    socket.on('local_tournament_reset', () => {
-        document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
-        document.getElementById('local-tournament-bracket')?.remove();
-        showTournamentDialog('Local tournament has been reset', {
-            confirmText: 'Return to Dashboard'
-        }).querySelector('button')!.onclick = () => {
-            window.location.href = '/dashboard';
-        };
-    });
+		
+		// Show match info
+		const { player1, player2 } = matchInfo;
+		showMatchInfo(player1.name, player2.name, 0, 0);
+		
+		// Start the game loop
+		if (movePlayersFrame === null) movePlayers();
+		
+		// Show controls info
+		showLocalTournamentControls();
+		
+		// Make sure bracket is visible during match
+		const bracketDiv = document.getElementById('local-tournament-bracket');
+		if (bracketDiv) {
+			bracketDiv.style.display = 'block';
+		}
+	});
+	
+	socket.on('local_tournament_status_update', (status) => {
+		updateLocalTournamentBracket(status);
+		if (!status.isActive && !status.isFinished) {
+			showLocalTournamentMatchDialog(status);
+		}
+	});
+	
+	socket.on('local_tournament_next_match', ({ status }) => {
+		updateLocalTournamentBracket(status);
+		showLocalTournamentMatchDialog(status);
+	});
+	
+	socket.on('local_tournament_finished', ({ winner, allMatches }) => {
+		document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
+		showLocalTournamentResults(winner, allMatches);
+	});
+	
+	socket.on('local_tournament_error', ({ message }) => {
+		alert(`Local Tournament Error: ${message}`);
+	});
+	
+	socket.on('local_tournament_reset', () => {
+		document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
+		document.getElementById('local-tournament-bracket')?.remove();
+		showTournamentDialog('Local tournament has been reset', {
+			confirmText: 'Return to Dashboard'
+		}).querySelector('button')!.onclick = () => {
+			window.location.href = '/dashboard';
+		};
+	});
 }
 
 function showLocalTournamentBracket(status: any) {
-    let bracketDiv = document.getElementById('local-tournament-bracket') as HTMLDivElement;
-    
-    if (!bracketDiv) {
-        bracketDiv = document.createElement('div');
-        bracketDiv.id = 'local-tournament-bracket';
-        bracketDiv.className = 'tournament-bracket';
-        bracketDiv.innerHTML = `
-            <div class="bracket-header">
-                <h3>Local Tournament Bracket</h3>
-                <button id="close-local-bracket">×</button>
-            </div>
-            <div class="bracket-content"></div>
-        `;
-        document.body.appendChild(bracketDiv);
-        
-        // Close button handler
-        const closeBtn = bracketDiv.querySelector('#close-local-bracket');
-        const closeBracket = () => {
-            bracketDiv.style.display = 'none';
-        };
-        
-        closeBtn?.addEventListener('click', closeBracket);
-        
-        // Keyboard handler for Escape key
-        const keyHandler = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                closeBracket();
-                document.removeEventListener('keydown', keyHandler);
-            }
-        };
-        document.addEventListener('keydown', keyHandler);
-        
-        // Click outside to close
-        const clickOutsideHandler = (e: MouseEvent) => {
-            if (e.target === bracketDiv) {
-                closeBracket();
-                document.removeEventListener('click', clickOutsideHandler);
-                document.removeEventListener('keydown', keyHandler);
-            }
-        };
-        document.addEventListener('click', clickOutsideHandler);
-    }
-    
-    updateLocalTournamentBracket(status);
-    bracketDiv.style.display = 'block';
+	let bracketDiv = document.getElementById('local-tournament-bracket') as HTMLDivElement;
+	
+	if (!bracketDiv) {
+		bracketDiv = document.createElement('div');
+		bracketDiv.id = 'local-tournament-bracket';
+		bracketDiv.className = 'tournament-bracket';
+		bracketDiv.innerHTML = `
+			<div class="bracket-header">
+				<h3>Local Tournament Bracket</h3>
+				<button id="close-local-bracket">×</button>
+			</div>
+			<div class="bracket-content"></div>
+		`;
+		document.body.appendChild(bracketDiv);
+		
+		// Close button handler
+		const closeBtn = bracketDiv.querySelector('#close-local-bracket');
+		const closeBracket = () => {
+			bracketDiv.style.display = 'none';
+		};
+		
+		closeBtn?.addEventListener('click', closeBracket);
+		
+		// Keyboard handler for Escape key
+		const keyHandler = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') {
+				closeBracket();
+				document.removeEventListener('keydown', keyHandler);
+			}
+		};
+		document.addEventListener('keydown', keyHandler);
+		
+		// Click outside to close
+		const clickOutsideHandler = (e: MouseEvent) => {
+			if (e.target === bracketDiv) {
+				closeBracket();
+				document.removeEventListener('click', clickOutsideHandler);
+				document.removeEventListener('keydown', keyHandler);
+			}
+		};
+		document.addEventListener('click', clickOutsideHandler);
+	}
+	
+	updateLocalTournamentBracket(status);
+	bracketDiv.style.display = 'block';
 }
 
 function updateLocalTournamentBracket(status: any) {
-    const bracketDiv = document.getElementById('local-tournament-bracket');
-    if (!bracketDiv) return;
-    
-    const contentDiv = bracketDiv.querySelector('.bracket-content') as HTMLDivElement;
-    contentDiv.innerHTML = '';
-    
-    if (status.bracket && status.bracket.rounds) {
-        status.bracket.rounds.forEach((round: any[], roundIdx: number) => {
-            const roundDiv = document.createElement('div');
-            roundDiv.className = 'tournament-round';
-            
-            const isCurrentRound = roundIdx === status.currentRound - 1;
-            const roundStatus = isCurrentRound ? ' (Current)' : '';
-            roundDiv.innerHTML = `<strong>Round ${roundIdx + 1}${roundStatus}</strong>`;
-            
-            round.forEach((match: any) => {
-                const matchDiv = document.createElement('div');
-                matchDiv.className = `tournament-match ${match.isCurrentMatch ? 'current-match' : ''} ${match.isCompleted ? 'completed-match' : ''}`;
-                
-                const p1Name = match.player1 ? match.player1.name : 'BYE';
-                const p2Name = match.player2 ? match.player2.name : 'BYE';
-                
-                let matchText = `${p1Name} vs ${p2Name}`;
-                
-                if (match.winner) {
-                    matchText += ` → Winner: ${match.winner.name}`;
-                } else if (match.isCurrentMatch) {
-                    matchText += ' ← Playing Now';
-                }
-                
-                matchDiv.textContent = matchText;
-                roundDiv.appendChild(matchDiv);
-            });
-            
-            contentDiv.appendChild(roundDiv);
-        });
-    }
-    
-    // Show tournament winner if finished
-    if (status.isFinished && status.winner) {
-        const championDiv = document.createElement('div');
-        championDiv.className = 'tournament-champion';
-        championDiv.innerHTML = `<strong>🏆 CHAMPION: ${status.winner}</strong>`;
-        contentDiv.appendChild(championDiv);
-    }
+	const bracketDiv = document.getElementById('local-tournament-bracket');
+	if (!bracketDiv) return;
+	
+	const contentDiv = bracketDiv.querySelector('.bracket-content') as HTMLDivElement;
+	contentDiv.innerHTML = '';
+	
+	if (status.bracket && status.bracket.rounds) {
+		status.bracket.rounds.forEach((round: any[], roundIdx: number) => {
+			const roundDiv = document.createElement('div');
+			roundDiv.className = 'tournament-round';
+			
+			const isCurrentRound = roundIdx === status.currentRound - 1;
+			const roundStatus = isCurrentRound ? ' (Current)' : '';
+			roundDiv.innerHTML = `<strong>Round ${roundIdx + 1}${roundStatus}</strong>`;
+			
+			round.forEach((match: any) => {
+				const matchDiv = document.createElement('div');
+				matchDiv.className = `tournament-match ${match.isCurrentMatch ? 'current-match' : ''} ${match.isCompleted ? 'completed-match' : ''}`;
+				
+				const p1Name = match.player1 ? match.player1.name : 'BYE';
+				const p2Name = match.player2 ? match.player2.name : 'BYE';
+				
+				let matchText = `${p1Name} vs ${p2Name}`;
+				
+				if (match.winner) {
+					matchText += ` → Winner: ${match.winner.name}`;
+				} else if (match.isCurrentMatch) {
+					matchText += ' ← Playing Now';
+				}
+				
+				matchDiv.textContent = matchText;
+				roundDiv.appendChild(matchDiv);
+			});
+			
+			contentDiv.appendChild(roundDiv);
+		});
+	}
+	
+	// Show tournament winner if finished
+	if (status.isFinished && status.winner) {
+		const championDiv = document.createElement('div');
+		championDiv.className = 'tournament-champion';
+		championDiv.innerHTML = `<strong>🏆 CHAMPION: ${status.winner}</strong>`;
+		contentDiv.appendChild(championDiv);
+	}
 }
 
 function showLocalTournamentMatchDialog(status: any) {
-    if (!status.currentMatch || !status.currentMatch.player1) return;
-    
-    const { player1, player2 } = status.currentMatch;
-    const isBye = !player2;
-    
-    if (isBye) {
-        showTournamentDialog(
-            `${player1.name} gets a bye to the next round!`,
-            { confirmText: 'Continue', timer: 3 }
-        );
-        
-        setTimeout(() => {
-            if (socket) {
-                socket.emit('local_tournament_match_ended', {
-                    winnerId: player1.id,
-                    scores: { player1: 0, player2: 0, isBye: true }
-                });
-            }
-        }, 3000);
-    } else {
-        const dialog = showTournamentDialog(
-            `Next Match: <strong>${player1.name}</strong> vs <strong>${player2.name}</strong><br><br>
-            Controls:<br>
-            ${player1.name}: W/S keys<br>
-            ${player2.name}: Arrow Up/Down keys`,
-            { confirmText: 'Start Match' }
-        );
-        
-        dialog.querySelector('button')!.onclick = () => {
-            dialog.remove();
-            if (socket) {
-                socket.emit('start_local_tournament_match');
-            }
-        };
-    }
+	if (!status.currentMatch || !status.currentMatch.player1) return;
+	
+	const { player1, player2 } = status.currentMatch;
+	const isBye = !player2;
+	
+	if (isBye) {
+		showTournamentDialog(
+			`${player1.name} gets a bye to the next round!`,
+			{ confirmText: 'Continue', timer: 3 }
+		);
+		
+		setTimeout(() => {
+			if (socket) {
+				socket.emit('local_tournament_match_ended', {
+					winnerId: player1.id,
+					scores: { player1: 0, player2: 0, isBye: true }
+				});
+			}
+		}, 3000);
+	} else {
+		const dialog = showTournamentDialog(
+			`Next Match: <strong>${player1.name}</strong> vs <strong>${player2.name}</strong><br><br>
+			Controls:<br>
+			${player1.name}: W/S keys<br>
+			${player2.name}: Arrow Up/Down keys`,
+			{ confirmText: 'Start Match' }
+		);
+		
+		dialog.querySelector('button')!.onclick = () => {
+			dialog.remove();
+			if (socket) {
+				socket.emit('start_local_tournament_match');
+			}
+		};
+	}
 }
 
 function showLocalTournamentControls() {
-    const controlsDiv = document.createElement('div');
-    controlsDiv.className = 'local-tournament-controls';
-    controlsDiv.innerHTML = `
-        <div class="controls-info">
-            <div><strong>Player 1:</strong> W/S keys</div>
-            <div><strong>Player 2:</strong> Arrow Up/Down keys</div>
-            <div><strong>Pause:</strong> Space bar</div>
-        </div>
-    `;
-    
-    document.body.appendChild(controlsDiv);
-    
-    // Remove after 5 seconds
-    setTimeout(() => controlsDiv.remove(), 5000);
+	const controlsDiv = document.createElement('div');
+	controlsDiv.className = 'local-tournament-controls';
+	controlsDiv.innerHTML = `
+		<div class="controls-info">
+			<div><strong>Player 1:</strong> W/S keys</div>
+			<div><strong>Player 2:</strong> Arrow Up/Down keys</div>
+			<div><strong>Pause:</strong> Space bar</div>
+		</div>
+	`;
+	
+	document.body.appendChild(controlsDiv);
+	
+	// Remove after 5 seconds
+	setTimeout(() => controlsDiv.remove(), 5000);
 }
 
 function showLocalTournamentResults(winner: string, allMatches: string[]) {
-    const dialog = document.createElement('div');
-    dialog.className = 'tournament-dialog tournament-results';
-    
-    dialog.innerHTML = `
-        <div class="dialog-content">
-            <h2>🏆 Local Tournament Complete!</h2>
-            <h3>Champion: ${winner}</h3>
-            <div class="match-results">
-                <h4>Match Results:</h4>
-                <ul>
-                    ${allMatches.map(match => `<li>${match}</li>`).join('')}
-                </ul>
-            </div>
-            <div class="buttons">
-                <button class="new-tournament-btn">New Tournament</button>
-                <button class="dashboard-btn">Back to Dashboard</button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(dialog);
-    
-    const newTournamentBtn = dialog.querySelector('.new-tournament-btn') as HTMLButtonElement;
-    const dashboardBtn = dialog.querySelector('.dashboard-btn') as HTMLButtonElement;
-    
-    newTournamentBtn.onclick = () => {
-        dialog.remove();
-        if (socket) {
-            socket.emit('reset_local_tournament');
-        }
-        promptLocalTournamentSetup();
-    };
-    
-    dashboardBtn.onclick = () => {
-        dialog.remove();
-        if (socket) {
-            socket.emit('reset_local_tournament');
-        }
-        window.location.href = '/dashboard';
-    };
+	const dialog = document.createElement('div');
+	dialog.className = 'tournament-dialog tournament-results';
+	
+	dialog.innerHTML = `
+		<div class="dialog-content">
+			<h2>🏆 Local Tournament Complete!</h2>
+			<h3>Champion: ${winner}</h3>
+			<div class="match-results">
+				<h4>Match Results:</h4>
+				<ul>
+					${allMatches.map(match => `<li>${match}</li>`).join('')}
+				</ul>
+			</div>
+			<div class="buttons">
+				<button class="new-tournament-btn">New Tournament</button>
+				<button class="dashboard-btn">Back to Dashboard</button>
+			</div>
+		</div>
+	`;
+	
+	document.body.appendChild(dialog);
+	
+	const newTournamentBtn = dialog.querySelector('.new-tournament-btn') as HTMLButtonElement;
+	const dashboardBtn = dialog.querySelector('.dashboard-btn') as HTMLButtonElement;
+	
+	newTournamentBtn.onclick = () => {
+		dialog.remove();
+		if (socket) {
+			socket.emit('reset_local_tournament');
+		}
+		promptLocalTournamentSetup();
+	};
+	
+	dashboardBtn.onclick = () => {
+		dialog.remove();
+		if (socket) {
+			socket.emit('reset_local_tournament');
+		}
+		window.location.href = '/dashboard';
+	};
 }
 
 // Game UI Functions
@@ -933,8 +933,8 @@ function showGameOverScreen(winner: string | { alias: string}) {
 
 	const buttons = document.createElement('div');
 	buttons.className = 'game-buttons';
-	
-	if (!inTournament) {
+
+	if (!inTournament && !inLocalTournament) {
 		const startBtn = document.createElement('button');
 		startBtn.textContent = "Start Tournament";
 		startBtn.onclick = () => promptAliasRegistration();
@@ -958,30 +958,52 @@ function showGameOverScreen(winner: string | { alias: string}) {
 			}
 		};
 		buttons.appendChild(restartBtn);
+
+		const dashboardBtn = document.createElement('button');
+		dashboardBtn.textContent = 'Back to Dashboard';
+		dashboardBtn.onclick = () => {
+			if (socket) {
+				socket.disconnect();
+				socket = null;
+			}
+			const token = sessionStorage.getItem('authToken');
+			if (!token) {
+				alert('Your session has expired. Please log in again.');
+				window.location.href = '/login';
+			} else {
+				window.location.href = '/dashboard';
+			}
+		};
+		buttons.appendChild(dashboardBtn);
+
+		overlay.appendChild(message);
+		overlay.appendChild(buttons);
+	} else if (inTournament) {
+		// Only show Back to Dashboard in remote tournament mode
+		const dashboardBtn = document.createElement('button');
+		dashboardBtn.textContent = 'Back to Dashboard';
+		dashboardBtn.onclick = () => {
+			if (socket) {
+				socket.disconnect();
+				socket = null;
+			}
+			const token = sessionStorage.getItem('authToken');
+			if (!token) {
+				alert('Your session has expired. Please log in again.');
+				window.location.href = '/login';
+			} else {
+				window.location.href = '/dashboard';
+			}
+		};
+		buttons.appendChild(dashboardBtn);
+
+		overlay.appendChild(message);
+		overlay.appendChild(buttons);
+	} else {
+		// Local Tournament: Only show winner message, no buttons
+		overlay.appendChild(message);
 	}
 
-	const dashboardBtn = document.createElement('button');
-	dashboardBtn.textContent = 'Back to Dashboard';
-	dashboardBtn.onclick = () => {
-		// Disconnect socket and reload to ensure clean state on dashboard
-		if (socket) {
-			socket.disconnect();
-			socket = null;
-		}
-		
-		// Check authentication before redirecting
-		const token = sessionStorage.getItem('authToken');
-		if (!token) {
-			alert('Your session has expired. Please log in again.');
-			window.location.href = '/login';
-		} else {
-			window.location.href = '/dashboard';
-		}
-	};
-	buttons.appendChild(dashboardBtn);
-	
-	overlay.appendChild(message);
-	overlay.appendChild(buttons);
 	canvas.parentElement.appendChild(overlay);
 }
 
@@ -1291,28 +1313,28 @@ export function renderGame(containerId: string = 'app') {
 	const localTournamentMode = urlParams.get('tournament') === 'local';
 
 	if (urlParams.get('tournament') === 'true') {
-        // Clear any existing reset dialogs immediately
-        document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
+		// Clear any existing reset dialogs immediately
+		document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
 
-        // Reset tournament state
-        aliasRegistered = false;
-        inTournament = false;
+		// Reset tournament state
+		aliasRegistered = false;
+		inTournament = false;
 
-        // DON'T call promptAliasRegistration() here - let the connect handler do it
-    }
+		// DON'T call promptAliasRegistration() here - let the connect handler do it
+	}
 	const aiMode = urlParams.get('mode') === 'ai';
 
-    // Socket connection to connect with Remote players
-    const backendUrl = `https://${window.location.hostname}:3000`;
-    socket = io(backendUrl, {
-        // transports: ['websocket'],
-        // secure: true,
-        query: {
+	// Socket connection to connect with Remote players
+	const backendUrl = `https://${window.location.hostname}:3000`;
+	socket = io(backendUrl, {
+		// transports: ['websocket'],
+		// secure: true,
+		query: {
 			token: localStorage.getItem('jwtToken'),
-            local: (!tournamentMode && !aiMode && !localTournamentMode).toString(), // "true" for local, "false" for tournament or AI
-            mode: aiMode ? 'ai' : (tournamentMode ? 'tournament' : (localTournamentMode ? 'local_tournament' : 'local'))
-        }
-    });
+			local: (!tournamentMode && !aiMode && !localTournamentMode).toString(), // "true" for local, "false" for tournament or AI
+			mode: aiMode ? 'ai' : (tournamentMode ? 'tournament' : (localTournamentMode ? 'local_tournament' : 'local'))
+		}
+	});
 
 	// Setup tournament handlers
 	setupTournamentHandlers();
