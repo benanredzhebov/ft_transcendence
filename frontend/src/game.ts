@@ -625,6 +625,8 @@ function setupLocalTournamentHandlers() {
         
         gameEnded = false;
         matchStarted = true;
+
+		currentMatch = [matchInfo.player1, matchInfo.player2];
         
         // Show match info
         const { player1, player2 } = matchInfo;
@@ -1463,10 +1465,32 @@ export function renderGame(containerId: string = 'app') {
 			
 			if (state.score.player1 >= 5) {
 				winner = inTournament && currentMatch ? currentMatch[0] : 'Player 1';
-				winnerId = inLocalTournament ? 'local_player_1' : '';
+				if (
+					inLocalTournament &&
+					currentMatch &&
+					typeof currentMatch[0] === 'object' &&
+					currentMatch[0] !== null &&
+					'id' in currentMatch[0] &&
+					typeof currentMatch[0].id === 'string'
+				) {
+					winnerId = currentMatch[0].id;
+				} else {
+					winnerId = '';
+				}
 			} else if (state.score.player2 >= 5) {
 				winner = inTournament && currentMatch ? currentMatch[1] : 'Player 2';
-				winnerId = inLocalTournament ? 'local_player_2' : '';
+				if (
+					inLocalTournament &&
+					currentMatch &&
+					typeof currentMatch[1] === 'object' &&
+					currentMatch[1] !== null &&
+					'id' in currentMatch[1] &&
+					typeof currentMatch[1].id === 'string'
+				) {
+					winnerId = currentMatch[1].id;
+				} else {
+					winnerId = '';
+				}
 			}
 
 			// Save tournament results
