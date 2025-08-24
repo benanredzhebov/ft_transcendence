@@ -197,71 +197,71 @@ io.on('connection', (socket) => {
 
 
 	socket.on('authenticate_chat', (token) => {
-        if (!token) {
-        socket.emit('auth_error', { message: 'Authentication token not provided.' });
-        return;
-    	}
-    	try {
-    	    const decoded = jwt.verify(token, JWT_SECRET);
+		if (!token) {
+		socket.emit('auth_error', { message: 'Authentication token not provided.' });
+		return;
+		}
+		try {
+			const decoded = jwt.verify(token, JWT_SECRET);
 
-    	    // Prevent duplicate user sessions
-    	    const isAlreadyOnline = [...onlineUsers.values()].some(user => user.userId === decoded.userId);
-    	    if (isAlreadyOnline) {
-    	        console.log(`User ${decoded.username} is already connected.`);
-    	        // Filter out the current user from the list
-    	        const onlineList = Array.from(onlineUsers.entries())
-    	            .filter(([id, u]) => u.userId !== decoded.userId)
-    	            .map(([id, u]) => ({ socketId: id, userId: u.userId, username: u.username, alias: u.alias }));
-    	        socket.emit('online_users', onlineList);
-    	        return;
-    	    }
+			// Prevent duplicate user sessions
+			const isAlreadyOnline = [...onlineUsers.values()].some(user => user.userId === decoded.userId);
+			if (isAlreadyOnline) {
+				console.log(`User ${decoded.username} is already connected.`);
+				// Filter out the current user from the list
+				const onlineList = Array.from(onlineUsers.entries())
+					.filter(([id, u]) => u.userId !== decoded.userId)
+					.map(([id, u]) => ({ socketId: id, userId: u.userId, username: u.username, alias: u.alias }));
+				socket.emit('online_users', onlineList);
+				return;
+			}
 
-    	    const user = {
-    	        userId: decoded.userId,
-    	        username: decoded.username,
-    	        alias: decoded.username,
-    	        blocked: new Set(),
-    	    };
-    	    onlineUsers.set(socket.id, user); // <-- Add User
-    	    console.log(`User authenticated for session: ${user.username} (${socket.id})`);
+			const user = {
+				userId: decoded.userId,
+				username: decoded.username,
+				alias: decoded.username,
+				blocked: new Set(),
+			};
+			onlineUsers.set(socket.id, user); // <-- Add User
+			console.log(`User authenticated for session: ${user.username} (${socket.id})`);
 
-    	    // Notify all clients about the updated user list (excluding themselves)
-    	    onlineUsers.forEach((_, socketId) => {
-    	        const currentUser = onlineUsers.get(socketId);
-    	        if (currentUser) {
-    	            const onlineList = Array.from(onlineUsers.entries())
-    	                .filter(([id, u]) => u.userId !== currentUser.userId)
-    	                .map(([id, u]) => ({ 
-    	                    socketId: id, 
-    	                    alias: u.alias, 
-    	                    userId: u.userId, 
-    	                    username: u.username 
-    	                }));
+			// Notify all clients about the updated user list (excluding themselves)
+			onlineUsers.forEach((_, socketId) => {
+				const currentUser = onlineUsers.get(socketId);
+				if (currentUser) {
+					const onlineList = Array.from(onlineUsers.entries())
+						.filter(([id, u]) => u.userId !== currentUser.userId)
+						.map(([id, u]) => ({ 
+							socketId: id, 
+							alias: u.alias, 
+							userId: u.userId, 
+							username: u.username 
+						}));
 					
-    	            io.to(socketId).emit('online_users', onlineList);
-    	        }
-    	    });
-    	    console.log(`DEBUG: Broadcasting personalized online_users. Total unique users: ${onlineUsers.size}`);
-        } catch (e) {
-            console.error('Chat authentication failed:', e.message);
-            socket.emit('auth_error', { message: 'Authentication failed' });
-        }
-    });
+					io.to(socketId).emit('online_users', onlineList);
+				}
+			});
+			console.log(`DEBUG: Broadcasting personalized online_users. Total unique users: ${onlineUsers.size}`);
+		} catch (e) {
+			console.error('Chat authentication failed:', e.message);
+			socket.emit('auth_error', { message: 'Authentication failed' });
+		}
+	});
 
 	socket.on('request_online_users', () => {
-	    const currentUser = onlineUsers.get(socket.id);
-	    if (currentUser) {
-	        const onlineList = Array.from(onlineUsers.entries())
-	            .filter(([id, u]) => u.userId !== currentUser.userId)
-	            .map(([id, u]) => ({ 
-	                socketId: id, 
-	                alias: u.alias, 
-	                userId: u.userId, 
-	                username: u.username 
-	            }));
+		const currentUser = onlineUsers.get(socket.id);
+		if (currentUser) {
+			const onlineList = Array.from(onlineUsers.entries())
+				.filter(([id, u]) => u.userId !== currentUser.userId)
+				.map(([id, u]) => ({ 
+					socketId: id, 
+					alias: u.alias, 
+					userId: u.userId, 
+					username: u.username 
+				}));
 			
-	        socket.emit('online_users', onlineList);
-	    }
+			socket.emit('online_users', onlineList);
+		}
 	});
 
 	socket.on('player_move', ({ direction, playerId }) => {
@@ -277,59 +277,59 @@ io.on('connection', (socket) => {
 
 	// ***new: added token + data for Match Data***
 	socket.on('register_alias', ({ alias, token }) => { // + token
-        if (!token) {
-            socket.emit('alias_registered', { success: false, message: 'Authentication required.' });
-            return;
-        }
+		if (!token) {
+			socket.emit('alias_registered', { success: false, message: 'Authentication required.' });
+			return;
+		}
 
-        try {
-            const decodedToken = jwt.verify(token, JWT_SECRET);
-            const user = { userId: decodedToken.userId, username: decodedToken.username };
+		try {
+			const decodedToken = jwt.verify(token, JWT_SECRET);
+			const user = { userId: decodedToken.userId, username: decodedToken.username };
 
-            if (!tournament) tournament = new Tournament();
-        
-            const success = tournament.registerPlayer(socket.id, alias, user);
-            
-            if (success) {
+			if (!tournament) tournament = new Tournament();
+		
+			const success = tournament.registerPlayer(socket.id, alias, user);
+			
+			if (success) {
 				// *** i deleted this part because onlineUsers is already populated in authenticate_chat, in Dashboard ***
-                socket.emit('alias_registered', { success: true });
-                // onlineUsers.set(socket.id, { userId: user.userId, username: user.username, alias, blocked: new Set() });
-                // const onlineList = Array.from(onlineUsers.entries()).map(([id, u]) => ({ socketId: id, alias: u.alias, userId: u.userId, username: u.username }));
-                // io.emit('online_users', onlineList);
+				socket.emit('alias_registered', { success: true });
+				// onlineUsers.set(socket.id, { userId: user.userId, username: user.username, alias, blocked: new Set() });
+				// const onlineList = Array.from(onlineUsers.entries()).map(([id, u]) => ({ socketId: id, alias: u.alias, userId: u.userId, username: u.username }));
+				// io.emit('online_users', onlineList);
 
-                const playerList = Array.from(tournament.players.entries()).map(([socketId, {alias, userId, username}]) => ({
-                    socketId,
-                    alias,
-                    userId,
-                    username
-                }));
-                io.emit('player_list_updated', playerList);
+				const playerList = Array.from(tournament.players.entries()).map(([socketId, {alias, userId, username}]) => ({
+					socketId,
+					alias,
+					userId,
+					username
+				}));
+				io.emit('player_list_updated', playerList);
 
-                console.log('Players in lobby:', Array.from(tournament.players.values()).map(p => p.alias)); // Del
-                
-                // Only show the lobby dialog, do not start the match yet
-                io.emit('tournament_lobby', {
-                    message: tournament.canStartTournament() && tournament.rounds.length === 0
-                        ? 'Ready to start tournament?'
-                        : 'Waiting for more players to join...',
-                    players: Array.from(tournament.players.values()).map(p => p.alias)
-                });
-            } else {
-                // Check if it's a duplicate user or duplicate alias
-                const existingUserIds = [...tournament.players.values()].map(p => p.userId);
-                const existingAliases = [...tournament.players.values()].map(p => p.alias);
-                
-                if (existingUserIds.includes(user.userId)) {
-                    socket.emit('alias_registered', { success: false, message: 'You are already registered in this tournament.' });
-                } else if (existingAliases.includes(alias)) {
-                    socket.emit('alias_registered', { success: false, message: 'Alias already taken. Please choose another name.' });
-                } else {
-                    socket.emit('alias_registered', { success: false, message: 'Registration failed.' });
-                }
-            }
-        } catch (e) {
-            socket.emit('alias_registered', { success: false, message: 'Invalid token.' });
-        }
+				console.log('Players in lobby:', Array.from(tournament.players.values()).map(p => p.alias)); // Del
+				
+				// Only show the lobby dialog, do not start the match yet
+				io.emit('tournament_lobby', {
+					message: tournament.canStartTournament() && tournament.rounds.length === 0
+						? 'Ready to start tournament?'
+						: 'Waiting for more players to join...',
+					players: Array.from(tournament.players.values()).map(p => p.alias)
+				});
+			} else {
+				// Check if it's a duplicate user or duplicate alias
+				const existingUserIds = [...tournament.players.values()].map(p => p.userId);
+				const existingAliases = [...tournament.players.values()].map(p => p.alias);
+				
+				if (existingUserIds.includes(user.userId)) {
+					socket.emit('alias_registered', { success: false, message: 'You are already registered in this tournament.' });
+				} else if (existingAliases.includes(alias)) {
+					socket.emit('alias_registered', { success: false, message: 'Alias already taken. Please choose another name.' });
+				} else {
+					socket.emit('alias_registered', { success: false, message: 'Registration failed.' });
+				}
+			}
+		} catch (e) {
+			socket.emit('alias_registered', { success: false, message: 'Invalid token.' });
+		}
 	});
 
 
@@ -391,48 +391,48 @@ socket.on('player_inactive', () => {
 	console.log(`Player ${socket.id} became inactive`);
 });
 
-    socket.on('private_message', async ({ targetSocketId, message }) => { // Make handler async
-            const sender = onlineUsers.get(socket.id);
-            const recipient = onlineUsers.get(targetSocketId);
-            if (!sender || !recipient) return;
-            if (recipient.blocked && recipient.blocked.has(sender.userId)) return;
+	socket.on('private_message', async ({ targetSocketId, message }) => { // Make handler async
+			const sender = onlineUsers.get(socket.id);
+			const recipient = onlineUsers.get(targetSocketId);
+			if (!sender || !recipient) return;
+			if (recipient.blocked && recipient.blocked.has(sender.userId)) return;
 
-            try {
-                await DB('chat_messages').insert({
-                    sender_id: sender.userId,
-                    recipient_id: recipient.userId,
-                    message_text: message
-                });
-            } catch (error) {
-                console.error('Failed to save chat message:', error);
-            }
+			try {
+				await DB('chat_messages').insert({
+					sender_id: sender.userId,
+					recipient_id: recipient.userId,
+					message_text: message
+				});
+			} catch (error) {
+				console.error('Failed to save chat message:', error);
+			}
 
-            io.to(targetSocketId).emit('private_message', { from: socket.id, message, username: sender.username, userId: sender.userId });
-    });
+			io.to(targetSocketId).emit('private_message', { from: socket.id, message, username: sender.username, userId: sender.userId });
+	});
 
-    socket.on('block_user', ({ targetUserId }) => {
-            const user = onlineUsers.get(socket.id);
-            if (user) {
-                    user.blocked.add(targetUserId);
-                    // Notify the client that the user was blocked
-                    socket.emit('user_blocked', { targetUserId, message: `You have blocked this user.` });
-            }
-    });
+	socket.on('block_user', ({ targetUserId }) => {
+			const user = onlineUsers.get(socket.id);
+			if (user) {
+					user.blocked.add(targetUserId);
+					// Notify the client that the user was blocked
+					socket.emit('user_blocked', { targetUserId, message: `You have blocked this user.` });
+			}
+	});
 
-    socket.on('unblock_user', ({ targetUserId }) => {
-            const user = onlineUsers.get(socket.id);
-            if (user) {
-                user.blocked.delete(targetUserId);
-                // Notify the client that the user was unblocked
-                socket.emit('user_unblocked', { targetUserId, message: `You have unblocked this user.` });
-            }
-    });
+	socket.on('unblock_user', ({ targetUserId }) => {
+			const user = onlineUsers.get(socket.id);
+			if (user) {
+				user.blocked.delete(targetUserId);
+				// Notify the client that the user was unblocked
+				socket.emit('user_unblocked', { targetUserId, message: `You have unblocked this user.` });
+			}
+	});
 
-    socket.on('invite_to_game', ({ targetSocketId }) => {
-            const sender = onlineUsers.get(socket.id);
-            if (!sender) return;
-            io.to(targetSocketId).emit('game_invite', { from: socket.id, alias: sender.alias, userId: sender.userId });
-    });
+	socket.on('invite_to_game', ({ targetSocketId }) => {
+			const sender = onlineUsers.get(socket.id);
+			if (!sender) return;
+			io.to(targetSocketId).emit('game_invite', { from: socket.id, alias: sender.alias, userId: sender.userId });
+	});
 
 	// Administrative tournament reset - can be triggered for testing or emergency cleanup
 	socket.on('admin_reset_tournament', ({ token }) => {
@@ -476,22 +476,22 @@ socket.on('player_inactive', () => {
 
 
 	socket.on('send_public_tournament_invite', ({ targetSocketId }) => {
-        const sender = onlineUsers.get(socket.id);
-        const recipient = onlineUsers.get(targetSocketId);
+		const sender = onlineUsers.get(socket.id);
+		const recipient = onlineUsers.get(targetSocketId);
 
-        if (!sender || !recipient) {
-            console.log('Could not find sender or recipient for tournament invite.');
-            return;
-        }
+		if (!sender || !recipient) {
+			console.log('Could not find sender or recipient for tournament invite.');
+			return;
+		}
 
-        const payload = {
-            senderAlias: sender.alias
-        };
+		const payload = {
+			senderAlias: sender.alias
+		};
 
-        // Send the special invite message to both users' chat windows
-        io.to(socket.id).emit('receive_public_tournament_invite', payload);
-        io.to(targetSocketId).emit('receive_public_tournament_invite', payload);
-    });
+		// Send the special invite message to both users' chat windows
+		io.to(socket.id).emit('receive_public_tournament_invite', payload);
+		io.to(targetSocketId).emit('receive_public_tournament_invite', payload);
+	});
 
 	// Start tournament when someone clicks "Start Tournament"
 	socket.on('start_tournament', () => {
@@ -505,7 +505,7 @@ socket.on('player_inactive', () => {
 				// Notify the client about the error, do not crash the server
 				socket.emit('tournament_error', { message: e.message });
 				tournament.reset(); // ***new: Reset the tournament state
-                io.emit('tournament_cancelled'); // ***new: Notify clients
+				io.emit('tournament_cancelled'); // ***new: Notify clients
 				return;
 			}
 			
@@ -586,75 +586,75 @@ socket.on('player_inactive', () => {
 	});
 	
 	socket.on('match_ended', async ({ winnerSocketId }) => {
-        if (!tournament?.currentMatch) {
-            console.warn('match_ended received but no current match');
-            return;
-        }
+		if (!tournament?.currentMatch) {
+			console.warn('match_ended received but no current match');
+			return;
+		}
 
-        const state = game.getState();
-        if (state.score.player1 === 0 && state.score.player2 === 0) {
-            console.warn('Ignoring match_ended: no score change');
-            return;
-        }
+		const state = game.getState();
+		if (state.score.player1 === 0 && state.score.player2 === 0) {
+			console.warn('Ignoring match_ended: no score change');
+			return;
+		}
 
-        // *** FIX: Capture match data BEFORE advancing the tournament ***
-        const { player1, player2 } = tournament.getCurrentMatchPlayers();
-        const winner = winnerSocketId === player1.socketId ? player1 : player2;
-        
-        if (player1 && player2) {
-            try {
-                const matchDataToSave = {
-                    player1_id: player1.userId,
-                    player2_id: player2.userId,
-                    player1_username: player1.alias,
-                    player2_username: player2.alias,
-                    player1_score: state.score.player1,
-                    player2_score: state.score.player2,
-                    winner_id: winner.userId,
-                    winner_username: winner.alias,
-                    is_tournament: true,
-                };
-                console.log('[DEBUG] Saving match data to DB:', matchDataToSave);
-                await DB('matchHistory').insert(matchDataToSave);
-                console.log('Match history saved successfully.');
-            } catch (error) {
-                console.error('Failed to save match history:', error);
-            }
-        }
+		// *** FIX: Capture match data BEFORE advancing the tournament ***
+		const { player1, player2 } = tournament.getCurrentMatchPlayers();
+		const winner = winnerSocketId === player1.socketId ? player1 : player2;
+		
+		if (player1 && player2) {
+			try {
+				const matchDataToSave = {
+					player1_id: player1.userId,
+					player2_id: player2.userId,
+					player1_username: player1.alias,
+					player2_username: player2.alias,
+					player1_score: state.score.player1,
+					player2_score: state.score.player2,
+					winner_id: winner.userId,
+					winner_username: winner.alias,
+					is_tournament: true,
+				};
+				console.log('[DEBUG] Saving match data to DB:', matchDataToSave);
+				await DB('matchHistory').insert(matchDataToSave);
+				console.log('Match history saved successfully.');
+			} catch (error) {
+				console.error('Failed to save match history:', error);
+			}
+		}
 
-        // Now, advance the tournament to the next match
-        const gameScores = { player1: state.score.player1, player2: state.score.player2 };
-        let nextMatch = tournament.recordWinner(winnerSocketId, gameScores);
+		// Now, advance the tournament to the next match
+		const gameScores = { player1: state.score.player1, player2: state.score.player2 };
+		let nextMatch = tournament.recordWinner(winnerSocketId, gameScores);
 
-        // Loop to skip byes and auto-advance until a real match or tournament end
-        while (nextMatch && (!nextMatch[0] || !nextMatch[1])) {
-            const autoWinner = nextMatch[0] ? nextMatch[0][0] : nextMatch[1][0];
-            nextMatch = tournament.recordWinner(autoWinner); // No scores for bye matches
-        }
+		// Loop to skip byes and auto-advance until a real match or tournament end
+		while (nextMatch && (!nextMatch[0] || !nextMatch[1])) {
+			const autoWinner = nextMatch[0] ? nextMatch[0][0] : nextMatch[1][0];
+			nextMatch = tournament.recordWinner(autoWinner); // No scores for bye matches
+		}
 
-        if (nextMatch) {
-            const { player1: nextP1, player2: nextP2 } = tournament.getCurrentMatchPlayers();
-            game.prepareForMatch();
+		if (nextMatch) {
+			const { player1: nextP1, player2: nextP2 } = tournament.getCurrentMatchPlayers();
+			game.prepareForMatch();
 
-            // Reset readiness for the new match
-            tournament.resetReadyForCurrentMatch();
+			// Reset readiness for the new match
+			tournament.resetReadyForCurrentMatch();
 
-            // Emit updated bracket after match completion
-            const dynamicBracket = tournament.getDynamicBracket();
-            io.emit('tournament_bracket', dynamicBracket);
+			// Emit updated bracket after match completion
+			const dynamicBracket = tournament.getDynamicBracket();
+			io.emit('tournament_bracket', dynamicBracket);
 
-            if (nextP1 && nextP2) {
-                io.emit('match_announcement', { 
-                    player1: nextP1.alias,
-                    player2: nextP2.alias
-                });
-                io.to(nextP1.socketId).emit('await_player_ready');
-                io.to(nextP2.socketId).emit('await_player_ready');
-            }
-        } else {
-            const finalWinnerData = tournament.winners[0];
-            const finalWinnerAlias = finalWinnerData && finalWinnerData[1] ? finalWinnerData[1] : 'Unknown';
-            const allMatchResults = tournament.getAllMatchResults();
+			if (nextP1 && nextP2) {
+				io.emit('match_announcement', { 
+					player1: nextP1.alias,
+					player2: nextP2.alias
+				});
+				io.to(nextP1.socketId).emit('await_player_ready');
+				io.to(nextP2.socketId).emit('await_player_ready');
+			}
+		} else {
+			const finalWinnerData = tournament.winners[0];
+			const finalWinnerAlias = finalWinnerData && finalWinnerData[1] ? finalWinnerData[1] : 'Unknown';
+			const allMatchResults = tournament.getAllMatchResults();
 				// Emit the final bracket with completed state and champion before tournament_over
 				const finalBracket = tournament.getDynamicBracket();
 				io.emit('tournament_bracket', finalBracket);
@@ -663,118 +663,134 @@ socket.on('player_inactive', () => {
 					allMatches: allMatchResults 
 				});
 				tournament.reset(); // Reset for the next tournament
-        }
-    });
+		}
+	});
 
-    // ===== LOCAL TOURNAMENT HANDLERS =====
-    
-    socket.on('init_local_tournament', ({ playerNames }) => {
-        try {
-            if (!localTournament) {
-                localTournament = new LocalTournamentMode();
-            }
-            
-            localTournament.initializeTournament(socket.id, playerNames);
-            localTournament.generateInitialBracket();
-            
-            const status = localTournament.getTournamentStatus();
-            socket.emit('local_tournament_initialized', status);
-            console.log(`Local tournament initialized with ${playerNames.length} players`);
-        } catch (error) {
-            socket.emit('local_tournament_error', { message: error.message });
-        }
-    });
+	// ===== LOCAL TOURNAMENT HANDLERS =====
+	
+	socket.on('init_local_tournament', ({ playerNames }) => {
+		try {
+			if (!localTournament) {
+				localTournament = new LocalTournamentMode();
+			}
+			
+			localTournament.initializeTournament(socket.id, playerNames);
+			localTournament.generateInitialBracket();
+			
+			const status = localTournament.getTournamentStatus();
+			socket.emit('local_tournament_initialized', status);
+			console.log(`Local tournament initialized with ${playerNames.length} players`);
+		} catch (error) {
+			socket.emit('local_tournament_error', { message: error.message });
+		}
+	});
 
-    socket.on('start_local_tournament_match', () => {
-        try {
-            if (!localTournament || !localTournament.currentMatch) {
-                throw new Error('No active local tournament match');
-            }
+	socket.on('start_local_tournament_match', () => {
+		try {
+			if (!localTournament || !localTournament.currentMatch) {
+				throw new Error('No active local tournament match');
+			}
 
-            const matchInfo = localTournament.startCurrentMatch();
-            
-            if (matchInfo && matchInfo.gameState) {
-                // Real match, not a bye
-                socket.emit('local_tournament_match_started', matchInfo);
-                socket.emit('state_update', matchInfo.gameState);
-            } else {
-                // Bye match was handled automatically, get updated status
-                const status = localTournament.getTournamentStatus();
-                socket.emit('local_tournament_status_update', status);
-            }
-        } catch (error) {
-            socket.emit('local_tournament_error', { message: error.message });
-        }
-    });
+			const matchInfo = localTournament.startCurrentMatch();
+			
+			if (matchInfo && matchInfo.gameState) {
+				// Real match, not a bye
+				socket.emit('local_tournament_match_started', matchInfo);
+				socket.emit('state_update', matchInfo.gameState);
+			} else {
+				// Bye match was handled automatically, get updated status
+				const status = localTournament.getTournamentStatus();
+				socket.emit('local_tournament_status_update', status);
+			}
+		} catch (error) {
+			socket.emit('local_tournament_error', { message: error.message });
+		}
+	});
 
-    socket.on('local_tournament_player_move', ({ direction, playerId }) => {
-        try {
-            if (!localTournament || !localTournament.gameEngine) {
-                return;
-            }
+	socket.on('local_tournament_player_move', ({ direction, playerId }) => {
+		try {
+			if (!localTournament || !localTournament.gameEngine) {
+				return;
+			}
 
-            localTournament.handleGameInput({ direction, playerId });
-            socket.emit('state_update', localTournament.getGameState());
-        } catch (error) {
-            console.error('Local tournament player move error:', error.message);
-            socket.emit('local_tournament_error', { message: error.message });
-        }
-    });
+			localTournament.handleGameInput({ direction, playerId });
+			socket.emit('state_update', localTournament.getGameState());
+		} catch (error) {
+			console.error('Local tournament player move error:', error.message);
+			socket.emit('local_tournament_error', { message: error.message });
+		}
+	});
 
-    socket.on('local_tournament_match_ended', ({ winnerId, scores }) => {
-        try {
-            if (!localTournament) {
-                throw new Error('No active local tournament');
-            }
+	socket.on('local_tournament_match_ended', ({ winnerId, scores }) => {
+		try {
+			if (!localTournament) {
+				throw new Error('No active local tournament');
+			}
 
-            const nextMatch = localTournament.recordWinner(winnerId, scores);
-            const status = localTournament.getTournamentStatus();
+			const nextMatch = localTournament.recordWinner(winnerId, scores);
+			const status = localTournament.getTournamentStatus();
 
-            if (localTournament.isFinished) {
-                socket.emit('local_tournament_finished', {
-                    winner: status.winner,
-                    allMatches: status.matchHistory,
-                    bracket: status.bracket
-                });
-            } else if (nextMatch) {
-                socket.emit('local_tournament_next_match', {
-                    match: localTournament.getCurrentMatchPlayers(),
-                    status: status
-                });
-            } else {
-                socket.emit('local_tournament_error', { message: 'No next match available' });
-            }
-        } catch (error) {
-            socket.emit('local_tournament_error', { message: error.message });
-        }
-    });
+			if (localTournament.isFinished) {
+				socket.emit('local_tournament_finished', {
+					winner: status.winner,
+					allMatches: status.matchHistory,
+					bracket: status.bracket
+				});
+			} else if (nextMatch) {
+				socket.emit('local_tournament_next_match', {
+					match: localTournament.getCurrentMatchPlayers(),
+					status: status
+				});
+			} else {
+				socket.emit('local_tournament_error', { message: 'No next match available' });
+			}
+		} catch (error) {
+			socket.emit('local_tournament_error', { message: error.message });
+		}
+	});
 
-    socket.on('get_local_tournament_status', () => {
-        if (localTournament) {
-            const status = localTournament.getTournamentStatus();
-            socket.emit('local_tournament_status_update', status);
-        } else {
-            socket.emit('local_tournament_error', { message: 'No active local tournament' });
-        }
-    });
+	socket.on('get_local_tournament_status', () => {
+		if (localTournament) {
+			const status = localTournament.getTournamentStatus();
+			socket.emit('local_tournament_status_update', status);
+		} else {
+			socket.emit('local_tournament_error', { message: 'No active local tournament' });
+		}
+	});
 
-    socket.on('reset_local_tournament', () => {
-        if (localTournament) {
-            localTournament.reset();
-            localTournament = null;
-            socket.emit('local_tournament_reset');
-            console.log('Local tournament reset');
-        }
-    });
+	socket.on('reset_local_tournament', () => {
+		if (localTournament) {
+			localTournament.reset();
+			localTournament = null;
+			socket.emit('local_tournament_reset');
+			console.log('Local tournament reset');
+		}
+	});
 
-    // ===== END LOCAL TOURNAMENT HANDLERS =====
+	socket.on('start_local_tournament', () => {
+		console.log('Starting new local tournament for socket:', socket.id);
+	
+		// Reset any existing local tournament state
+		if (localTournament) {
+			localTournament.reset();
+			localTournament = null;
+		}
+	
+		// Create new local tournament
+		localTournament = new LocalTournamentMode();
+	
+		// Send the initial setup screen
+		socket.emit('local_tournament_setup');
+	});
 
-    socket.on('disconnect', () => {
-        console.log('Client disconnected:', socket.id);
-        game.removePlayer(socket.id)
-        onlineUsers.delete(socket.id);
-        const onlineList = Array.from(onlineUsers.entries()).map(([id, u]) => ({ socketId: id, alias: u.alias, userId: u.userId, username: u.username }));
-        io.emit('online_users', onlineList);
+	// ===== END LOCAL TOURNAMENT HANDLERS =====
+
+	socket.on('disconnect', () => {
+		console.log('Client disconnected:', socket.id);
+		game.removePlayer(socket.id)
+		onlineUsers.delete(socket.id);
+		const onlineList = Array.from(onlineUsers.entries()).map(([id, u]) => ({ socketId: id, alias: u.alias, userId: u.userId, username: u.username }));
+		io.emit('online_users', onlineList);
 
 		if (tournament) {
 			const disconnectedPlayer = tournament.players.get(socket.id);
