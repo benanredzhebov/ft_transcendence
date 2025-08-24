@@ -635,13 +635,10 @@ function setupLocalTournamentHandlers() {
 		// Start the game loop
 		if (movePlayersFrame === null) movePlayers();
 		
-		// Show controls info
-		showLocalTournamentControls();
-		
 		// Make sure bracket is visible during match
 		const bracketDiv = document.getElementById('local-tournament-bracket');
 		if (bracketDiv) {
-			bracketDiv.style.display = 'block';
+			bracketDiv.style.display = 'none';
 		}
 	});
 	
@@ -654,7 +651,17 @@ function setupLocalTournamentHandlers() {
 	
 	socket.on('local_tournament_next_match', ({ status }) => {
 		updateLocalTournamentBracket(status);
-		showLocalTournamentMatchDialog(status);
+
+		// Show bracket first, then match dialog after a delay
+		const bracketDiv = document.getElementById('local-tournament-bracket');
+		if (bracketDiv) {
+			bracketDiv.style.display = 'block';
+		}
+	
+		// Show next match dialog after 2 seconds
+		setTimeout(() => {
+			showLocalTournamentMatchDialog(status);
+		}, 2000);
 	});
 	
 	socket.on('local_tournament_finished', ({ winner, allMatches }) => {
@@ -811,23 +818,6 @@ function showLocalTournamentMatchDialog(status: any) {
 	}
 }
 
-function showLocalTournamentControls() {
-	const controlsDiv = document.createElement('div');
-	controlsDiv.className = 'local-tournament-controls';
-	controlsDiv.innerHTML = `
-		<div class="controls-info">
-			<div><strong>Player 1:</strong> W/S keys</div>
-			<div><strong>Player 2:</strong> Arrow Up/Down keys</div>
-			<div><strong>Pause:</strong> Space bar</div>
-		</div>
-	`;
-	
-	document.body.appendChild(controlsDiv);
-	
-	// Remove after 5 seconds
-	setTimeout(() => controlsDiv.remove(), 5000);
-}
-
 function showLocalTournamentResults(winner: string, allMatches: string[]) {
 	const dialog = document.createElement('div');
 	dialog.className = 'tournament-dialog tournament-results';
@@ -856,17 +846,42 @@ function showLocalTournamentResults(winner: string, allMatches: string[]) {
 	
 	newTournamentBtn.onclick = () => {
 		dialog.remove();
-		if (socket) {
-			socket.emit('reset_local_tournament');
-		}
+		
+		//Clean up local state
+		inLocalTournament = true;
+		currentMatch = null;
+		gameEnded = false;
+		matchStarted = false;
+
+		// Remove existing bracket
+		const bracketDiv = document.getElementById('local-tournament-bracket');
+		if (bracketDiv) bracketDiv.remove;
+
 		promptLocalTournamentSetup();
 	};
 	
 	dashboardBtn.onclick = () => {
 		dialog.remove();
+
+		// Clean up local state
+		inLocalTournament = false;
+		currentMatch = null;
+		gameEnded = false;
+		matchStarted = false;
+
+		// Remove existing bracket
+		const bracketDiv = document.getElementById('local-tournament-bracket');
+		if (bracketDiv) bracketDiv.remove();
+
 		if (socket) {
 			socket.emit('reset_local_tournament');
 		}
+
+		if (socket) {
+			socket.disconnect();
+			socket = null;
+		}
+
 		window.location.href = '/dashboard';
 	};
 }
@@ -921,6 +936,10 @@ function showGameOverScreen(winner: string | { alias: string}) {
 	// Add this to clear match info
 	const matchBox = document.getElementById('match-info-box');
 	if (matchBox) matchBox.remove();
+
+	if (inLocalTournament) {
+		return;
+	}
 
 	const overlay = document.createElement('div');
 	overlay.className = 'game-overlay';
@@ -999,11 +1018,7 @@ function showGameOverScreen(winner: string | { alias: string}) {
 
 		overlay.appendChild(message);
 		overlay.appendChild(buttons);
-	} else {
-		// Local Tournament: Only show winner message, no buttons
-		overlay.appendChild(message);
 	}
-
 	canvas.parentElement.appendChild(overlay);
 }
 
@@ -1343,6 +1358,32 @@ export function renderGame(containerId: string = 'app') {
 	// Socket event handlers
 	socket.on('connect', () => {
 		console.log('✅ Connected:', socket!.id);
+
+		gameEnded = true;
+		matchStarted = false;
+		inLocalTournament = false;
+		currentMatch = null;
+
+		// Cancel any running game loop
+		if (movePlayersFrame !== null) {
+			cancelAnimationFrame(movePlayersFrame);
+			movePlayersFrame = null;
+		}
+
+		// Clear any existing overlays and dialogs
+		removeOverlays();
+		document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
+		document.querySelectorAll('.alias-dialog').forEach(el => el.remove());
+		
+		const bracketDiv = document.getElementById('local-tournament-bracket');
+		if (bracketDiv) bracketDiv.remove();
+	
+		// Reset canvas if it exists
+		if (canvas && ctx) {
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+		}
+	
+		console.log('Game state reset after reconnection');
 		
 		// Check if this is a reconnection after server restart
 		const wasInTournamentReconnect = sessionStorage.getItem('tournament_reconnect') === 'true';
@@ -1529,13 +1570,18 @@ export function renderGame(containerId: string = 'app') {
 			gameEnded = true;
 
 			if (inLocalTournament) {
-				// Handle local tournament match end
-				setTimeout(() => {
-					socket?.emit('local_tournament_match_ended', { 
+					removeOverlays();
+
+					// Show the tournament bracket immediately
+					const bracketDiv = document.getElementById('local-tournament-bracket');
+					if (bracketDiv)
+							bracketDiv.style.display = 'block';
+
+					// Emit the match result to update tournament state
+					socket?.emit('local_tournament_match_ended', {
 						winnerId: winnerId,
 						scores: { player1: state.score.player1, player2: state.score.player2 }
 					});
-				}, 2000); // Give time to show the game over screen
 			} else if (inTournament && currentMatch) { 
 				if (
 					(state.score.player1 >= 5 && assignedPlayerId === 'player1') ||
