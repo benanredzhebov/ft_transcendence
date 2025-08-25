@@ -56,7 +56,7 @@ if (!fs.existsSync(avatarsDir)) {
 	fs.mkdirSync(avatarsDir, { recursive: true });
 }
 
-const PORT = 3000;
+const PORT = 8443;
 const HOST = '0.0.0.0'; // Bind to all network interfaces
 
 // Load SSL certificates
