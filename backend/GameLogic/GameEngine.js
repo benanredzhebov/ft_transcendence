@@ -71,16 +71,16 @@ class GameEngine {
 
 	// Game loop
 	update() {
-    	if (this.paused || this.state.gameOver) return;
-    	const now = Date.now();
-    	const dt = (now - this.lastUpdateTime) / 1000;
-    	this.lastUpdateTime = now;
+		if (this.paused || this.state.gameOver) return;
+		const now = Date.now();
+		const dt = (now - this.lastUpdateTime) / 1000;
+		this.lastUpdateTime = now;
 		
-    	if (this.aiOpponent) {
-    	    this.aiOpponent.update();
-    	}
+		if (this.aiOpponent) {
+			this.aiOpponent.update();
+		}
 	
-    	this.state.update(dt);
+		this.state.update(dt);
 	}
 
 	// Game control
@@ -95,13 +95,13 @@ class GameEngine {
 	
 	// setting the Tournament mode
 	setTournamentMode(isTournament, mode = 'local') {
-        this.isTournament = isTournament;
-        if (mode === 'ai') {
-            this.aiOpponent = new AIOpponent(this);
-        } else {
-            this.aiOpponent = null;
-        }
-    }
+		this.isTournament = isTournament;
+		if (mode === 'ai') {
+			this.aiOpponent = new AIOpponent(this);
+		} else {
+			this.aiOpponent = null;
+		}
+	}
 
 	pause() {
 		this.paused = true;
