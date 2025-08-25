@@ -26,7 +26,7 @@ RUN mkdir -p /workspace/backend/https_keys && \
     -keyout /workspace/backend/https_keys/private-key.pem \
     -out /workspace/backend/https_keys/certificate.pem \
     -days 365 \
-    -subj "/C=US/ST=State/L=City/O=Organization/OU=Unit/CN=localhost"
+    -subj "/C=DE/L=Wolfsburg/O=42School/OU=Unit/CN=localhost"
 
 EXPOSE 3000
 

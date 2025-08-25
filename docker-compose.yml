@@ -1,25 +1,20 @@
 # version: "3.8"
 
 services:
-  db:
-    image: nouchka/sqlite3:latest
-    container_name: transcendence-db
-    volumes:
-      - ./backend/data:/data
-    command: ["sqlite3", "/data/database.sqlite"]
-
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
     container_name: transcendence-backend
-    depends_on:
-      - db
+    # depends_on:
+    #   - db
     environment:
-      - APP_URL=https://10.11.17.2:8443
+      - APP_URL=https://10.11.16.1:8443
       - NODE_ENV=production
       - JWT_SECRET=hbj2io4@@#!v7946h3&^*2cn9!@09*@B627B^*N39&^847,1
     ports:
       - "8443:8443"
     volumes:
-      - ./backend/data:/workspace/backend/data
+      - ./backend/data:/workspace/backend/data_controller/data
       - ./backend/https_keys:/workspace/backend/https_keys
     command: ["npm", "run", "dev"]
