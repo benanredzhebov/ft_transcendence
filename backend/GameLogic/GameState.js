@@ -139,16 +139,18 @@ class GameState {
 			const paddle2 = this.paddles.player2;
 
 			// Player 1 collision
-		if (ball.x - ball.radius <= paddle1.width &&
+		if (ball.x - ball.radius <= paddle1.width + 5 &&
 			ball.y >= paddle1.y &&
-			ball.y <= paddle1.y + paddle1.height) {
+			ball.y <= paddle1.y + paddle1.height &&
+			ball.vx < 0 ) {
 			this.handlePaddleCollision(paddle1, 'right');
 		}
 
 			// Player 2 collision
-		if (ball.x + ball.radius >= this.width - paddle2.width &&
+		if (ball.x + ball.radius >= this.width - paddle2.width - 5 &&
 			ball.y >= paddle2.y &&
-				ball.y <= paddle2.y + paddle2.height) {
+			ball.y <= paddle2.y + paddle2.height &&
+			ball.vx > 0) {
 				this.handlePaddleCollision(paddle2, 'left');
 		}
 	}
@@ -158,6 +160,7 @@ class GameState {
 		const normalizedRelative = relativeIntersect / (paddle.height / 2);
 		const bounceAngle = normalizedRelative * (Math.PI / 4);
 
+		// Increasing the ball on each hit *1.05
 		this.ball.speed = Math.min(this.ball.speed * 1.05, this.maxBallSpeed);
 		this.ball.vx = this.ball.speed * (side === 'right' ? 1 : -1);
 		this.ball.vy = -this.ball.speed * Math.sin(bounceAngle);
