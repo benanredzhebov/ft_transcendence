@@ -105,8 +105,9 @@ function initializeServer() {
 		localTournament.reset();
 		localTournament = null;
 	}
-	// Reset game state
+	// Reset game state before the game loop starts
 	game.resetGame();
+	// Ensure gameOver is false and score is zeroed before any game loop tick
 	console.log('Server initialized - all states reset');
 }
 
@@ -1015,15 +1016,15 @@ socket.on('player_inactive', () => {
 
 // Game loop
 setInterval(() => {
-	if (!game.paused) {
+	// Only run the game loop if both players are connected and game is not paused
+	if (!game.paused && game.state.connectedPlayers && game.state.connectedPlayers.size === 2) {
 		game.update(1 / 60);
 		const state = game.getState();
 		io.emit('state_update', game.getState());
-		
 		if (state.gameOver) {
 			console.log('Game over! Final score:', state.score);
 			game.paused = true;
-			// game.resetGame();
+			game.resetGame(); // Immediately reset after game over
 		}
 	}
 }, 1000 / 60); // 60 times per second
