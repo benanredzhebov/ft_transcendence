@@ -41,6 +41,9 @@ let countdownInterval = null;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// -------------------------------move to another file------------------------------------------------------------------------
+
+
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -55,6 +58,8 @@ if (!fs.existsSync(avatarsDir)) {
 if (!fs.existsSync(avatarsDir)) {
 	fs.mkdirSync(avatarsDir, { recursive: true });
 }
+
+// -------------------------------------------------------------------------------------------------------
 
 const PORT = 8443;
 const HOST = '0.0.0.0'; // Bind to all network interfaces
@@ -1032,11 +1037,10 @@ setInterval(() => {
 // --- Middlewares ---
 app.register(fastifyCors, { origin: true, credentials: true });
 
-// Register Multipart plugin
-app.register(multipart, { // Now 'multipart' is defined
-	// attachFieldsToBody: true,
+// Register Multipart
+app.register(multipart, {
 	limits: {
-	fileSize: 7 * 1024 * 1024, // 7MB
+	fileSize: 7 * 1024 * 1024,
 	}
 });
 
@@ -1051,7 +1055,7 @@ app.register(fastifyStatic, {
 
 // Serve frontend static files
 app.register(fastifyStatic, {
-	root: join(__dirname, '../frontend/dist'), // Path to compiled frontend
+	root: join(__dirname, '../frontend/dist'),
 	prefix: '/',
 });
 
@@ -1060,8 +1064,6 @@ app.register(fastifyStatic, {
 developerRoutes(app);
 credentialsRoutes(app);
 
-// noHandlerRoute(app);
-//-------------------------
 
 // Fallback for SPA routing
 app.setNotFoundHandler((req, reply) => {
@@ -1075,6 +1077,7 @@ const start =  async () => {
 		const address = await app.listen({ port: PORT, host: HOST });
 		console.log("Server running " + address)
 		console.log(`Access to school ${process.env.APP_URL}`)
+		console.log(`*****path of avatars: ${avatarsDir}`)
 	}
 	catch (e){
 		app.log.error(e);
