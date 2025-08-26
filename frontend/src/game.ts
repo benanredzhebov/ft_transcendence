@@ -13,7 +13,7 @@
 import './game.css';
 import { io, Socket } from 'socket.io-client';
 
-let isHost = false;
+// let isHost = false;
 
 // Game State Variables
 let gameEnded = false;
@@ -69,48 +69,52 @@ function promptAliasRegistration() {
 	}
 }
 
+//||| SEPERATED INTO THE SVGUnitTypes.TS |||||
+
 // Remove all overlays
-function removeOverlays() {
-	document.querySelectorAll('.game-overlay').forEach(el => el.remove());
-	// Also hide tournament bracket if it exists
-	const bracketDiv = document.getElementById('tournament-bracket');
-	if (bracketDiv) bracketDiv.style.display = 'none';
-}
+// function removeOverlays() {
+// 	document.querySelectorAll('.game-overlay').forEach(el => el.remove());
+// 	// Also hide tournament bracket if it exists
+// 	const bracketDiv = document.getElementById('tournament-bracket');
+// 	if (bracketDiv) bracketDiv.style.display = 'none';
+// }
 
-function showTournamentDialog(message: string, 
-	options?: { confirmText?: string, timer?: number, onConfirm?: () => void }
-) {
-	const existing = document.querySelector('.tournament-dialog');
-	if (existing) existing.remove();
+// function showTournamentDialog(message: string, 
+// 	options?: { confirmText?: string, timer?: number, onConfirm?: () => void }
+// ) {
+// 	const existing = document.querySelector('.tournament-dialog');
+// 	if (existing) existing.remove();
 
-	const dialog = document.createElement('div');
-	dialog.className = 'tournament-dialog';
+// 	const dialog = document.createElement('div');
+// 	dialog.className = 'tournament-dialog';
 
-	dialog.innerHTML = `
-	<div class="dialog-content">
-		<p>${message}</p>
-		${options?.confirmText ? 
-		`<button class="confirm-btn">${options.confirmText}</button>` : 
-		''}
-		${options?.timer ? 
-		`<div class="countdown">Starting in ${options.timer}...</div>` : 
-		''}
-	</div>
-	`;
+// 	dialog.innerHTML = `
+// 	<div class="dialog-content">
+// 		<p>${message}</p>
+// 		${options?.confirmText ? 
+// 		`<button class="confirm-btn">${options.confirmText}</button>` : 
+// 		''}
+// 		${options?.timer ? 
+// 		`<div class="countdown">Starting in ${options.timer}...</div>` : 
+// 		''}
+// 	</div>
+// 	`;
 
-	if (options?.confirmText) {
-		dialog.querySelector('button')!.onclick = () => {
-			if (options.confirmText === "I'm Ready") {
-				socket?.emit('player_ready'); // Only marks ready, does NOT start countdown
-			}
-			if (options.onConfirm) options.onConfirm();
-			dialog.remove();
-		};
-	}
+// 	if (options?.confirmText) {
+// 		dialog.querySelector('button')!.onclick = () => {
+// 			if (options.confirmText === "I'm Ready") {
+// 				socket?.emit('player_ready'); // Only marks ready, does NOT start countdown
+// 			}
+// 			if (options.onConfirm) options.onConfirm();
+// 			dialog.remove();
+// 		};
+// 	}
 
-	document.body.appendChild(dialog);
-	return dialog;
-}
+// 	document.body.appendChild(dialog);
+// 	return dialog;
+// }
+
+//||| SEPERATED INTO THE SVGUnitTypes.TS |||||
 
 function updateCountdownDisplay(seconds: number) {
 	let dialog = document.querySelector('.tournament-dialog');
@@ -1175,7 +1179,7 @@ function handleResize(container: HTMLElement) {
 }
 
 // Game Control Functions
-function movePlayers() {
+export function movePlayers() {
 	console.log('movePlayers running', Array.from(pressedKeys));
 	if (!socket || gameEnded || (inTournament && !matchStarted)) return;
 
