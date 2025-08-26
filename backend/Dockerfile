@@ -1,4 +1,3 @@
-
 # Build the frontend first
 FROM node:alpine as frontend-build
 WORKDIR /workspace/frontend

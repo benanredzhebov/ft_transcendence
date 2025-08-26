@@ -1340,7 +1340,7 @@ export function renderGame(containerId: string = 'app') {
 	const aiMode = urlParams.get('mode') === 'ai';
 
 	// Socket connection to connect with Remote players
-	const backendUrl = `https://${window.location.hostname}:3000`;
+	const backendUrl = `https://${window.location.hostname}:8443`;
 	socket = io(backendUrl, {
 		// transports: ['websocket'],
 		// secure: true,

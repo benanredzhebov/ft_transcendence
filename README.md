@@ -37,3 +37,8 @@ Check your disk usage
 
 ```docker system prune -af```
 ```docker volume prune -f```
+
+
+## TO DO
+1. all .env variables, PORTS, and so...
+2. avatars not in uploads

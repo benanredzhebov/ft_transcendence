@@ -588,7 +588,7 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
                       const indicatorHtml = isOnline ? '<span class="online-indicator"></span>' : '';
                       return `
                         <li data-user-id="${friend.id}">
-                          <img src="${friend.avatar_path || '/avatars/default.png'}" alt="${friend.username}'s avatar" />
+                          <img src="${friend.avatar_path || '/avatars/default.png'}"/>
                           ${indicatorHtml}
                           <span>${friend.username}</span>
                         </li>
