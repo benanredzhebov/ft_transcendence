@@ -1,3 +1,5 @@
+import { Socket } from "socket.io-client";
+
 export function removeOverlays() {
 	document.querySelectorAll('.game-overlay').forEach(el => el.remove());
 	const bracketDiv = document.getElementById('tournament-bracket');
@@ -73,3 +75,60 @@ export function showMatchInfo(
 	document.body.appendChild(box);
 }
 
+export function showTournamentResults(winnerName: string, allMatches?: string[], socket?: Socket | null) {
+	removeOverlays();
+
+	// Debug: log the results before rendering
+	// console.log('Tournament Results:', tournamentResults);
+
+	const overlay = document.createElement('div');
+	overlay.className = 'game-overlay';
+
+	const message = document.createElement('div');
+	message.className = 'game-message';
+	message.innerHTML = `<h2>🏆 Tournament Champion: ${winnerName}</h2>`;
+
+	// Show all match results if provided
+	if (allMatches && allMatches.length > 0) {
+		const matchResultsDiv = document.createElement('div');
+		matchResultsDiv.id = 'all-match-results';
+		matchResultsDiv.innerHTML = '<h3>Complete Tournament Results</h3>';
+		
+		const resultsList = document.createElement('div');
+		resultsList.className = 'match-results-list';
+		
+		allMatches.forEach(matchResult => {
+			const matchDiv = document.createElement('div');
+			matchDiv.className = 'match-result-item';
+			matchDiv.textContent = matchResult;
+			resultsList.appendChild(matchDiv);
+		});
+		
+		matchResultsDiv.appendChild(resultsList);
+		overlay.appendChild(matchResultsDiv);
+	}
+
+	const dashboardBtn = document.createElement('button');
+	dashboardBtn.textContent = 'Back to Dashboard';
+	dashboardBtn.onclick = () => {
+		// Disconnect socket and reload to ensure clean state on dashboard
+		if (socket) {
+			socket.disconnect();
+			// socket = null;
+		}
+		
+		// Check authentication before redirecting
+		const token = sessionStorage.getItem('authToken');
+		if (!token) {
+			alert('Your session has expired. Please log in again.');
+			window.location.href = '/login';
+		} else {
+			window.location.href = '/dashboard';
+		}
+	};
+
+	overlay.appendChild(message);
+	overlay.appendChild(dashboardBtn);
+
+	document.body.appendChild(overlay);
+}

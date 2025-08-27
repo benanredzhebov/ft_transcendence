@@ -1,39 +1,54 @@
 import { Socket } from 'socket.io-client';
-import { showTournamentDialog, removeOverlays, showMatchInfo } from '../game/uiHelpers';
+import { showTournamentDialog, removeOverlays, showMatchInfo, showTournamentResults } from '../game/uiHelpers';
 import { TournamentResult } from '../game/types';
 import { movePlayers } from '../game';
+
+// In tournamentMode.ts - Remove them and use dependency injection
+interface TournamentDependencies {
+	socket: Socket;
+	gameState: {
+		currentMatch: [string | { alias: string }, string | { alias: string }] | null;
+		inTournament: boolean;
+		matchStarted: boolean;
+		gameEnded: boolean;
+		countDownActive: boolean
+		movePlayersFrame: number | null;
+		tournamentResults: TournamentResult[];
+	};
+	setGameState: (updates: Partial<TournamentDependencies['gameState']>) => void;
+	promptAliasRegistration: () => void;
+}
 
 export class TournamentMode {
 	private socket: Socket | null = null;
 	private aliasMap: Record<string, string> = {};
-
+	private gameState: TournamentDependencies['gameState'];
+	private setGameState: TournamentDependencies['setGameState'];
+	private promptAliasRegistration: () => void;
 	public	aliasRegistered = false;
-	public	inTournament = false;
-	public	currentMatch: [string | { alias: string }, string | { alias: string }] | null = null;
 	public	assignedPlayerId: 'player1' | 'player2' | null = null;
-	public	tournamentResults: TournamentResult[] = [];
-	public	countDownActive = false;
-	public	matchStarted = false;
-	public	gameEnded = false;
-	public	movePlayersFrame: number | null = null;
-	
-	
 
-	constructor(socket: Socket) {
+	constructor({ socket, gameState, setGameState, promptAliasRegistration }: TournamentDependencies) {
 		this.socket = socket;
 		this.setupHandlers();
-	}
-
-	public	promptAliasRegistration() {
-		const alias = prompt("Enter your tournament alias:");
-		if (alias) {
-			const token = sessionStorage.getItem('authToken');
-			this.socket?.emit('register_alias', { alias, token });
-		}
+		this.gameState = gameState;
+		this.setGameState = setGameState;
+		this.promptAliasRegistration = promptAliasRegistration;
 	}
 
 	private setupHandlers() {
-		if (!this.socket) return;
+		if (!this.socket) {
+			console.error ('Cannot setup tournament handlers: socket is null');
+			return;
+		}
+
+		this.socket.on('start_match', () => {
+			this.setGameState({
+				matchStarted:true,
+				gameEnded: false,
+				inTournament: true
+			});
+		});
 
 		this.socket.on('player_list_updated', (players: { socketId: string, alias: string }[]) => {
 			this.aliasMap = {};
@@ -45,7 +60,9 @@ export class TournamentMode {
 		this.socket.on('alias_registered', ({ success, message }) => {
 			if (success) {
 				this.aliasRegistered = true;
-				this.inTournament = true;
+				this.setGameState({
+					inTournament: true
+				});
 				showTournamentDialog('Registered! Waiting for tournament to start...');
 			} else {
 				const errorMessage = message || 'Alias already taken. Please try another name.';
@@ -196,11 +213,13 @@ export class TournamentMode {
 			// Remove countdown dialog if it exists
 			const dialog = document.querySelector('.tournament-dialog');
 			if (dialog) dialog.remove();
-			this.countDownActive = false;
+			this.setGameState({
+				countDownActive: false
+			})
 		});
 
 		this.socket.on('match_announcement', (match: { player1: string, player2: string }) => {
-			this.currentMatch = [match.player1, match.player2];
+			this.setGameState({currentMatch: [match.player1, match.player2] });
 			showMatchInfo(match.player1, match.player2, 0, 0);
 			this.assignedPlayerId = null; // Set this elsewhere if needed
 		});
@@ -211,10 +230,12 @@ export class TournamentMode {
 			const bracketDiv = document.getElementById('tournament-bracket');
 			if (bracketDiv) bracketDiv.style.display = 'none';
 		
-			this.countDownActive = false; // added to start the match. Allow state updates to be rendered
-			this.matchStarted = true;
-			this.gameEnded = false;
-			if (this.movePlayersFrame === null) movePlayers();
+			this.setGameState ({
+				countDownActive: false, // added to start the match. Allow state updates to be rendered
+				matchStarted: true,
+				gameEnded: false
+			});
+			if (this.gameState.movePlayersFrame === null) movePlayers();
 		});
 
 	this.socket.on('tournament_over', ({ winner, allMatches }: { winner: any, allMatches: string[] }) => {
@@ -248,12 +269,15 @@ export class TournamentMode {
 				lobbyBtn.onclick = () => {
 					// Remove tournament bracket and reset state
 					bracketDiv.remove();
-					this.inTournament = false;
-					this.currentMatch = null;
+					this.setGameState({
+						inTournament: false,
+						currentMatch: null
+					});
+					
 					this.assignedPlayerId = null;
 					
 					// Show the simple results overlay for final summary
-					this.showTournamentResults(winnerName, allMatches);
+					showTournamentResults(winnerName, allMatches, this.socket);
 				};
 				bracketDiv.appendChild(lobbyBtn);
 			}
@@ -264,9 +288,11 @@ export class TournamentMode {
 			});
 			dialog.querySelector('button')!.onclick = () => {
 				dialog.remove();
-				this.showTournamentResults(winnerName, allMatches);
-				this.inTournament = false;
-				this.currentMatch = null;
+				showTournamentResults(winnerName, allMatches, this.socket);
+				this.setGameState({
+						inTournament: false,
+						currentMatch: null
+					});
 				this.assignedPlayerId = null;
 			};
 		}
@@ -284,7 +310,9 @@ export class TournamentMode {
 			if (dialog.parentNode) {
 				dialog.remove();
 			}
-			this.inTournament = true;
+			this.setGameState({
+				inTournament: true
+			});
 			// Show tournament bracket again
 			const bracketDiv = document.getElementById('tournament-bracket');
 			if (bracketDiv) bracketDiv.style.display = 'block';
@@ -317,8 +345,10 @@ export class TournamentMode {
 		const dialog = showTournamentDialog(message, { confirmText: 'Return to Dashboard' });
 		dialog.querySelector('button')!.onclick = () => {
 			dialog.remove();
-			this.inTournament = false;
-			this.currentMatch = null;
+			this.setGameState({
+				inTournament: false,
+				currentMatch: null
+				});
 			this.assignedPlayerId = null;
 			this.aliasRegistered = false; // Reset alias registration
 			
@@ -351,8 +381,10 @@ export class TournamentMode {
 		const dialog = showTournamentDialog(message, { confirmText: 'Return to Dashboard' });
 		dialog.querySelector('button')!.onclick = () => {
 			dialog.remove();
-			this.inTournament = false;
-			this.currentMatch = null;
+			this.setGameState({
+				inTournament: false,
+				currentMatch: null
+			});
 			this.assignedPlayerId = null;
 			this.aliasRegistered = false; // Reset alias registration
 			
@@ -384,7 +416,10 @@ export class TournamentMode {
 		if (tournamentBracket) tournamentBracket.style.display = 'none';
 
 		this.aliasRegistered = false;
-		this.inTournament = false;
+		this.setGameState({
+			inTournament: false
+		});
+		
 
 		// Show a message that tournament was closed
 		showTournamentDialog('Tournament closed - no players remaining', {
@@ -397,7 +432,9 @@ export class TournamentMode {
 	});
 
 	this.socket.on('tournament_lobby', ({ message, players, }) => {
-		this.tournamentResults = [];
+		this.setGameState({
+			tournamentResults: []
+		});
 		const	isHost = players.length > 0 && this.aliasMap && Object.values(this.aliasMap).includes(players[0]) && 
 		Object.keys(this.aliasMap).find(key => this.aliasMap[key] === players[0]) === this.socket?.id;
 		(players as string[]).forEach(alias => {
@@ -440,63 +477,11 @@ export class TournamentMode {
 		}
 	}
 
-	public showTournamentResults(winnerName: string, allMatches?: string[]) {
-		removeOverlays();
-		const overlay = document.createElement('div');
-		overlay.className = 'game-overlay';
-
-		const message = document.createElement('div');
-		message.className = 'game-message';
-		message.innerHTML = `<h2>🏆 Tournament Champion: ${winnerName}</h2>`;
-
-		// Show all match results if provided
-		if (allMatches && allMatches.length > 0) {
-			const matchResultsDiv = document.createElement('div');
-			matchResultsDiv.id = 'all-match-results';
-			matchResultsDiv.innerHTML = '<h3>Complete Tournament Results</h3>';
-		
-			const resultsList = document.createElement('div');
-			resultsList.className = 'match-results-list';
-		
-			allMatches.forEach(matchResult => {
-				const matchDiv = document.createElement('div');
-				matchDiv.className = 'match-result-item';
-				matchDiv.textContent = matchResult;
-				resultsList.appendChild(matchDiv);
-			});
-		
-			matchResultsDiv.appendChild(resultsList);
-			overlay.appendChild(matchResultsDiv);
-		}
-
-		const dashboardBtn = document.createElement('button');
-		dashboardBtn.textContent = 'Back to Dashboard';
-		dashboardBtn.onclick = () => {
-			// Disconnect socket and reload to ensure clean state on dashboard
-			if (this.socket) {
-				this.socket.disconnect();
-				this.socket = null;
-			}
-		
-			// Check authentication before redirecting
-			const token = sessionStorage.getItem('authToken');
-			if (!token) {
-				alert('Your session has expired. Please log in again.');
-				window.location.href = '/login';
-			} else {
-				window.location.href = '/dashboard';
-			}
-		};
-
-		overlay.appendChild(message);
-		overlay.appendChild(dashboardBtn);
-
-		document.body.appendChild(overlay);
-	}
-
 	public cleanup() {
-		this.inTournament = false;
-		this.currentMatch = null;
+		this.setGameState({
+			inTournament: false,
+			currentMatch: null
+		});
 		this.assignedPlayerId = null;
 		this.aliasRegistered = false;
 	}

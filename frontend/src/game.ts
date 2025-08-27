@@ -12,8 +12,8 @@
 
 import './game.css';
 import { io, Socket } from 'socket.io-client';
-
-// let isHost = false;
+import { removeOverlays, showTournamentDialog, showMatchInfo } from './game/uiHelpers'
+import { GameState, TournamentResult } from './game/types';
 
 // Game State Variables
 let gameEnded = false;
@@ -21,34 +21,12 @@ let matchStarted = false;
 let pressedKeys = new Set<string>();
 let inTournament = false;
 let inLocalTournament = false;
-// let currentMatch: [string, string] | null = null;
 let currentMatch: [string | { alias: string }, string | { alias: string }] | null = null;
-let aliasMap: Record<string, string> = {};
-let assignedPlayerId: 'player1' | 'player2' | null = null;
 let movePlayersFrame: number | null = null;
+
+// Both Tournament
 let countDownActive = false;
-let aliasRegistered = false;
-let tournamentResults: { player1: string, player2: string, score1: number, score2: number}[] = [];
-
-// Game State Interfaces
-interface PaddleState {
-	y: number;
-	height: number;
-	width: number;
-}
-
-interface BallState {
-	x: number;
-	y: number;
-	radius: number;
-}
-
-interface GameState {
-	paddles: { player1: PaddleState; player2: PaddleState };
-	ball: BallState;
-	score: { player1: number; player2: number };
-	gameOver: boolean;
-}
+let tournamentResults: TournamentResult[] = [];
 
 // Constants
 const SERVER_WIDTH = 900;
@@ -59,473 +37,6 @@ let socket: Socket | null = null;
 let canvas: HTMLCanvasElement | null = null;
 let ctx: CanvasRenderingContext2D | null = null;
 let resizeObserver: ResizeObserver | null = null;
-
-// Tournament Functions
-function promptAliasRegistration() {
-	const alias = prompt("Enter your tournament alias:");
-	if (alias) {
-		const token = sessionStorage.getItem('authToken'); // ***new: to store Match data***
-		socket?.emit('register_alias', { alias, token });
-	}
-}
-
-//||| SEPERATED INTO THE SVGUnitTypes.TS |||||
-
-// Remove all overlays
-// function removeOverlays() {
-// 	document.querySelectorAll('.game-overlay').forEach(el => el.remove());
-// 	// Also hide tournament bracket if it exists
-// 	const bracketDiv = document.getElementById('tournament-bracket');
-// 	if (bracketDiv) bracketDiv.style.display = 'none';
-// }
-
-// function showTournamentDialog(message: string, 
-// 	options?: { confirmText?: string, timer?: number, onConfirm?: () => void }
-// ) {
-// 	const existing = document.querySelector('.tournament-dialog');
-// 	if (existing) existing.remove();
-
-// 	const dialog = document.createElement('div');
-// 	dialog.className = 'tournament-dialog';
-
-// 	dialog.innerHTML = `
-// 	<div class="dialog-content">
-// 		<p>${message}</p>
-// 		${options?.confirmText ? 
-// 		`<button class="confirm-btn">${options.confirmText}</button>` : 
-// 		''}
-// 		${options?.timer ? 
-// 		`<div class="countdown">Starting in ${options.timer}...</div>` : 
-// 		''}
-// 	</div>
-// 	`;
-
-// 	if (options?.confirmText) {
-// 		dialog.querySelector('button')!.onclick = () => {
-// 			if (options.confirmText === "I'm Ready") {
-// 				socket?.emit('player_ready'); // Only marks ready, does NOT start countdown
-// 			}
-// 			if (options.onConfirm) options.onConfirm();
-// 			dialog.remove();
-// 		};
-// 	}
-
-// 	document.body.appendChild(dialog);
-// 	return dialog;
-// }
-
-//||| SEPERATED INTO THE SVGUnitTypes.TS |||||
-
-function updateCountdownDisplay(seconds: number) {
-	let dialog = document.querySelector('.tournament-dialog');
-	if (!dialog) {
-	dialog = showTournamentDialog('Match starting soon...', { timer: seconds });
-	}
-	
-	const countdownEl = dialog.querySelector('.countdown');
-	if (countdownEl) {
-	countdownEl.textContent = `Starting in ${seconds}...`;
-	}
-	
-	if (seconds <= 0) {
-	setTimeout(() => dialog?.remove(), 1000);
-	}
-}
-
-function setupTournamentHandlers() {
-	if (!socket) return;
-
-	socket.on('player_list_updated', (players: { socketId: string, alias: string }[]) => {
-		aliasMap = {};
-		players.forEach(player => {
-			aliasMap[player.socketId] = player.alias;
-		});
-	});
-
-	socket.on('alias_registered', ({ success, message }) => {
-		if (success) {
-			aliasRegistered = true;
-			inTournament = true;
-			showTournamentDialog('Registered! Waiting for tournament to start...');
-		} else {
-			const errorMessage = message || 'Alias already taken. Please try another name.';
-			if (message === 'You are already registered in this tournament.') {
-				const dialog = showTournamentDialog(errorMessage, {
-					confirmText: 'Back to Dashboard'
-				});
-				dialog.querySelector('button')!.onclick = () => {
-					// Redirect to dashboard
-					window.location.href = '/dashboard';
-				};
-			} else {
-				showTournamentDialog(errorMessage, {
-					confirmText: 'Try Again'
-				}).querySelector('button')!.onclick = () => {
-					promptAliasRegistration();
-				};
-			}
-		}
-	});
-
-	socket.on('tournament_error', (data: { message: string }) => {
-		showTournamentDialog(`Error: ${data.message}`, {
-			confirmText: 'Back to Dashboard',
-			onConfirm: () => {
-				// Check authentication before redirecting
-				const token = sessionStorage.getItem('authToken');
-				if (!token) {
-					alert('Your session has expired. Please log in again.');
-					window.location.href = '/login';
-				} else {
-					window.location.href = '/dashboard';
-				}
-			}
-		});
-	});
-
-	socket.on('await_player_ready', () => {
-		console.log('Received await_player_ready');
-		removeOverlays();
-		
-		// Show tournament bracket before each match
-		const bracketDiv = document.getElementById('tournament-bracket');
-		if (bracketDiv) bracketDiv.style.display = 'block';
-		
-		assignedPlayerId = null;
-		showTournamentDialog('Match ready!', {
-			confirmText: 'I\'m Ready'
-		});
-	});
-
-	socket.on('tournament_bracket', (data: { 
-		rounds: { 
-			player1: string | null, 
-			player2: string | null,
-			winner: string | null,
-			scores: { player1: number, player2: number } | null,
-			isComplete: boolean,
-			isCurrent: boolean,
-			isBye: boolean
-		}[][], 
-		currentRound: number,
-		isFinished: boolean,
-		tournamentWinner: string | null 
-	}) => {
-		(window as any)['lastBracketData'] = data;
-		const bracketDiv = document.getElementById('tournament-bracket') || document.createElement('div');
-		bracketDiv.id = 'tournament-bracket';
-		bracketDiv.innerHTML = `
-			<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-				<h2 style="margin: 0;">Tournament Overview ${data.isFinished ? '- COMPLETE!' : ''}</h2>
-				<button id="close-bracket" style="background: #ff4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 14px;">×</button>
-			</div>
-		`;
-
-		data.rounds.forEach((round, roundIdx) => {
-			const roundDiv = document.createElement('div');
-			roundDiv.className = 'bracket-round';
-			
-			// Round header with status
-			const isCurrentRound = roundIdx === data.currentRound;
-			const roundStatus = isCurrentRound ? ' (Current)' : '';
-			roundDiv.innerHTML = `<strong>Round ${roundIdx + 1}${roundStatus}</strong>`;
-			
-			round.forEach(match => {
-				const matchDiv = document.createElement('div');
-				matchDiv.className = 'bracket-match';
-				
-				// Add status classes for styling
-				if (match.isComplete) {
-					matchDiv.classList.add('completed-match');
-				} else if (match.isCurrent) {
-					matchDiv.classList.add('current-match');
-				} else if (match.isBye) {
-					matchDiv.classList.add('bye-match');
-				}
-
-				// Build match display text
-				let matchText = '';
-				if (match.isBye) {
-					const nonNullPlayer = match.player1 || match.player2;
-					matchText = `${nonNullPlayer} (Bye)`;
-				} else {
-					matchText = `${match.player1 || 'TBD'} vs ${match.player2 || 'TBD'}`;
-				}
-				
-				// Add scores if match is complete
-				if (match.isComplete && match.scores) {
-					matchText += ` (${match.scores.player1} - ${match.scores.player2})`;
-				}
-				
-				// Add winner indicator
-				if (match.winner) {
-					matchText += ` → Winner: ${match.winner}`;
-				} else if (match.isCurrent) {
-					matchText += ' ← Playing Now';
-				}
-				
-				matchDiv.textContent = matchText;
-				roundDiv.appendChild(matchDiv);
-			});
-			bracketDiv.appendChild(roundDiv);
-		});
-		
-		// Add tournament winner display if finished
-		if (data.isFinished && data.tournamentWinner) {
-			const championDiv = document.createElement('div');
-			championDiv.className = 'tournament-champion';
-			championDiv.innerHTML = `<strong>🏆 CHAMPION: ${data.tournamentWinner}</strong>`;
-			bracketDiv.appendChild(championDiv);
-		}
-		
-		// Add close button functionality
-		const closeBtn = bracketDiv.querySelector('#close-bracket');
-		if (closeBtn) {
-			closeBtn.addEventListener('click', () => {
-				bracketDiv.style.display = 'none';
-			});
-		}
-		
-		document.body.appendChild(bracketDiv);
-	});
-
-
-	socket.on('countdown_update', (remaining: number) => {
-		updateCountdownDisplay(remaining);
-	});
-
-	socket.on('countdown_cancelled', () => {
-		// Remove countdown dialog if it exists
-		const dialog = document.querySelector('.tournament-dialog');
-		if (dialog) dialog.remove();
-		countDownActive = false;
-	});
-
-	socket.on('match_announcement', (match: { player1: string, player2: string }) => {
-		currentMatch = [match.player1, match.player2];
-		showMatchInfo(match.player1, match.player2, 0, 0);
-		assignedPlayerId = null; // Set this elsewhere if needed
-	});
-
-	socket.on('start_match', () => {
-		removeOverlays();
-		// Hide tournament bracket during gameplay
-		const bracketDiv = document.getElementById('tournament-bracket');
-		if (bracketDiv) bracketDiv.style.display = 'none';
-		
-		countDownActive = false; // added to start the match. Allow state updates to be rendered
-		matchStarted = true;
-		gameEnded = false;
-		if (movePlayersFrame === null) movePlayers();
-	});
-
-	socket.on('tournament_over', ({ winner, allMatches }: { winner: any, allMatches: string[] }) => {
-		const winnerName = typeof winner === 'object' && winner !== null ? winner.alias : winner;
-		
-		// Instead of showing the simple overlay, enhance the existing tournament bracket
-		const bracketDiv = document.getElementById('tournament-bracket');
-		if (bracketDiv) {
-			// Make sure the bracket is visible
-			bracketDiv.style.display = 'block';
-			
-			// Add a "Return to Lobby" button to the tournament bracket
-			let lobbyBtn = bracketDiv.querySelector('#return-to-lobby') as HTMLButtonElement;
-			if (!lobbyBtn) {
-				lobbyBtn = document.createElement('button');
-				lobbyBtn.id = 'return-to-lobby';
-				lobbyBtn.textContent = 'Return to Lobby';
-				lobbyBtn.style.cssText = `
-					background: #4CAF50; 
-					color: white; 
-					border: none; 
-					padding: 10px 20px; 
-					border-radius: 4px; 
-					cursor: pointer; 
-					font-size: 16px; 
-					margin-top: 15px; 
-					display: block; 
-					margin-left: auto; 
-					margin-right: auto;
-				`;
-				lobbyBtn.onclick = () => {
-					// Remove tournament bracket and reset state
-					bracketDiv.remove();
-					inTournament = false;
-					currentMatch = null;
-					assignedPlayerId = null;
-					
-					// Show the simple results overlay for final summary
-					showTournamentResults(winnerName, allMatches);
-				};
-				bracketDiv.appendChild(lobbyBtn);
-			}
-		} else {
-			// Fallback: if no bracket exists, show the simple dialog
-			const dialog = showTournamentDialog(`Tournament winner: ${winnerName}!`, {
-				confirmText: 'Return to Lobby'
-			});
-			dialog.querySelector('button')!.onclick = () => {
-				dialog.remove();
-				showTournamentResults(winnerName, allMatches);
-				inTournament = false;
-				currentMatch = null;
-				assignedPlayerId = null;
-			};
-		}
-	});
-
-	socket.on('match_forfeit', ({ winner, loser, reason }: { winner: string, loser: string, reason: string }) => {
-		removeOverlays();
-		const dialog = showTournamentDialog(
-			`Match Forfeit!<br><strong>${winner}</strong> wins by forfeit<br>${loser} ${reason}<br><br>Tournament will continue automatically...`
-			// No confirmText provided = no button shown
-		);
-		
-		// Automatically remove the dialog after 3 seconds to match server delay
-		setTimeout(() => {
-			if (dialog.parentNode) {
-				dialog.remove();
-			}
-			inTournament = true;
-			// Show tournament bracket again
-			const bracketDiv = document.getElementById('tournament-bracket');
-			if (bracketDiv) bracketDiv.style.display = 'block';
-		}, 3000);
-	});
-
-	socket.on('match_cancelled', ({ reason }: { reason?: string }) => {
-		removeOverlays();
-		const message = reason ? `Match cancelled: ${reason}` : 'Match cancelled due to player disconnection';
-		const dialog = showTournamentDialog(message, { confirmText: 'OK' });
-		dialog.querySelector('button')!.onclick = () => {
-			dialog.remove();
-			// Show tournament bracket again
-			const bracketDiv = document.getElementById('tournament-bracket');
-			if (bracketDiv) bracketDiv.style.display = 'block';
-		};
-	});
-
-	socket.on('tournament_cancelled', ({ reason }: { reason?: string }) => {
-		removeOverlays();
-		document.getElementById('tournament-bracket')?.remove();
-		
-		let message = reason ? `Tournament cancelled: ${reason}` : 'Tournament cancelled';
-		
-		// Special handling for server restart scenarios
-		if (reason && (reason.includes('server') || reason.includes('restart') || reason.includes('reset'))) {
-			message = `Tournament cancelled due to server restart.<br>All tournament states have been reset.<br>You can start a new tournament.`;
-		}
-		
-		const dialog = showTournamentDialog(message, { confirmText: 'Return to Dashboard' });
-		dialog.querySelector('button')!.onclick = () => {
-			dialog.remove();
-			inTournament = false;
-			currentMatch = null;
-			assignedPlayerId = null;
-			aliasRegistered = false; // Reset alias registration
-			
-			// Clear any stored tournament state
-			sessionStorage.removeItem('tournament_reconnect');
-			sessionStorage.removeItem('tournament_alias_registered');
-			
-			// Check authentication before redirecting
-			const token = sessionStorage.getItem('authToken');
-			if (!token) {
-				// No valid session, redirect to login with message
-				alert('Your session has expired. Please log in again.');
-				window.location.href = '/login';
-			} else {
-				// Valid session, redirect to dashboard (use correct SPA route)
-				window.location.href = '/dashboard';
-			}
-		};
-	});
-
-	// Add handler for server-initiated tournament reset during active match
-	socket.on('tournament_reset', ({ reason }: { reason?: string }) => {
-		removeOverlays();
-		document.getElementById('tournament-bracket')?.remove();
-		
-		const message = reason ? 
-			`Tournament has been reset: ${reason}<br><br>All players and matches have been cleared.<br>You can start a new tournament.` :
-			'Tournament has been reset by the server.<br><br>All players and matches have been cleared.<br>You can start a new tournament.';
-		
-		const dialog = showTournamentDialog(message, { confirmText: 'Return to Dashboard' });
-		dialog.querySelector('button')!.onclick = () => {
-			dialog.remove();
-			inTournament = false;
-			currentMatch = null;
-			assignedPlayerId = null;
-			aliasRegistered = false; // Reset alias registration
-			
-			// Clear any stored tournament state
-			sessionStorage.removeItem('tournament_reconnect');
-			sessionStorage.removeItem('tournament_alias_registered');
-			
-			// Redirect to dashboard
-			const token = sessionStorage.getItem('authToken');
-			if (!token) {
-				alert('Your session has expired. Please log in again.');
-				window.location.href = '/login';
-			} else {
-				window.location.href = '/dashboard';
-			}
-		};
-	});
-
-	socket.on('tournament_lobby_closed', () => {
-		console.log('Tournament lobby closed - no players remaining');
-
-		// Reset tournament UI state
-		const registerContainer = document.getElementById('register-container');
-		const tournamentLobby = document.getElementById('tournament-lobby');
-		const tournamentBracket = document.getElementById('tournament-bracket');
-
-		if (registerContainer) registerContainer.style.display = 'block';
-		if (tournamentLobby) tournamentLobby.style.display = 'none';
-		if (tournamentBracket) tournamentBracket.style.display = 'none';
-
-		aliasRegistered = false;
-		inTournament = false;
-
-		// Show a message that tournament was closed
-		showTournamentDialog('Tournament closed - no players remaining', {
-			confirmText: 'OK',
-			onConfirm: () => {
-				// Optionally redirect to dashboard
-				window.location.href = '/dashboard';
-			}
-		});
-	});
-
-	socket.on('tournament_lobby', ({ message, players, }) => {
-		tournamentResults = [];
-		isHost = players.length > 0 && aliasMap && Object.values(aliasMap).includes(players[0]) && 
-		Object.keys(aliasMap).find(key => aliasMap[key] === players[0]) === socket?.id;
-		(players as string[]).forEach(alias => {
-			if (!Object.values(aliasMap).includes(alias)) {
-				aliasMap['unknown-' + alias] = alias;
-			}
-		});
-
-		// Debug
-		// console.log('F_Received tournament_lobby:', players);
-
-		const dialog = showTournamentDialog(
-			`${message}<br>Players: ${players.join(', ')}`,
-			isHost ? { confirmText: 'Start Tournament' } : undefined
-		);
-
-		// Always remove loading screen when lobby is shown
-		document.querySelector('.game-loading')?.remove();
-
-		if (isHost && dialog.querySelector('button')) {
-			dialog.querySelector('button')!.onclick = () => {
-				socket?.emit('start_tournament');
-			};
-		}
-	});
-}
 
 // Local Tournament Functions
 function promptLocalTournamentSetup() {
@@ -891,40 +402,6 @@ function showLocalTournamentResults(winner: string, allMatches: string[]) {
 }
 
 // Game UI Functions
-function showMatchInfo(
-	player1: string | { alias:string },
-	player2: string | { alias:string },
-	score1: number,
-	score2: number
- ) {
-	const p1 = typeof player1 === 'object' && player1 !== null ? player1.alias : player1;
-	const p2 = typeof player2 === 'object' && player2 !== null ? player2.alias : player2;
-	
-	const existing = document.getElementById('match-info-box');
-	if (existing) {
-		existing.innerHTML = `
-			<div><strong>${p1}</strong> vs <strong>${p2}</strong></div>
-			<div style="text-align: center; margin-top: 4px; font-size: 20px;">
-			${score1} : ${score2}
-			</div>
-		`;
-		return;
-	}
-
-	const box = document.createElement('div');
-	box.id = 'match-info-box';
-	box.className = 'match-info-box';
-
-	box.innerHTML = `
-	<div><strong>${p1}</strong> vs <strong>${p2}</strong></div>
-	<div style="text-align: center; margin-top: 4px; font-size: 20px;">
-		${score1} : ${score2}
-	</div>
-	`;
-
-	document.body.appendChild(box);
-}
-
 function showGameOverScreen(winner: string | { alias: string}) {
 	if (!canvas?.parentElement) return;
 
@@ -1024,64 +501,6 @@ function showGameOverScreen(winner: string | { alias: string}) {
 		overlay.appendChild(buttons);
 	}
 	canvas.parentElement.appendChild(overlay);
-}
-
-function showTournamentResults(winnerName: string, allMatches?: string[]) {
-	removeOverlays();
-
-	// Debug: log the results before rendering
-	// console.log('Tournament Results:', tournamentResults);
-
-	const overlay = document.createElement('div');
-	overlay.className = 'game-overlay';
-
-	const message = document.createElement('div');
-	message.className = 'game-message';
-	message.innerHTML = `<h2>🏆 Tournament Champion: ${winnerName}</h2>`;
-
-	// Show all match results if provided
-	if (allMatches && allMatches.length > 0) {
-		const matchResultsDiv = document.createElement('div');
-		matchResultsDiv.id = 'all-match-results';
-		matchResultsDiv.innerHTML = '<h3>Complete Tournament Results</h3>';
-		
-		const resultsList = document.createElement('div');
-		resultsList.className = 'match-results-list';
-		
-		allMatches.forEach(matchResult => {
-			const matchDiv = document.createElement('div');
-			matchDiv.className = 'match-result-item';
-			matchDiv.textContent = matchResult;
-			resultsList.appendChild(matchDiv);
-		});
-		
-		matchResultsDiv.appendChild(resultsList);
-		overlay.appendChild(matchResultsDiv);
-	}
-
-	const dashboardBtn = document.createElement('button');
-	dashboardBtn.textContent = 'Back to Dashboard';
-	dashboardBtn.onclick = () => {
-		// Disconnect socket and reload to ensure clean state on dashboard
-		if (socket) {
-			socket.disconnect();
-			socket = null;
-		}
-		
-		// Check authentication before redirecting
-		const token = sessionStorage.getItem('authToken');
-		if (!token) {
-			alert('Your session has expired. Please log in again.');
-			window.location.href = '/login';
-		} else {
-			window.location.href = '/dashboard';
-		}
-	};
-
-	overlay.appendChild(message);
-	overlay.appendChild(dashboardBtn);
-
-	document.body.appendChild(overlay);
 }
 
 // Game Rendering Functions
@@ -1257,6 +676,22 @@ function onResize() {
 	}
 }
 
+function	promptAliasRegistration() {
+		if (socket) {
+			console.error('Socket not initialized');
+			return;
+		}
+		const alias = prompt("Enter your tournament alias:");
+		if (alias) {
+			const token = sessionStorage.getItem('authToken');
+			socket.emit('register_alias', { alias, token });
+		}
+		else {
+			window.location.href = '/dashboard';
+		}
+	}
+
+
 // Main Game Function
 export function renderGame(containerId: string = 'app') {
 	const container = document.getElementById(containerId);
@@ -1297,7 +732,7 @@ export function renderGame(containerId: string = 'app') {
 			// Prompt for alias if in tournament mode and not registered
 			if (
 				socket &&
-				!aliasRegistered &&
+				!tournamentHandler.aliasRegistered &&
 				window.location.search.includes('tournament=true')
 			) {
 				promptAliasRegistration();
