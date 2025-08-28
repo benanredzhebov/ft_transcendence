@@ -14,6 +14,7 @@ interface TournamentDependencies {
 		countDownActive: boolean
 		movePlayersFrame: number | null;
 		tournamentResults: TournamentResult[];
+		assignedPlayerId: 'player1' | 'player2' | null;
 	};
 	setGameState: (updates: Partial<TournamentDependencies['gameState']>) => void;
 	promptAliasRegistration: () => void;
@@ -26,17 +27,17 @@ export class TournamentMode {
 	private setGameState: TournamentDependencies['setGameState'];
 	private promptAliasRegistration: () => void;
 	public	aliasRegistered = false;
-	public	assignedPlayerId: 'player1' | 'player2' | null = null;
 
 	constructor({ socket, gameState, setGameState, promptAliasRegistration }: TournamentDependencies) {
 		this.socket = socket;
-		this.setupHandlers();
+		this.setupTournamentHandlers();
 		this.gameState = gameState;
 		this.setGameState = setGameState;
 		this.promptAliasRegistration = promptAliasRegistration;
 	}
 
-	private setupHandlers() {
+
+	private setupTournamentHandlers() {
 		if (!this.socket) {
 			console.error ('Cannot setup tournament handlers: socket is null');
 			return;
@@ -108,10 +109,10 @@ export class TournamentMode {
 			const bracketDiv = document.getElementById('tournament-bracket');
 			if (bracketDiv) bracketDiv.style.display = 'block';
 		
-			this.assignedPlayerId = null;
+			this.setGameState({ assignedPlayerId: null });
 			showTournamentDialog('Match ready!', {
 				confirmText: 'I\'m Ready'
-			});
+			}, this.socket);
 		});
 
 		this.socket.on('tournament_bracket', (data: { 
@@ -206,6 +207,7 @@ export class TournamentMode {
 		});
 
 		this.socket.on('countdown_update', (remaining: number) => {
+			console.log('Received countdown_update:' , remaining);
 			this.updateCountdownDisplay(remaining);
 		});
 
@@ -221,7 +223,7 @@ export class TournamentMode {
 		this.socket.on('match_announcement', (match: { player1: string, player2: string }) => {
 			this.setGameState({currentMatch: [match.player1, match.player2] });
 			showMatchInfo(match.player1, match.player2, 0, 0);
-			this.assignedPlayerId = null; // Set this elsewhere if needed
+			this.setGameState({ assignedPlayerId: null });
 		});
 
 		this.socket.on('start_match', () => {
@@ -271,11 +273,9 @@ export class TournamentMode {
 					bracketDiv.remove();
 					this.setGameState({
 						inTournament: false,
-						currentMatch: null
+						currentMatch: null,
+						assignedPlayerId: null
 					});
-					
-					this.assignedPlayerId = null;
-					
 					// Show the simple results overlay for final summary
 					showTournamentResults(winnerName, allMatches, this.socket);
 				};
@@ -291,9 +291,9 @@ export class TournamentMode {
 				showTournamentResults(winnerName, allMatches, this.socket);
 				this.setGameState({
 						inTournament: false,
-						currentMatch: null
+						currentMatch: null,
+						assignedPlayerId: null
 					});
-				this.assignedPlayerId = null;
 			};
 		}
 	});
@@ -347,9 +347,10 @@ export class TournamentMode {
 			dialog.remove();
 			this.setGameState({
 				inTournament: false,
-				currentMatch: null
+				currentMatch: null,
+				assignedPlayerId: null
 				});
-			this.assignedPlayerId = null;
+			
 			this.aliasRegistered = false; // Reset alias registration
 			
 			// Clear any stored tournament state
@@ -383,9 +384,10 @@ export class TournamentMode {
 			dialog.remove();
 			this.setGameState({
 				inTournament: false,
-				currentMatch: null
+				currentMatch: null,
+				assignedPlayerId: null
 			});
-			this.assignedPlayerId = null;
+			
 			this.aliasRegistered = false; // Reset alias registration
 			
 			// Clear any stored tournament state
@@ -480,9 +482,10 @@ export class TournamentMode {
 	public cleanup() {
 		this.setGameState({
 			inTournament: false,
-			currentMatch: null
+			currentMatch: null,
+			assignedPlayerId: null
 		});
-		this.assignedPlayerId = null;
+		
 		this.aliasRegistered = false;
 	}
 }

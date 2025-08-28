@@ -6,8 +6,10 @@ export function removeOverlays() {
 	if (bracketDiv) bracketDiv.style.display = 'none';
 }
 
-export function showTournamentDialog(message: string, 
-	options?: { confirmText?: string, timer?: number, onConfirm?: () => void }
+export function showTournamentDialog(
+	message: string, 
+	options?: { confirmText?: string, timer?: number, onConfirm?: () => void },
+	socket?: Socket | null
 ) {
 	const existing = document.querySelector('.tournament-dialog');
 	if (existing) existing.remove();
@@ -30,7 +32,7 @@ export function showTournamentDialog(message: string,
 	if (options?.confirmText) {
 		dialog.querySelector('button')!.onclick = () => {
 			if (options.confirmText === "I'm Ready") {
-				// Socket will be passed from parent
+				socket?.emit('player_ready');
 			}
 			if (options.onConfirm) options.onConfirm();
 			dialog.remove();

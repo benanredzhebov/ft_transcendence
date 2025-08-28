@@ -135,6 +135,7 @@ function startSynchronizedCountdown(io, duration = 5) {
 	}
 	
 	countdownInterval = setInterval(() => {
+		console.log('Emitting countdown_update:', remaining); // del later
 		io.emit('countdown_update', remaining);
 		remaining--;
 	

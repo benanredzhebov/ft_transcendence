@@ -14,19 +14,40 @@ import './game.css';
 import { io, Socket } from 'socket.io-client';
 import { removeOverlays, showTournamentDialog, showMatchInfo } from './game/uiHelpers'
 import { GameState, TournamentResult } from './game/types';
+import { TournamentMode } from './gameModes/tournamentMode';
 
 // Game State Variables
-let gameEnded = false;
-let matchStarted = false;
+let gameState: {
+	currentMatch: [string | { alias: string }, string | { alias: string }] | null;
+	inTournament: boolean;
+	matchStarted: boolean;
+	gameEnded: boolean;
+	countDownActive: boolean;
+	movePlayersFrame: number | null;
+	tournamentResults: TournamentResult[];
+	assignedPlayerId: 'player1' | 'player2' | null;
+} = {
+	currentMatch: null,
+	inTournament: false,
+	matchStarted: false,
+	gameEnded: false,
+	countDownActive: false,
+	movePlayersFrame: null,
+	tournamentResults: [],
+	assignedPlayerId: null,
+};
+
+function setGameState(updates: Partial<typeof gameState>) {
+	Object.assign(gameState, updates);
+}
+
+let tournamentModeInstance: TournamentMode | null = null;
 let pressedKeys = new Set<string>();
-let inTournament = false;
 let inLocalTournament = false;
-let currentMatch: [string | { alias: string }, string | { alias: string }] | null = null;
-let movePlayersFrame: number | null = null;
 
 // Both Tournament
-let countDownActive = false;
-let tournamentResults: TournamentResult[] = [];
+
+
 
 // Constants
 const SERVER_WIDTH = 900;
@@ -83,7 +104,7 @@ function promptLocalTournamentSetup() {
 		}
 	};
 	
-	// Start tournament
+	// Start Local Tournament
 	startTournamentBtn.onclick = () => {
 		const inputs = playerInputsDiv.querySelectorAll('.player-name-input') as NodeListOf<HTMLInputElement>;
 		const playerNames: string[] = [];
@@ -138,17 +159,19 @@ function setupLocalTournamentHandlers() {
 		document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
 		removeOverlays();
 		
-		gameEnded = false;
-		matchStarted = true;
-
-		currentMatch = [matchInfo.player1, matchInfo.player2];
+		setGameState ({
+			gameEnded: false,
+			matchStarted: true,
+			currentMatch: [matchInfo.player1, matchInfo.player2]
+		});
+		
 		
 		// Show match info
 		const { player1, player2 } = matchInfo;
 		showMatchInfo(player1.name, player2.name, 0, 0);
 		
 		// Start the game loop
-		if (movePlayersFrame === null) movePlayers();
+		if (gameState.movePlayersFrame === null) movePlayers();
 		
 		// Make sure bracket is visible during match
 		const bracketDiv = document.getElementById('local-tournament-bracket');
@@ -362,11 +385,15 @@ function showLocalTournamentResults(winner: string, allMatches: string[]) {
 	newTournamentBtn.onclick = () => {
 		dialog.remove();
 		
-		//Clean up local state
 		inLocalTournament = true;
-		currentMatch = null;
-		gameEnded = false;
-		matchStarted = false;
+		//Clean up local state
+		setGameState({
+			
+			currentMatch: null,
+			gameEnded: false,
+			matchStarted: false,
+		})
+		
 
 		// Remove existing bracket
 		const bracketDiv = document.getElementById('local-tournament-bracket');
@@ -378,11 +405,15 @@ function showLocalTournamentResults(winner: string, allMatches: string[]) {
 	dashboardBtn.onclick = () => {
 		dialog.remove();
 
-		// Clean up local state
 		inLocalTournament = false;
-		currentMatch = null;
-		gameEnded = false;
-		matchStarted = false;
+		// Clean up local state
+		setGameState({
+			
+			currentMatch: null,
+			gameEnded: false,
+			matchStarted: false
+		});
+		
 
 		// Remove existing bracket
 		const bracketDiv = document.getElementById('local-tournament-bracket');
@@ -405,13 +436,16 @@ function showLocalTournamentResults(winner: string, allMatches: string[]) {
 function showGameOverScreen(winner: string | { alias: string}) {
 	if (!canvas?.parentElement) return;
 
-	gameEnded = true;
-	matchStarted = false;
+	setGameState({
+		gameEnded: true,
+		matchStarted: false
+	});
+	
 
 	// Reset movePlayers() to null, when a match ends
-	if (movePlayersFrame !== null) {
-		cancelAnimationFrame(movePlayersFrame);
-		movePlayersFrame = null;
+	if (gameState.movePlayersFrame !== null) {
+		cancelAnimationFrame(gameState.movePlayersFrame);
+		gameState.movePlayersFrame = null;
 	}
 
 	// Add this to clear match info
@@ -434,7 +468,7 @@ function showGameOverScreen(winner: string | { alias: string}) {
 	const buttons = document.createElement('div');
 	buttons.className = 'game-buttons';
 
-	if (!inTournament && !inLocalTournament) {
+	if (!gameState.inTournament && !inLocalTournament) {
 		const startBtn = document.createElement('button');
 		startBtn.textContent = "Start Tournament";
 		startBtn.onclick = () => promptAliasRegistration();
@@ -445,12 +479,15 @@ function showGameOverScreen(winner: string | { alias: string}) {
 		restartBtn.onclick = () => {
 			if (socket) {
 				socket.emit('restart_game');
-				gameEnded = false;
-				matchStarted = true;
+				setGameState({
+					gameEnded: false,
+					matchStarted: true
+				});
+				
 				pressedKeys.clear();
-				if (movePlayersFrame !== null) {
-					cancelAnimationFrame(movePlayersFrame);
-					movePlayersFrame = null;
+				if (gameState.movePlayersFrame !== null) {
+					cancelAnimationFrame(gameState.movePlayersFrame);
+					gameState.movePlayersFrame = null;
 				}
 				movePlayers();
 				removeOverlays();
@@ -478,7 +515,7 @@ function showGameOverScreen(winner: string | { alias: string}) {
 
 		overlay.appendChild(message);
 		overlay.appendChild(buttons);
-	} else if (inTournament) {
+	} else if (gameState.inTournament) {
 		// Only show Back to Dashboard in remote tournament mode
 		const dashboardBtn = document.createElement('button');
 		dashboardBtn.textContent = 'Back to Dashboard';
@@ -505,7 +542,7 @@ function showGameOverScreen(winner: string | { alias: string}) {
 
 // Game Rendering Functions
 function drawGame(state: GameState) {
-	if (!ctx || !canvas || gameEnded) return;
+	if (!ctx || !canvas || gameState.gameEnded) return;
 
 	const scaleX = canvas.width / SERVER_WIDTH;
 	const scaleY = canvas.height / SERVER_HEIGHT;
@@ -600,17 +637,17 @@ function handleResize(container: HTMLElement) {
 // Game Control Functions
 export function movePlayers() {
 	console.log('movePlayers running', Array.from(pressedKeys));
-	if (!socket || gameEnded || (inTournament && !matchStarted)) return;
+	if (!socket || gameState.gameEnded || (gameState.inTournament && !gameState.matchStarted)) return;
 
 	//For tournament mode, check if match has started
-	if (inTournament && !matchStarted) return;
+	if (gameState.inTournament && !gameState.matchStarted) return;
 
-	if (inTournament) {
-		if (assignedPlayerId === 'player1') {
+	if (gameState.inTournament) {
+		if (gameState.assignedPlayerId === 'player1') {
 			// console.log('1assignedPlayerId', assignedPlayerId);
 			if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
 			if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
-		} else if (assignedPlayerId === 'player2') {
+		} else if (gameState.assignedPlayerId === 'player2') {
 			// console.log('2assignedPlayerId', assignedPlayerId);
 			if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
 			if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
@@ -628,11 +665,11 @@ export function movePlayers() {
 		if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
 		if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
 	}
-			movePlayersFrame = requestAnimationFrame(movePlayers);
+			setGameState( {movePlayersFrame: requestAnimationFrame(movePlayers)});
 		}
 
 function handleKeyDown(e: KeyboardEvent) {
-	if (gameEnded) return;
+	if (gameState.gameEnded) return;
 	pressedKeys.add(e.key.toLowerCase());
 	console.log('keydown:', e.key.toLowerCase());
 }
@@ -644,9 +681,9 @@ function handleKeyUp(e: KeyboardEvent) {
 
 // Cleanup Functions
 function cleanupGame() {
-	if (movePlayersFrame !== null) {
-	cancelAnimationFrame(movePlayersFrame);
-	movePlayersFrame = null;
+	if (gameState.movePlayersFrame !== null) {
+	cancelAnimationFrame(gameState.movePlayersFrame);
+	setGameState({ movePlayersFrame: null });
 	}
 
 	if (socket) {
@@ -677,7 +714,7 @@ function onResize() {
 }
 
 function	promptAliasRegistration() {
-		if (socket) {
+		if (!socket) {
 			console.error('Socket not initialized');
 			return;
 		}
@@ -700,7 +737,7 @@ export function renderGame(containerId: string = 'app') {
 	// Cleanup previous game if exists
 	cleanupGame();
 	container.innerHTML = '';
-	gameEnded = false;
+	gameState.gameEnded = false;
 
 	// Loading screen
 	const loading = document.createElement('div');
@@ -732,7 +769,7 @@ export function renderGame(containerId: string = 'app') {
 			// Prompt for alias if in tournament mode and not registered
 			if (
 				socket &&
-				!tournamentHandler.aliasRegistered &&
+				!tournamentModeInstance?.aliasRegistered &&
 				window.location.search.includes('tournament=true')
 			) {
 				promptAliasRegistration();
@@ -742,12 +779,12 @@ export function renderGame(containerId: string = 'app') {
 	window.addEventListener('beforeunload', cleanupGame);
 
 	window.addEventListener('beforeunload', () => {
-		if (aliasRegistered && socket && socket.connected) {
+		if (tournamentModeInstance?.aliasRegistered && socket && socket.connected) {
 			socket.emit('leave_tournament');
 		}
 	});
 	document.addEventListener('visibilitychange', () => {
-		if (document.visibilityState ==='hidden' && aliasRegistered && socket && socket.connected) {
+		if (document.visibilityState ==='hidden' && tournamentModeInstance?.aliasRegistered && socket && socket.connected) {
 			socket.emit('player_inactive');
 		}
 	});
@@ -763,7 +800,7 @@ export function renderGame(containerId: string = 'app') {
 
 	// Detect tournament mode from URL
 	const urlParams = new URLSearchParams(window.location.search);
-	const tournamentMode = urlParams.get('tournament') === 'true';
+	const isTournamentMode = urlParams.get('tournament') === 'true';
 	const localTournamentMode = urlParams.get('tournament') === 'local';
 
 	if (urlParams.get('tournament') === 'true') {
@@ -771,8 +808,9 @@ export function renderGame(containerId: string = 'app') {
 		document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
 
 		// Reset tournament state
-		aliasRegistered = false;
-		inTournament = false;
+		if (tournamentModeInstance)
+			tournamentModeInstance.aliasRegistered = false;
+		gameState.inTournament = false;
 
 		// DON'T call promptAliasRegistration() here - let the connect handler do it
 	}
@@ -785,28 +823,35 @@ export function renderGame(containerId: string = 'app') {
 		// secure: true,
 		query: {
 			token: localStorage.getItem('jwtToken'),
-			local: (!tournamentMode && !aiMode && !localTournamentMode).toString(), // "true" for local, "false" for tournament or AI
-			mode: aiMode ? 'ai' : (tournamentMode ? 'tournament' : (localTournamentMode ? 'local_tournament' : 'local'))
+			local: (!isTournamentMode && !aiMode && !localTournamentMode).toString(), // "true" for local, "false" for tournament or AI
+			mode: aiMode ? 'ai' : (isTournamentMode ? 'tournament' : (localTournamentMode ? 'local_tournament' : 'local'))
 		}
 	});
 
+	tournamentModeInstance = new TournamentMode({
+		socket,
+		gameState,
+		setGameState,
+		promptAliasRegistration,
+	});
+
 	// Setup tournament handlers
-	setupTournamentHandlers();
+
 	setupLocalTournamentHandlers();
 
 	// Socket event handlers
 	socket.on('connect', () => {
 		console.log('✅ Connected:', socket!.id);
 
-		gameEnded = true;
-		matchStarted = false;
+		gameState.gameEnded = true;
+		gameState.matchStarted = false;
 		inLocalTournament = false;
-		currentMatch = null;
+		gameState.currentMatch = null;
 
 		// Cancel any running game loop
-		if (movePlayersFrame !== null) {
-			cancelAnimationFrame(movePlayersFrame);
-			movePlayersFrame = null;
+		if (gameState.movePlayersFrame !== null) {
+			cancelAnimationFrame(gameState.movePlayersFrame);
+			setGameState({movePlayersFrame: null});
 		}
 
 		// Clear any existing overlays and dialogs
@@ -828,11 +873,11 @@ export function renderGame(containerId: string = 'app') {
 		const wasInTournamentReconnect = sessionStorage.getItem('tournament_reconnect') === 'true';
 		const wasAliasRegistered = sessionStorage.getItem('tournament_alias_registered') === 'true';
 		
-		if (!tournamentMode && !localTournamentMode) {
+		if (!isTournamentMode && !localTournamentMode) {
 			socket!.emit('restart_game');
-			gameEnded = false;
-			matchStarted = true;
-			if (movePlayersFrame === null) movePlayers();
+			gameState.gameEnded = false;
+			gameState.matchStarted = true;
+			if (gameState.movePlayersFrame === null) movePlayers();
 		} else if (localTournamentMode) {
 			// Local Tournament mode
 			inLocalTournament = true;
@@ -842,10 +887,11 @@ export function renderGame(containerId: string = 'app') {
 			if (wasInTournamentReconnect) {
 				// We were previously in a tournament before server restart
 				console.log('Detected tournament reconnection after server restart');
-				aliasRegistered = wasAliasRegistered;
+				if (tournamentModeInstance)
+					tournamentModeInstance.aliasRegistered = wasAliasRegistered;
 			}
 			
-			if (!aliasRegistered) {
+			if (!tournamentModeInstance?.aliasRegistered) {
 				promptAliasRegistration();
 			}
 		}
@@ -860,8 +906,8 @@ export function renderGame(containerId: string = 'app') {
 	});
 
 	socket.on('assign_controls', (playerId) => {
-		assignedPlayerId = playerId;
-		if (movePlayersFrame === null) movePlayers();
+		setGameState({ assignedPlayerId: playerId });
+		if (gameState.movePlayersFrame === null) movePlayers();
 	});
 
 	socket.on('disconnect', (reason) => {
@@ -905,9 +951,9 @@ export function renderGame(containerId: string = 'app') {
 
 			document.getElementById('manual-reconnect-btn')?.addEventListener('click', () => {
 				// Store tournament state before reload if in tournament
-				if (inTournament) {
+				if (gameState.inTournament) {
 					sessionStorage.setItem('tournament_reconnect', 'true');
-					sessionStorage.setItem('tournament_alias_registered', aliasRegistered.toString());
+					sessionStorage.setItem('tournament_alias_registered', (tournamentModeInstance?.aliasRegistered ?? false).toString());
 				}
 				window.location.reload();
 			});
@@ -930,7 +976,7 @@ export function renderGame(containerId: string = 'app') {
 		}
 		
 		// Restore tournament state if needed
-		if (inTournament && !aliasRegistered) {
+		if (gameState.inTournament && !tournamentModeInstance?.aliasRegistered) {
 			promptAliasRegistration();
 		}
 	});
@@ -947,66 +993,66 @@ export function renderGame(containerId: string = 'app') {
 	socket.on('state_update', (state: GameState & { gameOver: boolean }) => {
 		// console.log("received paddle y positions:", state.paddles);
 		// console.log('Received state_update:', state.paddles.player1.y, state.paddles.player2.y);
-		if (countDownActive) return;
+		if (gameState.countDownActive) return;
 	
 		document.querySelector('.game-loading')?.remove();
 
 		if (canvas?.parentElement) handleResize(canvas.parentElement);
 		requestAnimationFrame(() => drawGame(state));
 
-		if (inTournament && currentMatch) {
-			const [alias1, alias2] = currentMatch;
+		if (gameState.inTournament && gameState.currentMatch) {
+			const [alias1, alias2] = gameState.currentMatch;
 			showMatchInfo(alias1, alias2, state.score.player1, state.score.player2);
 		}
 
-		if (!gameEnded && state.gameOver) {
+		if (!gameState.gameEnded && state.gameOver) {
 			if (state.score.player1 === 0 && state.score.player2 === 0) return;
 
 			let winner: string | { alias: string } = 'Unknown';
 			let winnerId: string = '';
 			
 			if (state.score.player1 >= 5) {
-				winner = inTournament && currentMatch ? currentMatch[0] : 'Player 1';
+				winner = gameState.inTournament && gameState.currentMatch ? gameState.currentMatch[0] : 'Player 1';
 				if (
 					inLocalTournament &&
-					currentMatch &&
-					typeof currentMatch[0] === 'object' &&
-					currentMatch[0] !== null &&
-					'id' in currentMatch[0] &&
-					typeof currentMatch[0].id === 'string'
+					gameState.currentMatch &&
+					typeof gameState.currentMatch[0] === 'object' &&
+					gameState.currentMatch[0] !== null &&
+					'id' in gameState.currentMatch[0] &&
+					typeof gameState.currentMatch[0].id === 'string'
 				) {
-					winnerId = currentMatch[0].id;
+					winnerId = gameState.currentMatch[0].id;
 				} else {
 					winnerId = '';
 				}
 			} else if (state.score.player2 >= 5) {
-				winner = inTournament && currentMatch ? currentMatch[1] : 'Player 2';
+				winner = gameState.inTournament && gameState.currentMatch ? gameState.currentMatch[1] : 'Player 2';
 				if (
 					inLocalTournament &&
-					currentMatch &&
-					typeof currentMatch[1] === 'object' &&
-					currentMatch[1] !== null &&
-					'id' in currentMatch[1] &&
-					typeof currentMatch[1].id === 'string'
+					gameState.currentMatch &&
+					typeof gameState.currentMatch[1] === 'object' &&
+					gameState.currentMatch[1] !== null &&
+					'id' in gameState.currentMatch[1] &&
+					typeof gameState.currentMatch[1].id === 'string'
 				) {
-					winnerId = currentMatch[1].id;
+					winnerId = gameState.currentMatch[1].id;
 				} else {
 					winnerId = '';
 				}
 			}
 
 			// Save tournament results
-			if (inTournament && currentMatch) {
-				tournamentResults.push({
-					player1: typeof currentMatch[0] === 'object' && currentMatch[0] !== null ? currentMatch[0].alias : currentMatch[0],
-					player2: typeof currentMatch[1] === 'object' && currentMatch[1] !== null ? currentMatch[1].alias : currentMatch[1],
+			if (gameState.inTournament && gameState.currentMatch) {
+				gameState.tournamentResults.push({
+					player1: typeof gameState.currentMatch[0] === 'object' && gameState.currentMatch[0] !== null ? gameState.currentMatch[0].alias : gameState.currentMatch[0],
+					player2: typeof gameState.currentMatch[1] === 'object' && gameState.currentMatch[1] !== null ? gameState.currentMatch[1].alias : gameState.currentMatch[1],
 					score1: state.score.player1,
 					score2: state.score.player2
 				});
 			}
 
 			showGameOverScreen(winner);
-			gameEnded = true;
+			gameState.gameEnded = true;
 
 			if (inLocalTournament) {
 					removeOverlays();
@@ -1021,10 +1067,10 @@ export function renderGame(containerId: string = 'app') {
 						winnerId: winnerId,
 						scores: { player1: state.score.player1, player2: state.score.player2 }
 					});
-			} else if (inTournament && currentMatch) { 
+			} else if (gameState.inTournament && gameState.currentMatch) { 
 				if (
-					(state.score.player1 >= 5 && assignedPlayerId === 'player1') ||
-					(state.score.player2 >= 5 && assignedPlayerId === 'player2')
+					(state.score.player1 >= 5 && gameState.assignedPlayerId === 'player1') ||
+					(state.score.player2 >= 5 && gameState.assignedPlayerId === 'player2')
 				) {
 					socket?.emit('match_ended', { winnerSocketId: socket.id });
 				}
