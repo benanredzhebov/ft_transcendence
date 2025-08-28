@@ -58,15 +58,12 @@ export function renderWelcome(): (() => void) | void {
   googleLoginButton.style.padding = '0.5em'; // Smaller padding
   googleLoginButton.style.lineHeight = '1'; // Adjust line height for icon
   googleLoginButton.style.display = 'inline-block'; // Allow width auto
-  const googleSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  googleSvg.setAttribute("viewBox", "0 0 48 48");
-  googleSvg.innerHTML = `<path fill="EA4335" d="M24 9.5c3.4 0 6.3 1.2 8.6 3.2l6.4-6.4C34.9 2.8 29.9 1 24 1 14.9 1 7.1 6.6 3.4 14.4l7.7 6C12.8 13.4 18 9.5 24 9.5z"/><path fill="4285F4" d="M46.5 24.5c0-1.8-.2-3.5-.5-5.2H24v9.9h12.7c-.6 3.2-2.3 5.9-4.9 7.8l7.7 6c4.5-4.1 7-10.1 7-17.5z"/><path fill="FBBC05" d="M11.1 20.4c-.5 1.5-.8 3.1-.8 4.8s.3 3.3.8 4.8l-7.7 6C1.2 31.6 0 28 0 24s1.2-7.6 3.4-10.4l7.7 6z"/><path fill="34A853" d="M24 47c5.9 0 10.9-1.9 14.5-5.2l-7.7-6c-2 1.3-4.5 2.1-7.3 2.1-6 0-11.2-3.9-13-9.2l-7.7 6C7.1 40.4 14.9 47 24 47z"/><path fill="none" d="M0 0h48v48H0z"/>`;
-   
+
   // Google logo
   const googleLogo = document.createElement('img');
-  googleLogo.src = '/google.jpg'; // Assuming google.jpg is in public/images
-  googleLogo.style.height = '30px'; // Set a fixed, smaller height for the logo
-  googleLogo.style.width = '30px';  // Set a fixed, smaller width for the logo
+  googleLogo.src = '/google.jpg';
+  googleLogo.style.height = '30px';
+  googleLogo.style.width = '30px'; 
   googleLogo.style.verticalAlign = 'center';
  
    googleLoginButton.appendChild(googleLogo);
