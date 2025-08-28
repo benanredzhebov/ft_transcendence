@@ -805,7 +805,7 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
 		    <p id="qr-instructions" style="margin-top: 8px;">⚠️ If you click here, your profile will be set with 2FA</p>
 		    <div id="qr-code-container" style="margin-top: 20px;">
 		      <p id="qr-success" style="display: none; color: white;">✅ Done, your Profile has 2FA enabled. Scan the QR code</p>
-		      <img id="qr-code" alt="QR Code" style="display: none; max-width: 200px;" />
+		      <img id="qr-code" alt="QR Code" style="display: none; max-width: 200px; display: block; margin: 0 auto;" />
 		    </div>
 		    <p id="qr-error" style="color: red;"></p>
 		  `;
