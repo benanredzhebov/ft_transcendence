@@ -289,62 +289,6 @@
     color: #ffffff;
 }
 
-/* Profile Modal View styles */
-.profile-view-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.6);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1060; /* High z-index */
-}
-
-.profile-view-modal-content {
-  background-color: transparent;
-  backdrop-filter: blur(10px);
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-  width: 100%;
-  max-width: 400px;
-  color: #e0e0e0;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.profile-view-modal-content h3 {
-  margin-top: 0;
-  font-size: 1.5rem;
-}
-
-.profile-view-modal-content p {
-  font-size: 1.1rem;
-  margin: 0.75rem 0;
-}
-
-.profile-view-modal-close-button {
-  margin-top: 1.5rem;
-  padding: 10px 20px;
-  background-color: #7289da;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: background-color 0.2s;
-}
-
-.profile-view-modal-close-button:hover {
-    background-color: #5f73bc;
-}
-
-
 /* --- NEW: Styles for the profile page layout --- */
 .profile-lower-container {
   display: flex;
@@ -613,83 +557,6 @@
   color: #d1d5db;
 }
 
-/* --- Profile View Modal Styles --- */
-.profile-view-modal-actions {
-    display: flex;
-    gap: 1rem;
-    justify-content: center;
-    margin-top: 1.5rem;
-    padding-top: 1rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.profile-view-modal-action-button {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 0.9rem;
-    font-weight: 600;
-    transition: background-color 0.2s;
-    background-color: #0e7490; /* Cyan color */
-    color: white;
-}
-
-.profile-view-modal-action-button:hover {
-    background-color: #0891b2; /* Lighter cyan */
-}
-
-.profile-view-modal-action-button.delete {
-    background-color: #e11d48; /* Red for delete */
-}
-
-.profile-view-modal-action-button.delete:hover {
-    background-color: #be123c; /* Darker red on hover */
-}
-
-.profile-view-modal-action-button:disabled {
-    background-color: #4b5563;
-    opacity: 0.7;
-    cursor: not-allowed;
-}
-
-/* --- NEW: Match History in Modal --- */
-.match-history-container-modal {
-  background-color: rgba(0, 0, 0, 0.2);
-  border-radius: 6px;
-  padding: 0.75rem 1rem;
-  margin-top: 0.5rem;
-  max-height: 180px;
-  overflow-y: auto;
-}
-
-.match-history-list-modal {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.match-history-list-modal li {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.6rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-  font-size: 0.9rem;
-}
-
-.match-history-list-modal li:last-child {
-  border-bottom: none;
-}
-
-.match-history-list-modal .win {
-  color: #4ade80; /* Green */
-}
-
-.match-history-list-modal .loss {
-  color: #f87171; /* Red */
-}
-/* --- END NEW --- */
 
 /* --- NEW: Chat Tournament Invite Styles --- */
 .chat-message.system-invite {
@@ -733,15 +600,6 @@
 }
 /* --- END: Chat Tournament Invite Styles --- */
 
-.profile-view-modal-avatar {
-    width: 100px;
-    height: 100px;
-    border-radius: 50%;
-    object-fit: cover;
-    margin-bottom: 1rem;
-    border: 3px solid rgba(255, 255, 255, 0.15);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-}
 
 /* --- Responsive Design for Dashboard --- */
 @media (max-width: 768px) {
@@ -799,27 +657,7 @@
 }
 
 
-/* DELETE??? */
-.profile-view-modal-close-button {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 0.9rem;
-    font-weight: 500;
-    transition: background-color 0.2s;
-    background-color: #747f8d; /* Gray */
-    color: white;
-}
-
-/* DELETE??? */
-.profile-view-modal-close-button:hover {
-    background-color: #616e78; /* Darker gray */
-}
-
-
 /* --- showTokenExpired --- */
-
 .session-expired-card {
   max-width: 400px;
   margin: 60px auto;
