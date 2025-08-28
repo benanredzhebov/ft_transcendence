@@ -42,9 +42,16 @@ const developerRoutes = (app) => {
 
     // Save the secret to the database
     await DB('credentialsTable').where({ id: userId }).update({ two_factor_secret: secret.base32 });
+	await DB('credentialsTable').where({ id: userId }).update({ two_factor_enabled: true });
 
     // Generate a QR code for the user to scan
     const qrCodeDataURL = await QRCode.toDataURL(secret.otpauth_url);
+
+	// *** DEBUG***
+      const updatedUser = await DB('credentialsTable').where({ id: userId }).first();
+      console.log(`--- 2FA Status SETUP Update for User ID: ${userId} ---`);
+      console.log(`User '${updatedUser.username}' has successfully enabled 2FA: ${updatedUser.two_factor_enabled}`);
+      console.log('-----------------------------------------');
 
     reply.send({ success: true, qrCode: qrCodeDataURL });
   });
@@ -74,6 +81,7 @@ const developerRoutes = (app) => {
   
     const user = await DB('credentialsTable').where({ id: userId }).first();
     if (!user || !user.two_factor_secret) {
+	  console.log('2FA verification failed: User not found or 2FA not set up.');
       return reply.status(400).send({ error: '2FA is not set up for this user' });
     }
   
@@ -86,10 +94,15 @@ const developerRoutes = (app) => {
     if (!verified) {
       return reply.status(400).send({ error: 'Invalid 2FA token' });
     }
+
+	// *** DEBUG***
+      const updatedUser = await DB('credentialsTable').where({ id: userId }).first();
+      console.log(`--- 2FA Status VERIFY Update for User ID: ${userId} ---`);
+      console.log(`User '${updatedUser.username}' has successfully enabled 2FA: ${updatedUser.two_factor_enabled}`);
+      console.log('-----------------------------------------');
   
     reply.send({ success: true, message: '2FA verified successfully' });
   });
-  
 
 	app.get('/data', async (req, reply) => {
 		try {
@@ -414,7 +427,11 @@ const credentialsRoutes = (app) =>{
         reply.status(401).send({ error: 'Invalid email or password' });
         return;
       }
-      if (user.two_factor_secret) {
+	  // *** DEBUG ****
+      console.log('--- User Login Data ---');
+      console.log(user);
+      console.log('-----------------------');
+      if (user.two_factor_enabled) { // Check if 2FA is fully enabled
         // Step 1 complete: return short-lived temp token
         const tempToken = jwt.sign(
           { userId: user.id, twoFAPending: true },
@@ -714,12 +731,13 @@ const credentialsRoutes = (app) =>{
           email,
           username,
           password: placeholderPassword,
+          auth_provider: 'google' // Make sure to set the provider
         });
-        user = { id, email, username };
+        user = { id, email, username, two_factor_enabled: false }; // Ensure user object is complete
       }
   
       // Check if the user has 2FA enabled
-      if (user.two_factor_secret) {
+      if (user.two_factor_enabled) {
         // Generate a temporary token for 2FA verification
         const tempToken = jwt.sign(
           { userId: user.id, twoFAPending: true },

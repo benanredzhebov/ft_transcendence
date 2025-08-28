@@ -67,13 +67,7 @@ const HOST = '0.0.0.0'; // Bind to all network interfaces
 // Load SSL certificates
 const keyPath = join(__dirname, 'https_keys/private-key.pem');
 const certPath = join(__dirname, 'https_keys/certificate.pem');
-const keyPath = join(__dirname, 'https_keys/private-key.pem');
-const certPath = join(__dirname, 'https_keys/certificate.pem');
 
-if (!existsSync(keyPath) || !existsSync(certPath)) {
-	console.error(`Error: SSL certificate files not found at ${keyPath} or ${certPath}.`);
-	console.error('Please ensure the certificates exist or adjust the paths in server.js.');
-	process.exit(1);
 if (!existsSync(keyPath) || !existsSync(certPath)) {
 	console.error(`Error: SSL certificate files not found at ${keyPath} or ${certPath}.`);
 	console.error('Please ensure the certificates exist or adjust the paths in server.js.');
@@ -1064,12 +1058,6 @@ app.register(fastifyStatic, {
 	decorateReply: false // To avoid conflict if already decorated for other static serving
 });
 
-// Serve uploaded avatars
-app.register(fastifyStatic, {
-	root: avatarsDir,
-	prefix: '/uploads/avatars/', // URL prefix to access these files
-	decorateReply: false // To avoid conflict if already decorated for other static serving
-});
 
 // Serve frontend static files
 app.register(fastifyStatic, {
@@ -1084,10 +1072,6 @@ developerRoutes(app);
 credentialsRoutes(app);
 
 
-// Fallback for SPA routing
-app.setNotFoundHandler((req, reply) => {
-	reply.sendFile('index.html'); // Serve index.html from the root specified in fastifyStatic
-});
 // Fallback for SPA routing
 app.setNotFoundHandler((req, reply) => {
 	reply.sendFile('index.html'); // Serve index.html from the root specified in fastifyStatic
