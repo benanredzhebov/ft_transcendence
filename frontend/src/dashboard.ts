@@ -44,7 +44,8 @@ export function showLobbyInviteCard(senderAlias: string, senderSocketId?: string
 
   // Join button
   card.querySelector('.dashboard-lobby-join-btn')?.addEventListener('click', () => {
-    window.location.href = '/game?tournament=true';
+    // window.location.href = '/game?tournament=true';
+	navigateTo('/game?tournament=true'); // *** ISSUE starting match ***
   });
 
   // Dismiss button
@@ -588,7 +589,7 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
                       const indicatorHtml = isOnline ? '<span class="online-indicator"></span>' : '';
                       return `
                         <li data-user-id="${friend.id}">
-                          <img src="${friend.avatar_path || '/avatars/default.png'}"/>
+                          <img src="${friend.avatar_path || '/avatars/default.png'}" onerror="this.onerror=null;this.src='/avatars/default.png';"/>
                           ${indicatorHtml}
                           <span>${friend.username}</span>
                         </li>
@@ -628,7 +629,8 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
                    alt="User Avatar" 
                    class="profile-avatar-img" 
                    style="cursor: pointer;" 
-                   title="Click to change avatar">
+                   title="Click to change avatar"
+				   onerror="this.onerror=null;this.src='/avatars/default.png';">
             </div>
             <p class="dashboard-content-paragraph"><strong>Email:</strong> ${userProfile.email || 'N/A'}</p>
             <p id="avatarUploadStatus" class="dashboard-content-paragraph" style="min-height: 1.2em; margin-top: 0.5rem;"></p>
