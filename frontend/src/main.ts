@@ -7,6 +7,8 @@ import { renderDashboard } from './dashboard';
 import { renderGame } from './game';
 import { renderDelete } from './delete';
 import { renderGoogle } from './google';
+import { renderTwoFA } from './twofa';
+
 
 // --- DOM ---
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -60,6 +62,8 @@ const routes: { [key: string]: () => (() => void) | void } = { // render functio
   '/dashboard': renderDashboard,
   '/delete': renderDelete, // Add the delete route
   '/username-google': renderGoogle,
+  '/2fa': renderTwoFA,
+
 
 };
 

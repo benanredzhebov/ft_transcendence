@@ -186,17 +186,21 @@ function addLoginFormListeners() {
 
       const data = await response.json();
       if (response.ok && data.success !== false) {
-			console.log('Login successful:', data);
+			// console.log('Login successful:', data);
 
-			// Store token if received (example)
-			if (data.token) {
-			  sessionStorage.setItem('authToken', data.token);
-        console.log('Token sent after Login!', data);
-			} else {
-			  console.warn('No token received from login endpoint.');
-			}
-			navigateTo('/dashboard');
-		} else {
+      if (data.requires2FA) {
+        // Store temporary token and redirect to 2FA page
+        sessionStorage.setItem('tempToken', data.tempToken);
+        navigateTo('/2fa');
+      } else {
+        // Normal login flow
+        if (data.token) {
+          sessionStorage.setItem('authToken', data.token);
+        }
+        navigateTo('/dashboard');
+		  }
+    }
+       else {
 			throw new Error(data.error || 'Login failed. Please try again.');
 		}
       } catch (error: any) {

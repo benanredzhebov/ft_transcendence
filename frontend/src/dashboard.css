@@ -137,6 +137,19 @@
     align-items: center;
     justify-content: center; /* Center the content */
     gap: 1rem;
+    margin-bottom: 0; /* Adjusted */
+    color: #ffffff;
+    flex-grow: 1;
+    text-align: center;
+    /* Adjust to keep it from overlapping the button */
+    margin-left: 40px; /* Corresponds to button width + gap */
+}
+
+.dashboard-heading-container {
+    display: flex;
+    align-items: center;
+    justify-content: center; /* Center the content */
+    gap: 1rem;
     margin-bottom: 1.5rem;
     position: relative; /* Needed for absolute positioning of button if we go that route */
 }

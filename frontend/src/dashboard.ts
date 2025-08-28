@@ -212,8 +212,17 @@ export function renderDashboard() {
 
   
 
+   // ----test 2FA QR----
+
+   const twoFaButton = document.createElement('button');
+   twoFaButton.className = "dashboard-nav-button";
+   twoFaButton.textContent = "2FA Setup";
+   twoFaButton.dataset.view = "twofa";
+   
+   nav.appendChild(twoFaButton); // Add the 2FA button to the navigation
+
   // Sidebar navigation
-  const navButtons = [profileButton, gameButton, chatButton];
+  const navButtons = [profileButton, gameButton, chatButton,twoFaButton];
   navButtons.forEach(button => {
     button.addEventListener('click', () => {
       const view = button.dataset.view;
@@ -232,6 +241,7 @@ export function renderDashboard() {
     }
     navigateTo('/');
   });
+
 
   // --- Initial View ---
   setActiveView('profile', navButtons, contentArea); // Set initial view to profile
@@ -648,6 +658,7 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
             </div>
             ${matchHistoryHtml}
           </div>
+          ${matchHistoryHtml}
         `;
 
         // Add click listeners to new friends list
@@ -787,6 +798,58 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
         `;
       }
       break;
+      // -----------2FA case----------
+      case 'twofa':
+        contentArea.innerHTML = `
+          <h3 class="dashboard-content-heading">Two-Factor Authentication Setup</h3>
+          <button id="generate-qr-btn" class="dashboard-action-button">Generate QR Code</button>
+          <div id="qr-code-container" style="margin-top: 20px;">
+            <p id="qr-instructions" style="display: none;">Scan this QR code with your Google Authenticator app:</p>
+            <img id="qr-code" alt="QR Code" style="display: none; max-width: 200px;" />
+          </div>
+          <p id="qr-error" style="color: red;"></p>
+        `;
+      
+        const generateQrButton = contentArea.querySelector<HTMLButtonElement>('#generate-qr-btn');
+        const qrCodeImage = contentArea.querySelector<HTMLImageElement>('#qr-code');
+        const qrInstructions = contentArea.querySelector<HTMLParagraphElement>('#qr-instructions');
+        const qrError = contentArea.querySelector<HTMLParagraphElement>('#qr-error');
+      
+        if (generateQrButton && qrCodeImage && qrInstructions && qrError) {
+          generateQrButton.addEventListener('click', async () => {
+            qrError.textContent = ''; // Clear any previous errors
+            qrCodeImage.style.display = 'none';
+            qrInstructions.style.display = 'none';
+      
+            try {
+              const token = sessionStorage.getItem('authToken'); // Replace with your token storage logic
+              if (!token) {
+                throw new Error('User is not authenticated. Please log in.');
+              }
+      
+              const response = await fetch('/api/2fa/setup', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`
+                },
+              });
+      
+              if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to generate QR code.');
+              }
+      
+              const data = await response.json();
+              qrCodeImage.src = data.qrCode; // Set the QR code image source
+              qrCodeImage.style.display = 'block';
+              qrInstructions.style.display = 'block';
+            } catch (error) {
+              qrError.textContent = (error as Error).message;
+              console.error(error);
+            }
+          });
+        }
+        break;
   }
 }
 }
