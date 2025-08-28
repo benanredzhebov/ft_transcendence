@@ -40,7 +40,7 @@
   display: block;
   margin: 10px auto 0;
   padding: 10px 20px;
-  background-color: #7289da; /* Discord-like button color */
+  background-color: #7289da;
   color: white;
   border: none;
   border-radius: 5px;
@@ -50,4 +50,16 @@
 
 .avatar-modal-close-button:hover {
   background-color: #5f73bc;
+}
+
+/* --- Responsive Design for Avatar Modal --- */
+@media (min-width: 768px) {
+  .avatar-modal-content {
+    max-width: 600px; /* Increase max-width on larger screens */
+    padding: 30px;
+  }
+
+  .avatar-modal-grid {
+    gap: 20px; /* Increase gap between avatars */
+  }
 }

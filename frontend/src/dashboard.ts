@@ -1,10 +1,12 @@
 import './dashboard.css';
 import { navigateTo } from './main';
 import { openAvatarSelectionModal } from './avatarModal';
-import { profileEdit } from './profileEdit'; // Import the new modal function
+import { profileEdit } from './profileEdit';
 import { io, Socket } from 'socket.io-client';
 import { renderChat } from './chat';
-let chatSocket: Socket | null = null; // module-level variable for the chat socket
+
+
+let chatSocket: Socket | null = null;
 let onlineUserCache: OnlineUser[] = []; // Cache for online users
 
 // Define a type for online users for better type safety
@@ -70,19 +72,14 @@ export function renderDashboard() {
   if (!appElement) {
     throw new Error('App root element (#app) not found!');
   }
-
-  // Clear previous content
   appElement.innerHTML = '';
 
-  // Global Container
   const globalContainer = document.createElement('div');
   globalContainer.className = "dashboard-global-container";
 
-  // Card Container
   const cardContainer = document.createElement('div');
   cardContainer.className = "dashboard-card-container";
 
-  // Left Sidebar
   const sidebar = document.createElement('div');
   sidebar.className = "dashboard-sidebar";
 
@@ -93,7 +90,6 @@ export function renderDashboard() {
   const nav = document.createElement('nav');
   nav.className = "dashboard-nav";
 
-  // Navigation Buttons
   const profileButton = document.createElement('button');
   profileButton.className = "dashboard-nav-button";
   profileButton.textContent = "Profile";
@@ -109,17 +105,14 @@ export function renderDashboard() {
   chatButton.textContent = "Chat";
   chatButton.dataset.view = "chat";
 
-  // Logout Button
   const logoutButton = document.createElement('button');
   logoutButton.className = "dashboard-logout-button";
   logoutButton.textContent = "Logout";
 
-  // Right Content Area
   const contentArea = document.createElement('div');
   contentArea.className = "dashboard-content-area";
   contentArea.id = "dashboard-content"; // ID to easily update content
 
-  // --- Assemble Sidebar ---
   nav.appendChild(profileButton);
   nav.appendChild(gameButton);
   nav.appendChild(chatButton);
@@ -128,14 +121,11 @@ export function renderDashboard() {
   sidebar.appendChild(nav);
   sidebar.appendChild(logoutButton);
 
-  // --- Assemble Card ---
   cardContainer.appendChild(sidebar);
   cardContainer.appendChild(contentArea);
 
-  // --- Assemble Global Container ---
   globalContainer.appendChild(cardContainer);
 
-  // --- Append to App ---
   appElement.appendChild(globalContainer);
 
   // --- SOCKET Chat Connection ---
@@ -210,10 +200,7 @@ export function renderDashboard() {
     });
   }
 
-  
-
    // ----test 2FA QR----
-
    const twoFaButton = document.createElement('button');
    twoFaButton.className = "dashboard-nav-button";
    twoFaButton.textContent = "2FA Setup";
@@ -627,9 +614,7 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
           <div class="dashboard-heading-container">
             <h3 class="dashboard-content-heading">${userProfile.username || 'N/A'}</h3>
             <button id="edit-profile-btn" class="edit-profile-button" title="Edit Profile">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.532 1.532 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.532 1.532 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
-              </svg>
+              <img src="/settings.svg" alt="Settings" style="width:24px;height:24px;" class="settings-rotate" />
             </button>
           </div>
           <div class="profile-details">
@@ -801,11 +786,11 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
       case 'twofa':
         contentArea.innerHTML = `
 		    <h3 class="dashboard-content-heading">Two-Factor Authentication Setup</h3>
-		    <button id="generate-qr-btn" class="dashboard-action-button" style="margin-top: 8px;">Generate QR Code</button>
+		    <button id="generate-qr-btn" class="dashboard-action-button" style="margin-top: 20px;">Generate QR Code</button>
 		    <p id="qr-instructions" style="margin-top: 8px;">⚠️ If you click here, your profile will be set with 2FA</p>
 		    <div id="qr-code-container" style="margin-top: 20px;">
 		      <p id="qr-success" style="display: none; color: white;">✅ Done, your Profile has 2FA enabled. Scan the QR code</p>
-		      <img id="qr-code" alt="QR Code" style="display: none; max-width: 200px; display: block; margin: 0 auto;" />
+		      <img id="qr-code" style="display: none; max-width: 200px; display: block; margin: 0 auto;" />
 		    </div>
 		    <p id="qr-error" style="color: red;"></p>
 		  `;

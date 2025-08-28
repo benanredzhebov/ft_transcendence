@@ -248,17 +248,6 @@ const credentialsRoutes = (app) =>{
           updates.username = username;
         }
       } else {
-        // ***** NO CHECKING CURRENT PASSWORD ****
-        // // Logic for standard (local) users
-        // if (!currentPassword) {
-        //   return reply.status(403).send({ error: 'Current password is required to make changes.' });
-        // }
-
-        // // Verify current password
-        // if (user.password !== hashPassword(currentPassword)) {
-        //   return reply.status(403).send({ error: 'Incorrect current password.' });
-        // }
-
         // Check for username update
         if (username && username !== user.username) {
           const existingUser = await DB('credentialsTable').where({ username }).first();

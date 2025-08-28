@@ -13,13 +13,14 @@
 }
 
 .profile-edit-modal-content {
-  background-color: #2c2f33;
+  background-color: transparent;
+  backdrop-filter: blur(10px);
   padding: 2rem;
   border-radius: 8px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-  width: 100%;
-  max-width: 450px;
-  color: #e0e0e0;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+  width: auto;
+  max-width: 500px;
+  color: #e0e0e0; /* Light text for dark background */
 }
 
 .profile-edit-modal-content h3 {
@@ -103,4 +104,12 @@
     font-size: 0.8rem;
     color: #b0b0b0;
     margin-top: 0.25rem;
+}
+
+/* --- Responsive Design for Profile Edit Modal --- */
+@media (min-width: 768px) {
+  .profile-edit-modal-content {
+    width: 500px; /* Set a fixed width for larger screens */
+    max-width: 90vw;
+  }
 }

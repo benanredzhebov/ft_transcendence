@@ -28,7 +28,6 @@
 
 /* Media query for responsiveness (optional, current setup is mostly fluid) */
 @media (min-width: 768px) {
-    /* Styles for medium screens and up if needed, current flex layout is responsive */
 }
 
 .dashboard-sidebar {

@@ -158,11 +158,6 @@ export function renderChat(socket: Socket): () => void {
     }
   });
 
-
-  // socket.on('game_invite', ({ username }) => {
-  //   appendMessage('System', `${username} invited you to a game.`);
-  // });
-
   socket.on('user_blocked', ({ targetUserId, message }) => {
     blockedUserIds.add(targetUserId);
     if (selectedUser && selectedUser.userId === targetUserId) {
