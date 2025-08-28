@@ -6,6 +6,8 @@ import { exchangeCodeForToken, fetchUserInfo } from '../token_google/exchangeTok
 import jwt from 'jsonwebtoken';
 import { promises as fs } from 'node:fs'; // For async file operations
 import crypto from 'node:crypto'; // For generating unique filenames
+import speakeasy from 'speakeasy';
+import QRCode from 'qrcode';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,7 +15,81 @@ const __dirname = path.dirname(__filename);
 // IMPORTANT: Store it in an env.
 const JWT_SECRET = process.env.JWT_SECRET || 'hbj2io4@@#!v7946h3&^*2cn9!@09*@B627B^*N39&^847,1';
 
+
 const developerRoutes = (app) => {
+  //2FA --test
+  app.post('/api/2fa/setup', async (req, reply) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.status(401).send({ error: 'Unauthorized: No token provided' });
+    }
+
+    const token = authHeader.substring(7);
+    let decodedToken;
+    try {
+      decodedToken = jwt.verify(token, JWT_SECRET);
+    } catch (err) {
+      return reply.status(401).send({ error: 'Unauthorized: Invalid token' });
+    }
+
+    const userId = decodedToken.userId;
+    if (!userId) {
+      return reply.status(401).send({ error: 'Unauthorized: Invalid token payload' });
+    }
+
+    // Generate a 2FA secret
+    const secret = speakeasy.generateSecret({ name: 'YourAppName' });
+
+    // Save the secret to the database
+    await DB('credentialsTable').where({ id: userId }).update({ two_factor_secret: secret.base32 });
+
+    // Generate a QR code for the user to scan
+    const qrCodeDataURL = await QRCode.toDataURL(secret.otpauth_url);
+
+    reply.send({ success: true, qrCode: qrCodeDataURL });
+  });
+
+  // -------------verify-------------
+
+  app.post('/api/2fa/verify', async (req, reply) => {
+    const { token } = req.body;
+    const authHeader = req.headers.authorization;
+  
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.status(401).send({ error: 'Unauthorized: No token provided' });
+    }
+  
+    const jwtToken = authHeader.substring(7);
+    let decodedToken;
+    try {
+      decodedToken = jwt.verify(jwtToken, JWT_SECRET);
+    } catch (err) {
+      return reply.status(401).send({ error: 'Unauthorized: Invalid token' });
+    }
+  
+    const userId = decodedToken.userId;
+    if (!userId) {
+      return reply.status(401).send({ error: 'Unauthorized: Invalid token payload' });
+    }
+  
+    const user = await DB('credentialsTable').where({ id: userId }).first();
+    if (!user || !user.two_factor_secret) {
+      return reply.status(400).send({ error: '2FA is not set up for this user' });
+    }
+  
+    const verified = speakeasy.totp.verify({
+      secret: user.two_factor_secret,
+      encoding: 'base32',
+      token,
+    });
+  
+    if (!verified) {
+      return reply.status(400).send({ error: 'Invalid 2FA token' });
+    }
+  
+    reply.send({ success: true, message: '2FA verified successfully' });
+  });
+  
 
 	app.get('/data', async (req, reply) => {
 		try {
@@ -328,15 +404,29 @@ const credentialsRoutes = (app) =>{
   app.post('/login', async (req, reply) => {
     const { email, password: rawPassword } = req.body;
     if (!email || !rawPassword) {
-      reply.status(400).send({ error: 'Email and password are required' });
+      reply.status(401).send({ error: 'Email and password are required' });
       return;
     }
-
+   
     try {
       const user = await DB('credentialsTable').where({ email }).first();
       if (!user || user.password !== hashPassword(rawPassword)) {
         reply.status(401).send({ error: 'Invalid email or password' });
         return;
+      }
+      if (user.two_factor_secret) {
+        // Step 1 complete: return short-lived temp token
+        const tempToken = jwt.sign(
+          { userId: user.id, twoFAPending: true },
+          JWT_SECRET,
+          { expiresIn: '5m' } // short lifespan
+        );
+      
+        return reply.send({
+          success: true,
+          requires2FA: true,
+          tempToken
+        });
       }
       // Generate token
       const tokenPayload = {
@@ -550,14 +640,58 @@ const credentialsRoutes = (app) =>{
     }
   });
 
+  app.post('/login/2fa', async (req, reply) => {
+    const { token: twoFAToken, tempToken } = req.body;
+  
+    if (!tempToken) {
+      return reply.status(400).send({ error: 'Temporary token is required' });
+    }
+  
+    let decoded;
+    try {
+      decoded = jwt.verify(tempToken, JWT_SECRET);
+    } catch (err) {
+      return reply.status(401).send({ error: 'Invalid or expired temporary token' });
+    }
+  
+    if (!decoded.twoFAPending) {
+      return reply.status(400).send({ error: 'Not a valid 2FA pending session' });
+    }
+  
+    const user = await DB('credentialsTable').where({ id: decoded.userId }).first();
+    if (!user) {
+      return reply.status(404).send({ error: 'User not found' });
+    }
+  
+    const verified = speakeasy.totp.verify({
+      secret: user.two_factor_secret,
+      encoding: 'base32',
+      token: twoFAToken,
+      window: 1
+
+    });
+  
+    if (!verified) {
+      return reply.status(400).send({ error: 'Invalid 2FA code' });
+    }
+  
+    // 2FA passed → issue real token
+    const realToken = jwt.sign(
+      { userId: user.id, email: user.email, username: user.username },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+  
+    reply.send({ success: true, token: realToken });
+  });
+
 
   app.get('/username-google', async (req, reply) => {
     const { code } = req.query;
-
     if (!code) {
       return reply.redirect('/login?error=google_auth_missing_code');
     }
-
+  
     try {
       const tokenResponse = await exchangeCodeForToken(code);
       if (!tokenResponse || !tokenResponse.access_token) {
@@ -569,37 +703,44 @@ const credentialsRoutes = (app) =>{
         console.error('Failed to fetch user info from Google or email missing:', userInfo);
         return reply.redirect('/login?error=google_user_info_failed');
       }
-
-      const {email, name} = userInfo;
+  
+      const { email, name } = userInfo;
       let user = await DB('credentialsTable').where({ email }).first();
-
+  
       if (!user) {
-        const username = name || `user_${Date.now()}`; // Use Google name or a fallback
-        // For Google-authenticated users, you might use a placeholder password
-        // or a flag indicating Google auth, as they won't use this password to log in.
+        const username = name || `user_${Date.now()}`;
         const placeholderPassword = hashPassword(`google_auth_${email}_${Date.now()}`);
-        const [id] =  await DB('credentialsTable').insert({
-            email,
-            username,
-            password: placeholderPassword
-            // Consider adding a field like 'auth_provider' and set it to 'google'
+        const [id] = await DB('credentialsTable').insert({
+          email,
+          username,
+          password: placeholderPassword,
         });
-        user = { id, email, username }; // Use the newly created user's details
+        user = { id, email, username };
       }
-
+  
+      // Check if the user has 2FA enabled
+      if (user.two_factor_secret) {
+        // Generate a temporary token for 2FA verification
+        const tempToken = jwt.sign(
+          { userId: user.id, twoFAPending: true },
+          JWT_SECRET,
+          { expiresIn: '5m' } // Short lifespan
+        );
+  
+        return tempToken, reply.redirect(`/2fa?tempToken=${tempToken}`);
+      }
+  
       // Generate JWT token for the user
       const tokenPayload = {
         userId: user.id,
         email: user.email,
-        username: user.username
+        username: user.username,
       };
       const jwtAuthToken = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '1h' });
-
+  
       reply.redirect(`/google-auth-handler?token=${jwtAuthToken}`);
-
     } catch (e) {
       console.error('Error during Google OAuth callback:', e);
-      // Redirect to frontend login with a generic error
       reply.redirect('/login?error=google_auth_failed');
     }
   });
