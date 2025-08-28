@@ -1176,7 +1176,7 @@ function handleResize(container: HTMLElement) {
 
 // Game Control Functions
 function movePlayers() {
-	console.log('movePlayers running', Array.from(pressedKeys));
+	// console.log('movePlayers running', Array.from(pressedKeys));
 	if (!socket || gameEnded || (inTournament && !matchStarted)) return;
 
 	//For tournament mode, check if match has started

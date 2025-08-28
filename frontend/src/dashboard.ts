@@ -658,7 +658,6 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
             </div>
             ${matchHistoryHtml}
           </div>
-          ${matchHistoryHtml}
         `;
 
         // Add click listeners to new friends list
@@ -801,25 +800,29 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
       // -----------2FA case----------
       case 'twofa':
         contentArea.innerHTML = `
-          <h3 class="dashboard-content-heading">Two-Factor Authentication Setup</h3>
-          <button id="generate-qr-btn" class="dashboard-action-button">Generate QR Code</button>
-          <div id="qr-code-container" style="margin-top: 20px;">
-            <p id="qr-instructions" style="display: none;">Scan this QR code with your Google Authenticator app:</p>
-            <img id="qr-code" alt="QR Code" style="display: none; max-width: 200px;" />
-          </div>
-          <p id="qr-error" style="color: red;"></p>
-        `;
+		    <h3 class="dashboard-content-heading">Two-Factor Authentication Setup</h3>
+		    <button id="generate-qr-btn" class="dashboard-action-button" style="margin-top: 8px;">Generate QR Code</button>
+		    <p id="qr-instructions" style="margin-top: 8px;">⚠️ If you click here, your profile will be set with 2FA</p>
+		    <div id="qr-code-container" style="margin-top: 20px;">
+		      <p id="qr-success" style="display: none; color: white;">✅ Done, your Profile has 2FA enabled. Scan the QR code</p>
+		      <img id="qr-code" alt="QR Code" style="display: none; max-width: 200px;" />
+		    </div>
+		    <p id="qr-error" style="color: red;"></p>
+		  `;
       
         const generateQrButton = contentArea.querySelector<HTMLButtonElement>('#generate-qr-btn');
         const qrCodeImage = contentArea.querySelector<HTMLImageElement>('#qr-code');
         const qrInstructions = contentArea.querySelector<HTMLParagraphElement>('#qr-instructions');
         const qrError = contentArea.querySelector<HTMLParagraphElement>('#qr-error');
-      
-        if (generateQrButton && qrCodeImage && qrInstructions && qrError) {
+        const qrSuccess = contentArea.querySelector<HTMLParagraphElement>('#qr-success');
+
+        if (generateQrButton && qrCodeImage && qrInstructions && qrError && qrSuccess) {
           generateQrButton.addEventListener('click', async () => {
             qrError.textContent = ''; // Clear any previous errors
             qrCodeImage.style.display = 'none';
             qrInstructions.style.display = 'none';
+			qrSuccess.style.display = 'none';
+
       
             try {
               const token = sessionStorage.getItem('authToken'); // Replace with your token storage logic
@@ -842,7 +845,7 @@ async function setActiveView(view: string, buttons: HTMLButtonElement[], content
               const data = await response.json();
               qrCodeImage.src = data.qrCode; // Set the QR code image source
               qrCodeImage.style.display = 'block';
-              qrInstructions.style.display = 'block';
+              qrSuccess.style.display = 'block';
             } catch (error) {
               qrError.textContent = (error as Error).message;
               console.error(error);

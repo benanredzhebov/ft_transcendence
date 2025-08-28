@@ -1,4 +1,4 @@
-import { navigateTo } from './main';  // Adjust the path if needed
+import { navigateTo } from './main';
 
 export function renderTwoFA() {
 	const urlParams = new URLSearchParams(window.location.search);
@@ -13,13 +13,34 @@ export function renderTwoFA() {
 	}
   
 	app.innerHTML = `
-	  <div class="twofa-container">
-		<h2>Two-Factor Authentication</h2>
-		<input id="twofa-code" type="text" placeholder="Enter your 2FA code" autocomplete="one-time-code" />
-		<button id="twofa-submit">Verify</button>
-		<div id="twofa-error" class="twofa-error"></div>
-	  </div>
-	`;
+    <div class="min-h-screen flex items-center justify-center bg-gray-900 text-white p-4">
+      <div class="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-sm space-y-6">
+        <h2 class="text-2xl font-bold text-center">Two-Factor Authentication</h2>
+        
+        <div>
+          <label for="twofa-code" class="sr-only">2FA Code</label>
+          <input 
+            id="twofa-code" 
+            type="text" 
+            placeholder="Enter your 6-digit code" 
+            autocomplete="one-time-code" 
+            required 
+            class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center tracking-widest text-lg" 
+            maxlength="6"
+          />
+        </div>
+
+        <button 
+          id="twofa-submit" 
+          class="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-md text-white font-semibold transition duration-200 disabled:bg-gray-500 disabled:cursor-not-allowed"
+        >
+          Verify
+        </button>
+
+        <div id="twofa-error" class="text-red-400 text-center h-5"></div>
+      </div>
+    </div>
+    `;
   
 	const submitButton = document.getElementById('twofa-submit') as HTMLButtonElement;
 	const errorDiv = document.getElementById('twofa-error') as HTMLDivElement;
