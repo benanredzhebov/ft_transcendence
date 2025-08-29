@@ -1027,7 +1027,7 @@ socket.on('player_inactive', () => {
 // Game loop
 setInterval(() => {
 	// Only run the game loop if both players are connected and game is not paused
-	if (!game.paused && game.state.connectedPlayers && game.state.connectedPlayers.size === 2) {
+	if (!game.paused) {
 		game.update(1 / 60);
 		const state = game.getState();
 		io.emit('state_update', game.getState());
@@ -1084,7 +1084,7 @@ const start =  async () => {
 		const address = await app.listen({ port: PORT, host: HOST });
 		console.log("Server running " + address)
 		console.log(`Access to school ${process.env.APP_URL}`)
-		console.log(`*****path of avatars: ${avatarsDir}`)
+		// console.log(`*****path of avatars: ${avatarsDir}`)
 	}
 	catch (e){
 		app.log.error(e);
