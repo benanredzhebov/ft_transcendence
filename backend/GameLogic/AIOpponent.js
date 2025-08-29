@@ -1,5 +1,5 @@
 class AIOpponent {
-    constructor(gameEngine, difficulty = 'medium') {
+    constructor(gameEngine, difficulty = 'easy') {
         this.gameEngine = gameEngine;
         this.difficulty = difficulty;
         this.targetY = this.gameEngine.state.height / 2;

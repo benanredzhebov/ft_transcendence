@@ -42,6 +42,20 @@ Check your disk usage
 ```docker volume prune -f```
 
 
-## TO DO
-1. all .env variables, PORTS, and so...
-2. avatars not in uploads
+## FIXED ISSUES
+setInterval(() => {
+    const isTwoPlayerGame = !game.isTournament && game.state.connectedPlayers.size === 2;
+    const isAiGame = game.gameMode === 'ai' && game.state.connectedPlayers.size === 1;
+
+    // Run the loop for a 2-player game OR an AI game.
+    if (!game.paused && (isTwoPlayerGame || isAiGame)) {
+        game.update();
+        const state = game.getState();
+        io.emit('state_update', state);
+        if (state.gameOver) {
+            console.log('Game over! Final score:', state.score);
+            game.pause();
+            game.resetGame(); // Reset immediately after game over
+        }
+    }
+}, 1000 / 60);
