@@ -17,7 +17,7 @@ class GameEngine {
 	constructor() {
 		this.state = new GameState();
 		this.connectedSockets = new Set();
-		this.paused = false;
+		this.paused = true; // Start paused until players join
 		this.lastUpdateTime = Date.now();
 		this.isTournament = false;
 	}

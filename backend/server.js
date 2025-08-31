@@ -153,13 +153,24 @@ function startSynchronizedCountdown(io, duration = 5) {
 			countdownInterval = null;
 
 			setTimeout(() => {
-				game.startMatch(); // Use GameEngine's method
+				// For tournaments, add current match players to the game
 				if (tournament && tournament.currentMatch) {
 					const [p1, p2] = tournament.currentMatch;
 					const alias1 = p1 && p1[1] && p1[1].alias ? p1[1].alias : 'Unknown';
 					const alias2 = p2 && p2[1] && p2[1].alias ? p2[1].alias : 'Bye';
 					console.log(`Match started ${alias1} vs ${alias2}`);
+					
+					// Reset game state and add tournament players
+					game.resetGame();
+					if (p1 && p1[1] && p1[1].socketId) {
+						game.addPlayer(p1[1].socketId);
+					}
+					if (p2 && p2[1] && p2[1].socketId) {
+						game.addPlayer(p2[1].socketId);
+					}
 				}
+				
+				game.startMatch(); // Use GameEngine's method
 				io.emit('start_match');
 			}, 1000);
 		}
@@ -177,7 +188,22 @@ io.on('connection', (socket) => {
 	const gameMode = socket.handshake.query.mode || 'local';
 	const isLocalTournament = gameMode === 'local_tournament';
 	
-	game.setTournamentMode(!isLocalMatch && !isLocalTournament, gameMode);
+	// Only set tournament mode if this connection has game-related query parameters
+	// Dashboard connections won't have these parameters
+	const hasGameParams = socket.handshake.query.local !== undefined || 
+						  socket.handshake.query.mode !== undefined;
+	
+	if (hasGameParams) {
+		game.setTournamentMode(!isLocalMatch && !isLocalTournament, gameMode);
+		
+		// For AI mode, add players and start immediately
+		if (gameMode === 'ai') {
+			game.addPlayer(socket.id); // Add human player as player1
+			game.state.addPlayer('ai_player'); // Add AI as player2
+			game.connectedSockets.add('ai_player');
+			game.startMatch(); // This will unpause and start the game
+		}
+	}
 	
 	// Check if client might have been in a tournament before server restart
 	if (gameMode === 'tournament') {
@@ -1026,8 +1052,16 @@ socket.on('player_inactive', () => {
 
 // Game loop
 setInterval(() => {
-	// Only run the game loop if both players are connected and game is not paused
-	if (!game.paused) {
+	// Run the game loop if:
+	// 1. Game is not paused, AND
+	// 2. Either we have 2+ connected players OR it's AI mode OR it's tournament mode
+	const shouldRun = !game.paused && (
+		game.state.connectedPlayers.size >= 2 || 
+		game.aiOpponent || 
+		game.isTournament
+	);
+	
+	if (shouldRun) {
 		game.update(1 / 60);
 		const state = game.getState();
 		io.emit('state_update', game.getState());
@@ -1081,12 +1115,14 @@ app.setNotFoundHandler((req, reply) => {
 // --- Start Server ---
 const start =  async () => {
 	try{
+		console.log('Attempting to start server on', HOST, ':', PORT);
 		const address = await app.listen({ port: PORT, host: HOST });
 		console.log("Server running " + address)
 		console.log(`Access to school ${process.env.APP_URL}`)
 		// console.log(`*****path of avatars: ${avatarsDir}`)
 	}
 	catch (e){
+		console.error('Server startup error:', e);
 		app.log.error(e);
 		process.exit(1);
 	}
