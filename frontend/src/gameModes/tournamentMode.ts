@@ -30,10 +30,10 @@ export class TournamentMode {
 
 	constructor({ socket, gameState, setGameState, promptAliasRegistration }: TournamentDependencies) {
 		this.socket = socket;
-		this.setupTournamentHandlers();
 		this.gameState = gameState;
 		this.setGameState = setGameState;
 		this.promptAliasRegistration = promptAliasRegistration;
+		this.setupTournamentHandlers();
 	}
 
 
@@ -42,14 +42,6 @@ export class TournamentMode {
 			console.error ('Cannot setup tournament handlers: socket is null');
 			return;
 		}
-
-		this.socket.on('start_match', () => {
-			this.setGameState({
-				matchStarted:true,
-				gameEnded: false,
-				inTournament: true
-			});
-		});
 
 		this.socket.on('player_list_updated', (players: { socketId: string, alias: string }[]) => {
 			this.aliasMap = {};
@@ -227,6 +219,7 @@ export class TournamentMode {
 		});
 
 		this.socket.on('start_match', () => {
+			console.log('Received start_match event - starting game!');
 			removeOverlays();
 			// Hide tournament bracket during gameplay
 			const bracketDiv = document.getElementById('tournament-bracket');
