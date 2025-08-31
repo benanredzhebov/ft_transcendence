@@ -37,7 +37,7 @@ class GameState {
 		};
 
 		this.gameOver = false;
-		this.paused = false;
+		this.paused = true; // Start paused until players join
 		this.lastScorer = null;
 
 		this.connectedPlayers = new Set();
@@ -184,9 +184,13 @@ class GameState {
 		this.paddles.player1.y = 250;
 		this.paddles.player2.y = 250;
 		this.gameOver = false;
-		this.paused = false;
+		// Don't automatically unpause - let startMatch() handle that
 		this.lastScorer = null;
-		this.resetBall();
+		// Reset ball position but not velocity - let resume() handle that
+		this.ball.x = this.width / 2;
+		this.ball.y = this.height / 2;
+		this.ball.vx = 0;
+		this.ball.vy = 0;
 		console.log('After resetGame', 'gameOver:', this.gameOver, 'paused:', this.paused);
 	}
 
@@ -196,6 +200,13 @@ class GameState {
 
 	resume() {
 		this.paused = false;
+		// Start ball movement when game resumes
+		if (this.ball.vx === 0 && this.ball.vy === 0) {
+			const serveDirection = this.lastScorer === 'player1' ? -1 : 1;
+			const randomAngle = (Math.random() * Math.PI / 3) - (Math.PI / 6);
+			this.ball.vx = this.ball.speed * serveDirection * Math.cos(randomAngle);
+			this.ball.vy = this.ball.speed * Math.sin(randomAngle);
+		}
 		// console.log('resume called, paused:', this.paused);
 	}
 
