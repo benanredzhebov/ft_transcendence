@@ -154,14 +154,14 @@ function startSynchronizedCountdown(io, duration = 5) {
 
 			setTimeout(() => {
 				// For tournaments, add current match players to the game
+				// Don't reset game again since prepareForMatch already did it
 				if (tournament && tournament.currentMatch) {
 					const [p1, p2] = tournament.currentMatch;
 					const alias1 = p1 && p1[1] && p1[1].alias ? p1[1].alias : 'Unknown';
 					const alias2 = p2 && p2[1] && p2[1].alias ? p2[1].alias : 'Bye';
 					console.log(`Match started ${alias1} vs ${alias2}`);
 					
-					// Reset game state and add tournament players
-					game.resetGame();
+					// Add tournament players to the game (don't reset again)
 					if (p1 && p1[1] && p1[1].socketId) {
 						game.addPlayer(p1[1].socketId);
 					}
@@ -176,6 +176,112 @@ function startSynchronizedCountdown(io, duration = 5) {
 		}
 	}, 1000);
 	return countdownInterval;
+}
+
+// Handle tournament match end automatically
+async function handleTournamentMatchEnd(state) {
+	if (!tournament?.currentMatch) {
+		console.warn('handleTournamentMatchEnd called but no current match');
+		return;
+	}
+
+	// Determine the actual winner from game scores
+	const { player1, player2 } = tournament.getCurrentMatchPlayers();
+	const actualWinnerSocketId = state.score.player1 >= 5 ? player1?.socketId : player2?.socketId;
+	const winner = actualWinnerSocketId === player1?.socketId ? player1 : player2;
+	
+	console.log('🏆 Tournament match ended. Scores:', state.score, 'Winner:', winner?.alias);
+
+	if (player1 && player2) {
+		try {
+			const matchDataToSave = {
+				player1_id: player1.userId,
+				player2_id: player2.userId,
+				player1_username: player1.alias,
+				player2_username: player2.alias,
+				player1_score: state.score.player1,
+				player2_score: state.score.player2,
+				winner_id: winner.userId,
+				winner_username: winner.alias,
+				is_tournament: true,
+			};
+			console.log('[DEBUG] Saving match data to DB:', matchDataToSave);
+			await DB('matchHistory').insert(matchDataToSave);
+			console.log('Match history saved successfully.');
+		} catch (error) {
+			console.error('Failed to save match history:', error);
+		}
+	}
+
+	// Now, advance the tournament to the next match
+	const gameScores = { player1: state.score.player1, player2: state.score.player2 };
+	console.log('🏆 Recording winner:', actualWinnerSocketId, 'with scores:', gameScores);
+	console.log('🏆 Tournament state before recordWinner:', {
+		currentRound: tournament.currentRound,
+		currentMatchIndex: tournament.currentMatchIndex,
+		winnersCount: tournament.winners.length,
+		playersCount: tournament.players.size
+	});
+	
+	let nextMatch = tournament.recordWinner(actualWinnerSocketId, gameScores);
+	
+	console.log('🏆 Next match returned:', nextMatch ? 'exists' : 'null');
+	console.log('🏆 Tournament state after recordWinner:', {
+		currentRound: tournament.currentRound,
+		currentMatchIndex: tournament.currentMatchIndex,
+		winnersCount: tournament.winners.length,
+		isFinished: tournament.isFinished
+	});
+
+	// Loop to skip byes and auto-advance until a real match or tournament end
+	while (nextMatch && (!nextMatch[0] || !nextMatch[1])) {
+		console.log('🏆 Skipping bye match, auto-advancing...');
+		const autoWinner = nextMatch[0] ? nextMatch[0][0] : nextMatch[1][0];
+		nextMatch = tournament.recordWinner(autoWinner); // No scores for bye matches
+	}
+
+	if (nextMatch) {
+		console.log('🏆 Setting up next match...');
+		const { player1: nextP1, player2: nextP2 } = tournament.getCurrentMatchPlayers();
+		console.log('🏆 Next match players:', {
+			player1: nextP1 ? nextP1.alias : 'null',
+			player2: nextP2 ? nextP2.alias : 'null'
+		});
+		
+		game.prepareForMatch();
+
+		// Reset readiness for the new match
+		tournament.resetReadyForCurrentMatch();
+
+		// Emit updated bracket after match completion
+		const dynamicBracket = tournament.getDynamicBracket();
+		io.emit('tournament_bracket', dynamicBracket);
+
+		if (nextP1 && nextP2) {
+			console.log('🏆 Emitting match announcement and await_player_ready');
+			io.emit('match_announcement', { 
+				player1: nextP1.alias,
+				player2: nextP2.alias
+			});
+			io.to(nextP1.socketId).emit('await_player_ready');
+			io.to(nextP2.socketId).emit('await_player_ready');
+		} else {
+			console.error('🏆 ERROR: nextMatch exists but players are null!');
+		}
+	} else {
+		console.log('🏆 Tournament is over, declaring winner...');
+		const finalWinnerData = tournament.winners[0];
+		const finalWinnerAlias = finalWinnerData && finalWinnerData[1] ? finalWinnerData[1] : 'Unknown';
+		const allMatchResults = tournament.getAllMatchResults();
+		// Emit the final bracket with completed state and champion before tournament_over
+		const finalBracket = tournament.getDynamicBracket();
+		io.emit('tournament_bracket', finalBracket);
+		io.emit('tournament_over', { 
+			winner: finalWinnerAlias,
+			allMatches: allMatchResults 
+		});
+		tournament.reset(); // Reset for the next tournament
+	}
 }
 
 io.on('connection', (socket) => {
@@ -631,84 +737,9 @@ socket.on('player_inactive', () => {
 	});
 	
 	socket.on('match_ended', async ({ winnerSocketId }) => {
-		if (!tournament?.currentMatch) {
-			console.warn('match_ended received but no current match');
-			return;
-		}
-
-		const state = game.getState();
-		if (state.score.player1 === 0 && state.score.player2 === 0) {
-			console.warn('Ignoring match_ended: no score change');
-			return;
-		}
-
-		// *** FIX: Capture match data BEFORE advancing the tournament ***
-		const { player1, player2 } = tournament.getCurrentMatchPlayers();
-		const winner = winnerSocketId === player1.socketId ? player1 : player2;
-		
-		if (player1 && player2) {
-			try {
-				const matchDataToSave = {
-					player1_id: player1.userId,
-					player2_id: player2.userId,
-					player1_username: player1.alias,
-					player2_username: player2.alias,
-					player1_score: state.score.player1,
-					player2_score: state.score.player2,
-					winner_id: winner.userId,
-					winner_username: winner.alias,
-					is_tournament: true,
-				};
-				console.log('[DEBUG] Saving match data to DB:', matchDataToSave);
-				await DB('matchHistory').insert(matchDataToSave);
-				console.log('Match history saved successfully.');
-			} catch (error) {
-				console.error('Failed to save match history:', error);
-			}
-		}
-
-		// Now, advance the tournament to the next match
-		const gameScores = { player1: state.score.player1, player2: state.score.player2 };
-		let nextMatch = tournament.recordWinner(winnerSocketId, gameScores);
-
-		// Loop to skip byes and auto-advance until a real match or tournament end
-		while (nextMatch && (!nextMatch[0] || !nextMatch[1])) {
-			const autoWinner = nextMatch[0] ? nextMatch[0][0] : nextMatch[1][0];
-			nextMatch = tournament.recordWinner(autoWinner); // No scores for bye matches
-		}
-
-		if (nextMatch) {
-			const { player1: nextP1, player2: nextP2 } = tournament.getCurrentMatchPlayers();
-			game.prepareForMatch();
-
-			// Reset readiness for the new match
-			tournament.resetReadyForCurrentMatch();
-
-			// Emit updated bracket after match completion
-			const dynamicBracket = tournament.getDynamicBracket();
-			io.emit('tournament_bracket', dynamicBracket);
-
-			if (nextP1 && nextP2) {
-				io.emit('match_announcement', { 
-					player1: nextP1.alias,
-					player2: nextP2.alias
-				});
-				io.to(nextP1.socketId).emit('await_player_ready');
-				io.to(nextP2.socketId).emit('await_player_ready');
-			}
-		} else {
-			const finalWinnerData = tournament.winners[0];
-			const finalWinnerAlias = finalWinnerData && finalWinnerData[1] ? finalWinnerData[1] : 'Unknown';
-			const allMatchResults = tournament.getAllMatchResults();
-				// Emit the final bracket with completed state and champion before tournament_over
-				const finalBracket = tournament.getDynamicBracket();
-				io.emit('tournament_bracket', finalBracket);
-				io.emit('tournament_over', { 
-					winner: finalWinnerAlias,
-					allMatches: allMatchResults 
-				});
-				tournament.reset(); // Reset for the next tournament
-		}
+		// This event is now deprecated - server handles tournament progression automatically
+		// Keep for backward compatibility but log that it's not needed
+		console.log('ℹ️ Received match_ended event (deprecated) - server handles this automatically now');
 	});
 
 	// ===== LOCAL TOURNAMENT HANDLERS =====
@@ -1068,7 +1099,15 @@ setInterval(() => {
 		if (state.gameOver) {
 			console.log('Game over! Final score:', state.score);
 			game.paused = true;
-			game.resetGame(); // Immediately reset after game over
+			
+			// Handle tournament progression automatically for tournaments
+			if (game.isTournament && tournament && tournament.currentMatch) {
+				console.log('🏆 Auto-processing tournament match end...');
+				handleTournamentMatchEnd(state);
+			} else {
+				// For non-tournament games, reset immediately
+				game.resetGame();
+			}
 		}
 	}
 }, 1000 / 60); // 60 times per second
