@@ -30,8 +30,8 @@ class GameEngine {
 	if (success) {
 		this.connectedSockets.add(socketId);
 		console.log(`Player ${socketId} connected as ${this.state.getPlayerId(socketId)}`);
-		// console.log('Connected players:', Array.from(this.state.connectedPlayers));
-		// console.log('Connected sockets:', Array.from(this.connectedSockets));
+		console.log('🎮 Connected players:', Array.from(this.state.connectedPlayers));
+		console.log('🎮 Connected sockets:', Array.from(this.connectedSockets));
 
 		// Local match: ensure both players exist for one socket
 		if (!this.isTournament) {
@@ -39,8 +39,8 @@ class GameEngine {
 				this.state.addPlayer('local_player2');
 				this.connectedSockets.add('local_player2');
 				console.log('Local match: added player2 as local_player2');
-				// console.log('Connected players:', Array.from(this.state.connectedPlayers));
-				// console.log('Connected sockets:', Array.from(this.connectedSockets));
+				console.log('🎮 Connected players:', Array.from(this.state.connectedPlayers));
+				console.log('🎮 Connected sockets:', Array.from(this.connectedSockets));
 				}
 			if (!this.isTournament && this.connectedSockets.size === 2) {
 				this.startMatch();
@@ -64,7 +64,9 @@ class GameEngine {
 			console.log('Local match: removed player2 (local_player2)');
 		}
 
-		if (this.connectedSockets.size < 2) {
+		// Only reset game for non-tournament modes when there are insufficient players
+		if (!this.isTournament && this.connectedSockets.size < 2) {
+			console.log('🔄 Resetting game due to insufficient players (non-tournament)');
 			this.resetGame();
 		}
 	}
@@ -126,6 +128,13 @@ class GameEngine {
 
 	// Tournament-specific
 	prepareForMatch() {
+		// Clear previous match players for tournaments
+		if (this.isTournament) {
+			console.log('🏆 Preparing for tournament match - clearing previous players');
+			this.connectedSockets.clear();
+			this.state.connectedPlayers.clear();
+			this.state.socketToPlayerMap.clear();
+		}
 		this.resetGame();
 		this.pause();
 	}
