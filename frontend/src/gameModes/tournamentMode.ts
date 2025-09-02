@@ -200,6 +200,7 @@ export class TournamentMode {
 
 		this.socket.on('countdown_update', (remaining: number) => {
 			console.log('Received countdown_update:' , remaining);
+			this.setGameState({ countDownActive: true });
 			this.updateCountdownDisplay(remaining);
 		});
 
@@ -216,6 +217,11 @@ export class TournamentMode {
 			this.setGameState({currentMatch: [match.player1, match.player2] });
 			showMatchInfo(match.player1, match.player2, 0, 0);
 			this.setGameState({ assignedPlayerId: null });
+		});
+
+		this.socket.on('assign_controls', (playerId: 'player1' | 'player2') => {
+			console.log('Received assign_controls:', playerId);
+			this.setGameState({ assignedPlayerId: playerId });
 		});
 
 		this.socket.on('start_match', () => {

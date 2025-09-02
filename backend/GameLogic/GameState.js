@@ -196,7 +196,10 @@ class GameState {
 
 	resume() {
 		this.paused = false;
-		// console.log('resume called, paused:', this.paused);
+		// Safety check: ensure ball has velocity when resuming
+		if (this.ball.vx === 0 && this.ball.vy === 0) {
+			this.resetBall();
+		}
 	}
 
 	getState() {

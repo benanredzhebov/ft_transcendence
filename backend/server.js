@@ -191,13 +191,14 @@ io.on('connection', (socket) => {
 		console.log('Connected players:', Array.from(game.state.connectedPlayers));
 	}
 	
-
+	console.log('✅ About to emit state_update for single player...');
 	//Emit state_update after both players are present
 	if (!game.isTournament && game.state.connectedPlayers.size === 1) {
 		io.emit('state_update', game.getState());
 	}
+	console.log('✅ State update emission completed');
 
-
+	console.log('✅ About to setup authenticate_chat handler...');
 	socket.on('authenticate_chat', (token) => {
 		if (!token) {
 		socket.emit('auth_error', { message: 'Authentication token not provided.' });
@@ -1078,6 +1079,7 @@ const start =  async () => {
 		console.log(`Access to school ${process.env.APP_URL}`)
 	}
 	catch (e){
+		console.error('❌ Error in start function:', e);
 		app.log.error(e);
 		process.exit(1);
 	}
