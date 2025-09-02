@@ -12,6 +12,7 @@
 
 import './game.css';
 import { io, Socket } from 'socket.io-client';
+import { PauseManager } from './pauseManager';
 
 let isHost = false;
 
@@ -21,6 +22,7 @@ let matchStarted = false;
 let pressedKeys = new Set<string>();
 let inTournament = false;
 let inLocalTournament = false;
+let aiMode = false;
 // let currentMatch: [string, string] | null = null;
 let currentMatch: [string | { alias: string }, string | { alias: string }] | null = null;
 let aliasMap: Record<string, string> = {};
@@ -29,6 +31,9 @@ let movePlayersFrame: number | null = null;
 let countDownActive = false;
 let aliasRegistered = false;
 let tournamentResults: { player1: string, player2: string, score1: number, score2: number}[] = [];
+
+// Pause Manager
+let pauseManager: PauseManager;
 
 // Game State Interfaces
 interface PaddleState {
@@ -312,6 +317,8 @@ function setupTournamentHandlers() {
 		countDownActive = false; // added to start the match. Allow state updates to be rendered
 		matchStarted = true;
 		gameEnded = false;
+		pauseManager.updateState({ matchStarted: true, gameEnded: false, inTournament: true });
+		pauseManager.createPauseButton(); // Create pause button when match starts
 		if (movePlayersFrame === null) movePlayers();
 	});
 
@@ -625,6 +632,8 @@ function setupLocalTournamentHandlers() {
 		
 		gameEnded = false;
 		matchStarted = true;
+		pauseManager.updateState({ matchStarted: true, gameEnded: false, inLocalTournament: true });
+		pauseManager.createPauseButton(); // Create pause button when local tournament match starts
 
 		currentMatch = [matchInfo.player1, matchInfo.player2];
 		
@@ -681,6 +690,15 @@ function setupLocalTournamentHandlers() {
 		}).querySelector('button')!.onclick = () => {
 			window.location.href = '/dashboard';
 		};
+	});
+
+	// Local tournament pause/resume handlers
+	socket.on('local_tournament_paused', () => {
+		pauseManager.updateState({ gamePaused: true });
+	});
+
+	socket.on('local_tournament_resumed', () => {
+		pauseManager.updateState({ gamePaused: false });
 	});
 }
 
@@ -805,7 +823,8 @@ function showLocalTournamentMatchDialog(status: any) {
 			`Next Match: <strong>${player1.name}</strong> vs <strong>${player2.name}</strong><br><br>
 			Controls:<br>
 			${player1.name}: W/S keys<br>
-			${player2.name}: Arrow Up/Down keys`,
+			${player2.name}: Arrow Up/Down keys<br><br>
+			<em>Press P or Space to pause during the match</em>`,
 			{ confirmText: 'Start Match' }
 		);
 		
@@ -916,6 +935,9 @@ function showMatchInfo(
 	<div style="text-align: center; margin-top: 4px; font-size: 20px;">
 		${score1} : ${score2}
 	</div>
+	<div style="text-align: center; margin-top: 8px; font-size: 12px; color: #ccc;">
+		Press P or Space to pause
+	</div>
 	`;
 
 	document.body.appendChild(box);
@@ -926,6 +948,8 @@ function showGameOverScreen(winner: string | { alias: string}) {
 
 	gameEnded = true;
 	matchStarted = false;
+	pauseManager.updateState({ gameEnded: true, matchStarted: false });
+	pauseManager.cleanup(); // Clean up pause UI when game ends
 
 	// Reset movePlayers() to null, when a match ends
 	if (movePlayersFrame !== null) {
@@ -966,6 +990,8 @@ function showGameOverScreen(winner: string | { alias: string}) {
 				socket.emit('restart_game');
 				gameEnded = false;
 				matchStarted = true;
+				pauseManager.updateState({ gameEnded: false, matchStarted: true });
+				pauseManager.createPauseButton(); // Create pause button when restarting
 				pressedKeys.clear();
 				if (movePlayersFrame !== null) {
 					cancelAnimationFrame(movePlayersFrame);
@@ -1177,44 +1203,73 @@ function handleResize(container: HTMLElement) {
 // Game Control Functions
 function movePlayers() {
 	// console.log('movePlayers running', Array.from(pressedKeys));
-	if (!socket || gameEnded || (inTournament && !matchStarted)) return;
-
-	//For tournament mode, check if match has started
-	if (inTournament && !matchStarted) return;
-
+	
+	// Debug tournament mode pause manager state
 	if (inTournament) {
-		if (assignedPlayerId === 'player1') {
-			// console.log('1assignedPlayerId', assignedPlayerId);
+		console.log('🎮 Tournament movePlayers debug:', {
+			gameEnded,
+			pauseManagerState: pauseManager.getState(),
+			matchStarted,
+			assignedPlayerId,
+			pressedKeysSize: pressedKeys.size,
+			canProcessMovement: socket && !gameEnded && !pauseManager.getState().gamePaused && (!inTournament || matchStarted)
+		});
+	}
+	
+	// Only process movement if game is active and not paused
+	if (socket && !gameEnded && !pauseManager.getState().gamePaused && (!inTournament || matchStarted)) {
+		if (inTournament) {
+			if (assignedPlayerId === 'player1') {
+				// console.log('1assignedPlayerId', assignedPlayerId);
+				if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
+				if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
+			} else if (assignedPlayerId === 'player2') {
+				// console.log('2assignedPlayerId', assignedPlayerId);
+				if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
+				if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
+			}
+		} else if (inLocalTournament) {
+			// Local tournament controls
+			if (pressedKeys.has('w')) socket.emit('local_tournament_player_move', { playerId: 'player1', direction: 'up' });
+			if (pressedKeys.has('s')) socket.emit('local_tournament_player_move', { playerId: 'player1', direction: 'down' });
+			if (pressedKeys.has('arrowup')) socket.emit('local_tournament_player_move', { playerId: 'player2', direction: 'up' });
+			if (pressedKeys.has('arrowdown')) socket.emit('local_tournament_player_move', { playerId: 'player2', direction: 'down' });
+		} else if (aiMode) {
+			// AI mode - only player1 (left paddle) can be controlled by human
 			if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
 			if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
-		} else if (assignedPlayerId === 'player2') {
-			// console.log('2assignedPlayerId', assignedPlayerId);
+		} else {
+			// Local match controls - both players
+			if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
+			if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
 			if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
 			if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
 		}
-	} else if (inLocalTournament) {
-		// Local tournament controls
-		if (pressedKeys.has('w')) socket.emit('local_tournament_player_move', { playerId: 'player1', direction: 'up' });
-		if (pressedKeys.has('s')) socket.emit('local_tournament_player_move', { playerId: 'player1', direction: 'down' });
-		if (pressedKeys.has('arrowup')) socket.emit('local_tournament_player_move', { playerId: 'player2', direction: 'up' });
-		if (pressedKeys.has('arrowdown')) socket.emit('local_tournament_player_move', { playerId: 'player2', direction: 'down' });
-	} else {
-		// Local match controls
-		if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
-		if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
-		if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
-		if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
 	}
-			movePlayersFrame = requestAnimationFrame(movePlayers);
-		}
+	
+	// Always continue the animation loop, even when paused
+	movePlayersFrame = requestAnimationFrame(movePlayers);
+}
 
 function handleKeyDown(e: KeyboardEvent) {
 	if (gameEnded) return;
+	
+	// Let pauseManager handle pause-related keys first
+	if (pauseManager.handleKeyDown(e)) {
+		return; // Key was handled by pause manager
+	}
+	
+	// Don't handle movement keys when paused
+	if (pauseManager.getState().gamePaused) return;
+	
 	pressedKeys.add(e.key.toLowerCase());
 	console.log('keydown:', e.key.toLowerCase());
 }
 
 function handleKeyUp(e: KeyboardEvent) {
+	// Don't handle movement keys when paused
+	if (pauseManager.getState().gamePaused) return;
+	
 	pressedKeys.delete(e.key.toLowerCase());
 	console.log('keyup:', e.key.toLowerCase());
 }
@@ -1229,6 +1284,11 @@ function cleanupGame() {
 	if (socket) {
 	socket.disconnect();
 	socket = null;
+	}
+
+	// Clean up pause UI
+	if (pauseManager) {
+		pauseManager.cleanup();
 	}
 
 	window.removeEventListener('keydown', handleKeyDown);
@@ -1263,6 +1323,9 @@ export function renderGame(containerId: string = 'app') {
 	container.innerHTML = '';
 	gameEnded = false;
 
+	// Initialize pause manager
+	pauseManager = new PauseManager();
+
 	// Loading screen
 	const loading = document.createElement('div');
 	loading.className = 'game-loading';
@@ -1278,6 +1341,7 @@ export function renderGame(containerId: string = 'app') {
 	// Canvas setup
 	canvas = document.createElement('canvas');
 	canvas.className = 'game-canvas';
+	canvas.tabIndex = 0; // Make canvas focusable
 	ctx = canvas.getContext('2d');
 	container.appendChild(canvas);
 
@@ -1337,7 +1401,7 @@ export function renderGame(containerId: string = 'app') {
 
 		// DON'T call promptAliasRegistration() here - let the connect handler do it
 	}
-	const aiMode = urlParams.get('mode') === 'ai';
+	aiMode = urlParams.get('mode') === 'ai';
 
 	// Socket connection to connect with Remote players
 	const backendUrl = `https://${window.location.hostname}:8443`;
@@ -1354,6 +1418,32 @@ export function renderGame(containerId: string = 'app') {
 	// Setup tournament handlers
 	setupTournamentHandlers();
 	setupLocalTournamentHandlers();
+	
+	// Initialize pause manager with socket and setup handlers
+	pauseManager.updateSocket(socket);
+	pauseManager.setupPauseHandlers();
+	
+	// Update pause manager state for current game mode
+	pauseManager.updateState({
+		inTournament: tournamentMode,
+		inLocalTournament: localTournamentMode
+	});
+	
+	// Set up callback to ensure controls work after resume
+	pauseManager.setOnResumeCallback(() => {
+		// Clear any stuck keys from before pause
+		pressedKeys.clear();
+		
+		// Ensure game canvas has focus and controls are responsive
+		if (canvas) {
+			canvas.focus();
+		}
+		
+		// Force a small delay to ensure the UI is ready
+		setTimeout(() => {
+			console.log('Game controls restored after resume, movePlayers loop should be running');
+		}, 50);
+	});
 
 	// Socket event handlers
 	socket.on('connect', () => {
@@ -1363,6 +1453,7 @@ export function renderGame(containerId: string = 'app') {
 		matchStarted = false;
 		inLocalTournament = false;
 		currentMatch = null;
+		pauseManager.cleanup(); // Clean up pause state on connect
 
 		// Cancel any running game loop
 		if (movePlayersFrame !== null) {
@@ -1393,6 +1484,8 @@ export function renderGame(containerId: string = 'app') {
 			socket!.emit('restart_game');
 			gameEnded = false;
 			matchStarted = true;
+			pauseManager.updateState({ matchStarted: true, gameEnded: false });
+			pauseManager.createPauseButton(); // Create pause button for local match
 			if (movePlayersFrame === null) movePlayers();
 		} else if (localTournamentMode) {
 			// Local Tournament mode
@@ -1568,6 +1661,8 @@ export function renderGame(containerId: string = 'app') {
 
 			showGameOverScreen(winner);
 			gameEnded = true;
+			pauseManager.updateState({ gameEnded: true });
+			pauseManager.cleanup(); // Clean up pause UI when game ends
 
 			if (inLocalTournament) {
 					removeOverlays();

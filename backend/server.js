@@ -41,9 +41,6 @@ let countdownInterval = null;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// -------------------------------move to another file------------------------------------------------------------------------
-
-
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -59,9 +56,7 @@ if (!fs.existsSync(avatarsDir)) {
 	fs.mkdirSync(avatarsDir, { recursive: true });
 }
 
-// -------------------------------------------------------------------------------------------------------
-
-const PORT = 8443;
+const PORT = process.env.PORT || 8443;
 const HOST = '0.0.0.0'; // Bind to all network interfaces
 
 // Load SSL certificates
@@ -77,20 +72,15 @@ if (!existsSync(keyPath) || !existsSync(certPath)) {
 const httpsOptions = {
 	key: readFileSync(keyPath),
 	cert: readFileSync(certPath),
-	key: readFileSync(keyPath),
-	cert: readFileSync(certPath),
 };
 
 const app = fastify({
-	logger: false,
-	https: httpsOptions,
 	logger: false,
 	https: httpsOptions,
 });
 
 const server = app.server; // Get the underlying HTTPS server
 const io = new Server(server, {
-	cors: { origin: '*' }, // Allow all origins for Socket.IO
 	cors: { origin: '*' }, // Allow all origins for Socket.IO
 });
 
@@ -145,6 +135,7 @@ function startSynchronizedCountdown(io, duration = 5) {
 	}
 	
 	countdownInterval = setInterval(() => {
+		console.log('Emitting countdown_update:', remaining); // del later
 		io.emit('countdown_update', remaining);
 		remaining--;
 	
@@ -153,135 +144,25 @@ function startSynchronizedCountdown(io, duration = 5) {
 			countdownInterval = null;
 
 			setTimeout(() => {
-				// For tournaments, add current match players to the game
-				// Don't reset game again since prepareForMatch already did it
+				game.startMatch(); // Use GameEngine's method
+				// Explicitly ensure game is unpaused for tournament
+				game.paused = false;
+				console.log('🎮 Tournament match started, game unpaused:', !game.paused);
+				
 				if (tournament && tournament.currentMatch) {
 					const [p1, p2] = tournament.currentMatch;
 					const alias1 = p1 && p1[1] && p1[1].alias ? p1[1].alias : 'Unknown';
 					const alias2 = p2 && p2[1] && p2[1].alias ? p2[1].alias : 'Bye';
 					console.log(`Match started ${alias1} vs ${alias2}`);
-					
-					// Add tournament players to the game (don't reset again)
-					if (p1 && p1[1] && p1[1].socketId) {
-						game.addPlayer(p1[1].socketId);
-					}
-					if (p2 && p2[1] && p2[1].socketId) {
-						game.addPlayer(p2[1].socketId);
-					}
 				}
-				
-				game.startMatch(); // Use GameEngine's method
 				io.emit('start_match');
+				// Send initial state update to start rendering immediately
+				io.emit('state_update', game.getState());
+				console.log('🎮 Initial state_update sent after tournament match start');
 			}, 1000);
 		}
 	}, 1000);
 	return countdownInterval;
-}
-
-// Handle tournament match end automatically
-async function handleTournamentMatchEnd(state) {
-	if (!tournament?.currentMatch) {
-		console.warn('handleTournamentMatchEnd called but no current match');
-		return;
-	}
-
-	// Determine the actual winner from game scores
-	const { player1, player2 } = tournament.getCurrentMatchPlayers();
-	const actualWinnerSocketId = state.score.player1 >= 5 ? player1?.socketId : player2?.socketId;
-	const winner = actualWinnerSocketId === player1?.socketId ? player1 : player2;
-	
-	console.log('🏆 Tournament match ended. Scores:', state.score, 'Winner:', winner?.alias);
-
-	if (player1 && player2) {
-		try {
-			const matchDataToSave = {
-				player1_id: player1.userId,
-				player2_id: player2.userId,
-				player1_username: player1.alias,
-				player2_username: player2.alias,
-				player1_score: state.score.player1,
-				player2_score: state.score.player2,
-				winner_id: winner.userId,
-				winner_username: winner.alias,
-				is_tournament: true,
-			};
-			console.log('[DEBUG] Saving match data to DB:', matchDataToSave);
-			await DB('matchHistory').insert(matchDataToSave);
-			console.log('Match history saved successfully.');
-		} catch (error) {
-			console.error('Failed to save match history:', error);
-		}
-	}
-
-	// Now, advance the tournament to the next match
-	const gameScores = { player1: state.score.player1, player2: state.score.player2 };
-	console.log('🏆 Recording winner:', actualWinnerSocketId, 'with scores:', gameScores);
-	console.log('🏆 Tournament state before recordWinner:', {
-		currentRound: tournament.currentRound,
-		currentMatchIndex: tournament.currentMatchIndex,
-		winnersCount: tournament.winners.length,
-		playersCount: tournament.players.size
-	});
-	
-	let nextMatch = tournament.recordWinner(actualWinnerSocketId, gameScores);
-	
-	console.log('🏆 Next match returned:', nextMatch ? 'exists' : 'null');
-	console.log('🏆 Tournament state after recordWinner:', {
-		currentRound: tournament.currentRound,
-		currentMatchIndex: tournament.currentMatchIndex,
-		winnersCount: tournament.winners.length,
-		isFinished: tournament.isFinished
-	});
-
-	// Loop to skip byes and auto-advance until a real match or tournament end
-	while (nextMatch && (!nextMatch[0] || !nextMatch[1])) {
-		console.log('🏆 Skipping bye match, auto-advancing...');
-		const autoWinner = nextMatch[0] ? nextMatch[0][0] : nextMatch[1][0];
-		nextMatch = tournament.recordWinner(autoWinner); // No scores for bye matches
-	}
-
-	if (nextMatch) {
-		console.log('🏆 Setting up next match...');
-		const { player1: nextP1, player2: nextP2 } = tournament.getCurrentMatchPlayers();
-		console.log('🏆 Next match players:', {
-			player1: nextP1 ? nextP1.alias : 'null',
-			player2: nextP2 ? nextP2.alias : 'null'
-		});
-		
-		game.prepareForMatch();
-
-		// Reset readiness for the new match
-		tournament.resetReadyForCurrentMatch();
-
-		// Emit updated bracket after match completion
-		const dynamicBracket = tournament.getDynamicBracket();
-		io.emit('tournament_bracket', dynamicBracket);
-
-		if (nextP1 && nextP2) {
-			console.log('🏆 Emitting match announcement and await_player_ready');
-			io.emit('match_announcement', { 
-				player1: nextP1.alias,
-				player2: nextP2.alias
-			});
-			io.to(nextP1.socketId).emit('await_player_ready');
-			io.to(nextP2.socketId).emit('await_player_ready');
-		} else {
-			console.error('🏆 ERROR: nextMatch exists but players are null!');
-		}
-	} else {
-		console.log('🏆 Tournament is over, declaring winner...');
-		const finalWinnerData = tournament.winners[0];
-		const finalWinnerAlias = finalWinnerData && finalWinnerData[1] ? finalWinnerData[1] : 'Unknown';
-		const allMatchResults = tournament.getAllMatchResults();
-		// Emit the final bracket with completed state and champion before tournament_over
-		const finalBracket = tournament.getDynamicBracket();
-		io.emit('tournament_bracket', finalBracket);
-		io.emit('tournament_over', { 
-			winner: finalWinnerAlias,
-			allMatches: allMatchResults 
-		});
-		tournament.reset(); // Reset for the next tournament
-	}
 }
 
 io.on('connection', (socket) => {
@@ -293,23 +174,11 @@ io.on('connection', (socket) => {
 		socket.handshake.query.local === true;
 	const gameMode = socket.handshake.query.mode || 'local';
 	const isLocalTournament = gameMode === 'local_tournament';
+	const isAIMode = gameMode === 'ai';
+	const isTournamentMode = gameMode === 'tournament';
 	
-	// Only set tournament mode if this connection has game-related query parameters
-	// Dashboard connections won't have these parameters
-	const hasGameParams = socket.handshake.query.local !== undefined || 
-						  socket.handshake.query.mode !== undefined;
-	
-	if (hasGameParams) {
-		game.setTournamentMode(!isLocalMatch && !isLocalTournament, gameMode);
-		
-		// For AI mode, add players and start immediately
-		if (gameMode === 'ai') {
-			game.addPlayer(socket.id); // Add human player as player1
-			game.state.addPlayer('ai_player'); // Add AI as player2
-			game.connectedSockets.add('ai_player');
-			game.startMatch(); // This will unpause and start the game
-		}
-	}
+	game.setTournamentMode(isTournamentMode, gameMode);
+	console.log(`Game mode set: ${gameMode}, isLocalMatch: ${isLocalMatch}, isTournament: ${isTournamentMode}, isAI: ${isAIMode}`);
 	
 	// Check if client might have been in a tournament before server restart
 	if (gameMode === 'tournament') {
@@ -322,8 +191,8 @@ io.on('connection', (socket) => {
 		}
 	}
 	
-	// Add player with error handling CHECK THIS LATER!
-	if (isLocalMatch) {
+	// Add player with error handling
+	if (isLocalMatch || isAIMode) {
 		if (!game.addPlayer(socket.id)) {
 			socket.emit('error', { message: 'Game is full' });
 			socket.disconnect();
@@ -332,13 +201,14 @@ io.on('connection', (socket) => {
 		console.log('Connected players:', Array.from(game.state.connectedPlayers));
 	}
 	
-
+	console.log('✅ About to emit state_update for single player...');
 	//Emit state_update after both players are present
-	if (!game.isTournament && game.state.connectedPlayers.size === 1) {
+	if (!isTournamentMode && game.state.connectedPlayers.size === 1) {
 		io.emit('state_update', game.getState());
 	}
+	console.log('✅ State update emission completed');
 
-
+	console.log('✅ About to setup authenticate_chat handler...');
 	socket.on('authenticate_chat', (token) => {
 		if (!token) {
 		socket.emit('auth_error', { message: 'Authentication token not provided.' });
@@ -416,6 +286,73 @@ io.on('connection', (socket) => {
 		game.resetGame();
 		game.resume();
 		io.emit('state_update', game.getState());
+	});
+
+	// Pause/Resume functionality
+	socket.on('pause_game', () => {
+		game.pause();
+		io.emit('game_paused');
+		console.log('Game paused by player:', socket.id);
+	});
+
+	socket.on('resume_game', () => {
+		game.resume();
+		io.emit('game_resumed');
+		console.log('Game resumed by player:', socket.id);
+	});
+
+	// Remote tournament pause/resume functionality
+	socket.on('tournament_pause', () => {
+		if (tournament && tournament.currentMatch) {
+			game.pause();
+			// Notify only the players in the current match
+			const { player1, player2 } = tournament.getCurrentMatchPlayers();
+			if (player1) io.to(player1.socketId).emit('tournament_paused');
+			if (player2) io.to(player2.socketId).emit('tournament_paused');
+			console.log('Tournament game paused by player:', socket.id);
+		}
+	});
+
+	socket.on('tournament_resume', () => {
+		if (tournament && tournament.currentMatch) {
+			game.resume();
+			// Notify only the players in the current match
+			const { player1, player2 } = tournament.getCurrentMatchPlayers();
+			if (player1) io.to(player1.socketId).emit('tournament_resumed');
+			if (player2) io.to(player2.socketId).emit('tournament_resumed');
+			console.log('Tournament game resumed by player:', socket.id);
+		}
+	});
+
+	// Remote tournament pause/resume functionality
+	socket.on('tournament_pause', () => {
+		if (tournament && tournament.currentMatch) {
+			game.pause();
+			// Notify only the players in the current match
+			const currentMatch = tournament.getCurrentMatchPlayers();
+			if (currentMatch.player1) {
+				io.to(currentMatch.player1.socketId).emit('tournament_paused');
+			}
+			if (currentMatch.player2) {
+				io.to(currentMatch.player2.socketId).emit('tournament_paused');
+			}
+			console.log('Tournament match paused by player:', socket.id);
+		}
+	});
+
+	socket.on('tournament_resume', () => {
+		if (tournament && tournament.currentMatch) {
+			game.resume();
+			// Notify only the players in the current match
+			const currentMatch = tournament.getCurrentMatchPlayers();
+			if (currentMatch.player1) {
+				io.to(currentMatch.player1.socketId).emit('tournament_resumed');
+			}
+			if (currentMatch.player2) {
+				io.to(currentMatch.player2.socketId).emit('tournament_resumed');
+			}
+			console.log('Tournament match resumed by player:', socket.id);
+		}
 	});
 
 	// ***new: added token + data for Match Data***
@@ -737,9 +674,84 @@ socket.on('player_inactive', () => {
 	});
 	
 	socket.on('match_ended', async ({ winnerSocketId }) => {
-		// This event is now deprecated - server handles tournament progression automatically
-		// Keep for backward compatibility but log that it's not needed
-		console.log('ℹ️ Received match_ended event (deprecated) - server handles this automatically now');
+		if (!tournament?.currentMatch) {
+			console.warn('match_ended received but no current match');
+			return;
+		}
+
+		const state = game.getState();
+		if (state.score.player1 === 0 && state.score.player2 === 0) {
+			console.warn('Ignoring match_ended: no score change');
+			return;
+		}
+
+		// *** FIX: Capture match data BEFORE advancing the tournament ***
+		const { player1, player2 } = tournament.getCurrentMatchPlayers();
+		const winner = winnerSocketId === player1.socketId ? player1 : player2;
+		
+		if (player1 && player2) {
+			try {
+				const matchDataToSave = {
+					player1_id: player1.userId,
+					player2_id: player2.userId,
+					player1_username: player1.alias,
+					player2_username: player2.alias,
+					player1_score: state.score.player1,
+					player2_score: state.score.player2,
+					winner_id: winner.userId,
+					winner_username: winner.alias,
+					is_tournament: true,
+				};
+				console.log('[DEBUG] Saving match data to DB:', matchDataToSave);
+				await DB('matchHistory').insert(matchDataToSave);
+				console.log('Match history saved successfully.');
+			} catch (error) {
+				console.error('Failed to save match history:', error);
+			}
+		}
+
+		// Now, advance the tournament to the next match
+		const gameScores = { player1: state.score.player1, player2: state.score.player2 };
+		let nextMatch = tournament.recordWinner(winnerSocketId, gameScores);
+
+		// Loop to skip byes and auto-advance until a real match or tournament end
+		while (nextMatch && (!nextMatch[0] || !nextMatch[1])) {
+			const autoWinner = nextMatch[0] ? nextMatch[0][0] : nextMatch[1][0];
+			nextMatch = tournament.recordWinner(autoWinner); // No scores for bye matches
+		}
+
+		if (nextMatch) {
+			const { player1: nextP1, player2: nextP2 } = tournament.getCurrentMatchPlayers();
+			game.prepareForMatch();
+
+			// Reset readiness for the new match
+			tournament.resetReadyForCurrentMatch();
+
+			// Emit updated bracket after match completion
+			const dynamicBracket = tournament.getDynamicBracket();
+			io.emit('tournament_bracket', dynamicBracket);
+
+			if (nextP1 && nextP2) {
+				io.emit('match_announcement', { 
+					player1: nextP1.alias,
+					player2: nextP2.alias
+				});
+				io.to(nextP1.socketId).emit('await_player_ready');
+				io.to(nextP2.socketId).emit('await_player_ready');
+			}
+		} else {
+			const finalWinnerData = tournament.winners[0];
+			const finalWinnerAlias = finalWinnerData && finalWinnerData[1] ? finalWinnerData[1] : 'Unknown';
+			const allMatchResults = tournament.getAllMatchResults();
+				// Emit the final bracket with completed state and champion before tournament_over
+				const finalBracket = tournament.getDynamicBracket();
+				io.emit('tournament_bracket', finalBracket);
+				io.emit('tournament_over', { 
+					winner: finalWinnerAlias,
+					allMatches: allMatchResults 
+				});
+				tournament.reset(); // Reset for the next tournament
+		}
 	});
 
 	// ===== LOCAL TOURNAMENT HANDLERS =====
@@ -794,6 +806,31 @@ socket.on('player_inactive', () => {
 		} catch (error) {
 			console.error('Local tournament player move error:', error.message);
 			socket.emit('local_tournament_error', { message: error.message });
+		}
+	});
+
+	// Local tournament pause/resume functionality
+	socket.on('local_tournament_pause', () => {
+		try {
+			if (localTournament && localTournament.gameEngine) {
+				localTournament.gameEngine.pause();
+				socket.emit('local_tournament_paused');
+				console.log('Local tournament game paused by player:', socket.id);
+			}
+		} catch (error) {
+			console.error('Local tournament pause error:', error.message);
+		}
+	});
+
+	socket.on('local_tournament_resume', () => {
+		try {
+			if (localTournament && localTournament.gameEngine) {
+				localTournament.gameEngine.resume();
+				socket.emit('local_tournament_resumed');
+				console.log('Local tournament game resumed by player:', socket.id);
+			}
+		} catch (error) {
+			console.error('Local tournament resume error:', error.message);
 		}
 	});
 
@@ -1083,31 +1120,20 @@ socket.on('player_inactive', () => {
 
 // Game loop
 setInterval(() => {
-	// Run the game loop if:
-	// 1. Game is not paused, AND
-	// 2. Either we have 2+ connected players OR it's AI mode OR it's tournament mode
-	const shouldRun = !game.paused && (
-		game.state.connectedPlayers.size >= 2 || 
-		game.aiOpponent || 
-		game.isTournament
-	);
-	
-	if (shouldRun) {
+	// Only run the game loop if both players are connected and game is not paused
+	// For tournament mode, also check if tournament exists and has current match
+	const shouldRunGameLoop = !game.paused && 
+		((game.state.connectedPlayers && game.state.connectedPlayers.size === 2) ||
+		 (tournament && tournament.currentMatch && tournament.getCurrentMatchPlayers().player1 && tournament.getCurrentMatchPlayers().player2));
+		 
+	if (shouldRunGameLoop) {
 		game.update(1 / 60);
 		const state = game.getState();
 		io.emit('state_update', game.getState());
 		if (state.gameOver) {
 			console.log('Game over! Final score:', state.score);
 			game.paused = true;
-			
-			// Handle tournament progression automatically for tournaments
-			if (game.isTournament && tournament && tournament.currentMatch) {
-				console.log('🏆 Auto-processing tournament match end...');
-				handleTournamentMatchEnd(state);
-			} else {
-				// For non-tournament games, reset immediately
-				game.resetGame();
-			}
+			game.resetGame(); // Immediately reset after game over
 		}
 	}
 }, 1000 / 60); // 60 times per second
@@ -1115,10 +1141,11 @@ setInterval(() => {
 // --- Middlewares ---
 app.register(fastifyCors, { origin: true, credentials: true });
 
-// Register Multipart
-app.register(multipart, {
+// Register Multipart plugin
+app.register(multipart, { // Now 'multipart' is defined
+	// attachFieldsToBody: true,
 	limits: {
-	fileSize: 7 * 1024 * 1024,
+	fileSize: 7 * 1024 * 1024, // 7MB
 	}
 });
 
@@ -1131,19 +1158,19 @@ app.register(fastifyStatic, {
 	decorateReply: false // To avoid conflict if already decorated for other static serving
 });
 
-
 // Serve frontend static files
 app.register(fastifyStatic, {
-	root: join(__dirname, '../frontend/dist'),
+	root: join(__dirname, '../frontend/dist'), // Path to compiled frontend
 	prefix: '/',
 });
-
 
 
 //--------Routes------------
 developerRoutes(app);
 credentialsRoutes(app);
 
+// noHandlerRoute(app);
+//-------------------------
 
 // Fallback for SPA routing
 app.setNotFoundHandler((req, reply) => {
@@ -1154,14 +1181,12 @@ app.setNotFoundHandler((req, reply) => {
 // --- Start Server ---
 const start =  async () => {
 	try{
-		console.log('Attempting to start server on', HOST, ':', PORT);
 		const address = await app.listen({ port: PORT, host: HOST });
 		console.log("Server running " + address)
 		console.log(`Access to school ${process.env.APP_URL}`)
-		// console.log(`*****path of avatars: ${avatarsDir}`)
 	}
 	catch (e){
-		console.error('Server startup error:', e);
+		console.error('❌ Error in start function:', e);
 		app.log.error(e);
 		process.exit(1);
 	}

@@ -98,10 +98,13 @@ class GameEngine {
 	// setting the Tournament mode
 	setTournamentMode(isTournament, mode = 'local') {
 		this.isTournament = isTournament;
+		console.log(`Setting game mode: ${mode}, isTournament: ${isTournament}`);
 		if (mode === 'ai') {
 			this.aiOpponent = new AIOpponent(this);
+			console.log('AI Opponent initialized');
 		} else {
 			this.aiOpponent = null;
+			console.log('AI Opponent disabled');
 		}
 	}
 
