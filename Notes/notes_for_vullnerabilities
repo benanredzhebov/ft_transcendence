@@ -1,0 +1,28 @@
+1. Hardcoded JWT Secret
+	- will store JWT Secret in an evironment variable
+
+2. /data and /delete endpoints (Developer Routes)
+	- risk: these endpoints allow anyone to view all user data and delete users without 
+	authentication or authorization.
+	- fix: protect these routes with authentication and admin authorization, or remove them in
+	production.
+
+3. No Rate Limiting or Sensitive Endpoints (Rate Limiting is a Security technique that restricts 
+how many times someone can call your API Endpoints in a sertain period(for example 5 login attempts
+per minute))
+	- can use @fastify / rate limit to set limit
+
+4. File Size Limit on Avatar Upload - `Done`
+
+5. No file Type Validation on Avatar Filename
+	-	We're already checking the MIME type of uploaded files, which is good, but MIME type alone can be spoofed by an attacker.
+
+	- always generate a new filename - const uniqueFilename = `${userId}_${crypto.randomBytes(8).toString('hex')}${fileExtension}`;
+
+	- check the file content ("Magic Bytes")
+		- why: Attackers can rename a `.exe` to `jpg` and set the MIME type to `image/jpeg`
+		- how: use a library like 'file-type' to check the actual file content
+
+6. No HTTPS Enforcement
+
+7. No Email Verification on Signup
