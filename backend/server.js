@@ -1133,7 +1133,10 @@ setInterval(() => {
 		if (state.gameOver) {
 			console.log('Game over! Final score:', state.score);
 			game.paused = true;
-			game.resetGame(); // Immediately reset after game over
+			// Don't reset immediately in tournament mode - let match_ended handler do it
+			if (!tournament || !tournament.currentMatch) {
+				game.resetGame(); // Only reset for non-tournament games
+			}
 		}
 	}
 }, 1000 / 60); // 60 times per second

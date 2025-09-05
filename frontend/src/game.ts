@@ -323,6 +323,7 @@ function setupTournamentHandlers() {
 	});
 
 	socket.on('tournament_over', ({ winner, allMatches }: { winner: any, allMatches: string[] }) => {
+		console.log('🏆 Tournament Over event received:', { winner, allMatches }); // Debug log
 		const winnerName = typeof winner === 'object' && winner !== null ? winner.alias : winner;
 		
 		// Instead of showing the simple overlay, enhance the existing tournament bracket
@@ -961,7 +962,14 @@ function showGameOverScreen(winner: string | { alias: string}) {
 	const matchBox = document.getElementById('match-info-box');
 	if (matchBox) matchBox.remove();
 
-	if (inLocalTournament) {
+	if (inLocalTournament || inTournament) {
+		// For tournament mode, show the bracket immediately while waiting for server updates
+		if (inTournament) {
+			const bracketDiv = document.getElementById('tournament-bracket');
+			if (bracketDiv) {
+				bracketDiv.style.display = 'block';
+			}
+		}
 		return;
 	}
 
@@ -1023,29 +1031,9 @@ function showGameOverScreen(winner: string | { alias: string}) {
 
 		overlay.appendChild(message);
 		overlay.appendChild(buttons);
-	} else if (inTournament) {
-		// Only show Back to Dashboard in remote tournament mode
-		const dashboardBtn = document.createElement('button');
-		dashboardBtn.textContent = 'Back to Dashboard';
-		dashboardBtn.onclick = () => {
-			if (socket) {
-				socket.disconnect();
-				socket = null;
-			}
-			const token = sessionStorage.getItem('authToken');
-			if (!token) {
-				alert('Your session has expired. Please log in again.');
-				window.location.href = '/login';
-			} else {
-				window.location.href = '/dashboard';
-			}
-		};
-		buttons.appendChild(dashboardBtn);
-
-		overlay.appendChild(message);
-		overlay.appendChild(buttons);
+		
+		canvas.parentElement.appendChild(overlay);
 	}
-	canvas.parentElement.appendChild(overlay);
 }
 
 function showTournamentResults(winnerName: string, allMatches?: string[]) {
