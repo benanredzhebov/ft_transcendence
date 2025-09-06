@@ -7,7 +7,7 @@ services:
       dockerfile: ./backend/Dockerfile
     container_name: transcendence-backend
     environment:
-      - APP_URL=https://10.12.3.3:8443
+      - APP_URL=https://10.12.13.4:8443
       - NODE_ENV=production
       - JWT_SECRET=hbj2io4@@#!v7946h3&^*2cn9!@09*@B627B^*N39&^847,1
     ports:
