@@ -68,18 +68,25 @@ export function renderChat(socket: Socket): () => void {
   container.appendChild(playerListContainer); // Add the new container to the main layout
   container.appendChild(chatArea);
 
+  // Used textContent for security (prevents XSS)
   function appendMessage(sender: string, message: string, isOwnMessage = false) {
-    const msgDiv = document.createElement('div');
-    if (sender === '🤖') {
-      msgDiv.className = 'chat-message system-center';
-      msgDiv.innerHTML = `<strong>${sender}:</strong> ${message}`;
-    } else {
-      msgDiv.className = 'chat-message ' + (isOwnMessage ? 'sent' : 'received');
-      msgDiv.innerHTML = `<strong>${sender}:</strong> ${message}`;
-    }
-    messagesDiv.appendChild(msgDiv);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  const msgDiv = document.createElement('div');
+  if (sender === '🤖') {
+    msgDiv.className = 'chat-message system-center';
+    const strong = document.createElement('strong');
+    strong.textContent = sender + ':';
+    msgDiv.appendChild(strong);
+    msgDiv.append(' ' + message);
+  } else {
+    msgDiv.className = 'chat-message ' + (isOwnMessage ? 'sent' : 'received');
+    const strong = document.createElement('strong');
+    strong.textContent = sender + ':';
+    msgDiv.appendChild(strong);
+    msgDiv.append(' ' + message);
   }
+  messagesDiv.appendChild(msgDiv);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
 
   // --- Show OnlineUser List - Authenticate the user for the chat ---
   const token = sessionStorage.getItem('authToken');
