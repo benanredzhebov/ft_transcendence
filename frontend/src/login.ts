@@ -84,11 +84,7 @@ export function renderLogin() {
   const loginButtonSpan = document.createElement('span');
   loginButtonSpan.textContent = "Login";
 
-  // SVG is complex, keeping inline for now, but could be moved to CSS background/mask
-  // const loginButtonSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  // ... (SVG attributes remain the same) ...
   loginButton.appendChild(loginButtonSpan);
-  // loginButton.appendChild(loginButtonSvg);
 
   // Border
   const borderDiv = document.createElement('div');

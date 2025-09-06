@@ -574,6 +574,11 @@ socket.on('player_inactive', () => {
         io.to(targetSocketId).emit('receive_public_tournament_invite', payload);
     });
 
+	// socket.on('start_match_navigation', (data) => {
+	// 	console.log('Opponent accepted! Starting match.', data);
+	// 	navigateTo('/game?tournament=true');
+	// });
+
 	socket.on('dismiss_lobby_invite', ({ senderSocketId }) => {
     	const sender = onlineUsers.get(senderSocketId);
     	if (sender) {
