@@ -6,3 +6,6 @@
 3. When remote tournament finished appear back to dashboar button, not the correct bracket
 4. 2FA - after filling out 6 digit code it's appear an error message "An error occurred during 2FA vertification"
 
+
+
+5. When trying log in with google I noticed this issue : Access blocked: Authorization Error
