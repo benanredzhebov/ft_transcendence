@@ -79,10 +79,12 @@ export function renderGoogle() {
       if (response.ok) {
         if (data.requires2FA) {
           sessionStorage.setItem('tempToken', data.tempToken);
-          navigateTo('/2fa'); // Redirect to 2FA page
+          // Add small delay before navigation to ensure token is stored
+          setTimeout(() => navigateTo('/2fa'), 50);
         } else {
           sessionStorage.setItem('authToken', data.token);
-          navigateTo('/dashboard'); // Redirect to dashboard
+          // Add small delay before navigation to ensure token is stored
+          setTimeout(() => navigateTo('/dashboard'), 50);
         }
       } else {
         throw new Error(data.error || 'Failed to set username.');

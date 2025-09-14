@@ -89,13 +89,21 @@ export function renderChat(socket: Socket): () => void {
 }
 
   // --- Show OnlineUser List - Authenticate the user for the chat ---
-  const token = sessionStorage.getItem('authToken');
-  if (token) {
-    socket.emit('authenticate_chat', token);
-  } else {
-    appendMessage('🤖', 'Authentication token not found. Chat disabled.');
-    console.error('Chat: No auth token found in sessionStorage.');
-  }
+  // Add retry mechanism for authentication
+  const authenticateChat = (retryCount = 0) => {
+    const token = sessionStorage.getItem('authToken');
+    if (token) {
+      socket.emit('authenticate_chat', token);
+    } else if (retryCount < 3) {
+      // Retry after a short delay if token not found
+      setTimeout(() => authenticateChat(retryCount + 1), 200);
+    } else {
+      appendMessage('🤖', 'Authentication token not found. Chat disabled.');
+      console.error('Chat: No auth token found in sessionStorage after retries.');
+    }
+  };
+  
+  authenticateChat();
 
   // Setup handlers
   socket.on('online_users', (users: OnlineUser[]) => {

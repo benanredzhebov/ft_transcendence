@@ -82,25 +82,33 @@ export function renderDashboard() {
   appElement.appendChild(globalContainer);
 
   // --- SOCKET Chat Connection ---
-  const token = sessionStorage.getItem('authToken');
-  if (token && (!chatSocket || !chatSocket.connected)) {
-    if (chatSocket) {
-      chatSocket.disconnect(); // Disconnect any old socket
-    }
-    chatSocket = io(`${import.meta.env.VITE_URL}`, {
-      transports: ['websocket'],
-      secure: true,
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
-    });
+  // Add a small delay to ensure token is available
+  setTimeout(() => {
+    const token = sessionStorage.getItem('authToken');
+    if (token && (!chatSocket || !chatSocket.connected)) {
+      if (chatSocket) {
+        chatSocket.disconnect(); // Disconnect any old socket
+      }
+      chatSocket = io(`${import.meta.env.VITE_URL}`, {
+        transports: ['websocket'],
+        secure: true,
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000,
+      });
 
-    chatSocket.on('connect', () => {
-      console.log('%cDEBUG: Session socket connected:', chatSocket?.id);
-      chatSocket?.emit('authenticate_chat', token);
-    });
+      chatSocket.on('connect', () => {
+        console.log('%cDEBUG: Session socket connected:', chatSocket?.id);
+        // Verify token is still available before authenticating
+        const currentToken = sessionStorage.getItem('authToken');
+        if (currentToken) {
+          chatSocket?.emit('authenticate_chat', currentToken);
+        } else {
+          console.warn('Token not available during socket connection');
+        }
+      });
 
     chatSocket.on('disconnect', () => {
       console.log('%cDEBUG: Session socket disconnected.');
@@ -154,6 +162,7 @@ export function renderDashboard() {
       console.log('Chat socket failed to reconnect');
     });
   }
+  }, 100); // Close setTimeout - 100ms delay to ensure token is available
 
    // ----test 2FA QR----
    const twoFaButton = document.createElement('button');
