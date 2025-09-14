@@ -154,6 +154,14 @@ export function renderChat(socket: Socket): () => void {
     appendMessage('🤖', message);
   });
 
+  socket.on('lobby_invite_accepted', ({ accepterAlias, senderAlias }) => {
+    if (accepterAlias) {
+      appendMessage('🤖', `${accepterAlias} accepted your match invitation!`);
+    } else if (senderAlias) {
+      appendMessage('🤖', `You accepted ${senderAlias}'s match invitation!`);
+    }
+  });
+
   socket.on('private_message', ({ from, message, username, userId }) => {
     // Ignore message if sender is blocked
     if (blockedUserIds.has(userId)) {
@@ -227,14 +235,6 @@ export function renderChat(socket: Socket): () => void {
         }
     }
   });
-
-  inviteBtn.addEventListener('click', () => {
-    if (selectedUser) {
-      socket.emit('invite_to_game', { targetSocketId: selectedUser.socketId });
-      // appendMessage('System', `Game invite sent to ${selectedUser.username}`);
-    }
-  });
-
 
   const root = document.querySelector('#dashboard-content');
   root?.appendChild(container);

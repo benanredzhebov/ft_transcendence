@@ -6,10 +6,15 @@ services:
       context: .
       dockerfile: ./backend/Dockerfile
     container_name: transcendence-backend
+    env_file:
+      - .env
     environment:
-      - APP_URL=https://10.12.13.4:8443
-      - NODE_ENV=production
-      - JWT_SECRET=hbj2io4@@#!v7946h3&^*2cn9!@09*@B627B^*N39&^847,1
+      - APP_URL=${APP_URL}
+      - VITE_URL=${VITE_URL}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - NODE_ENV=${NODE_ENV}
+      - JWT_SECRET=${JWT_SECRET}
     ports:
       - "8443:8443"
     volumes:

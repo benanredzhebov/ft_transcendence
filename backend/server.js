@@ -11,7 +11,6 @@
 /* ************************************************************************** */
 
 import dotenv from 'dotenv';
-dotenv.config();
 
 import fs from 'fs'
 import { existsSync, readFileSync } from 'fs';
@@ -40,6 +39,9 @@ let countdownInterval = null;
 // Fix __dirname in ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Load .env from parent directory
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -584,6 +586,29 @@ socket.on('player_inactive', () => {
     	if (sender) {
     	    io.to(senderSocketId).emit('lobby_invite_dismissed', { message: 'Your match invite was dismissed.' });
     	}
+	});
+
+	socket.on('accept_lobby_invite', ({ senderSocketId }) => {
+		const sender = onlineUsers.get(senderSocketId);
+		const accepter = onlineUsers.get(socket.id);
+		
+		if (sender && accepter) {
+			// Notify the original sender that their invite was accepted
+			io.to(senderSocketId).emit('lobby_invite_accepted', { 
+				accepterAlias: accepter.alias,
+				accepterSocketId: socket.id
+			});
+			
+			// Optionally notify the accepter too
+			socket.emit('lobby_invite_accepted', { 
+				senderAlias: sender.alias,
+				senderSocketId: senderSocketId
+			});
+			
+			console.log(`${accepter.alias} accepted lobby invite from ${sender.alias}`);
+		} else {
+			console.log('Could not find sender or accepter for lobby invite acceptance.');
+		}
 	});
 
 	// Start tournament when someone clicks "Start Tournament"

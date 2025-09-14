@@ -189,8 +189,10 @@ export function renderDashboard() {
   setActiveView('profile', navButtons, contentArea); // Set initial view to profile
 
   if (chatSocket) {
-    chatSocket.on('receive_public_tournament_invite', ({ senderAlias, senderSocketId, chatSocket }) => {
-      showLobbyInviteCard(senderAlias, senderSocketId, chatSocket);
+    chatSocket.on('receive_public_tournament_invite', ({ senderAlias, senderSocketId }) => {
+      if (chatSocket) {
+        showLobbyInviteCard(senderAlias, senderSocketId, chatSocket);
+      }
     });
   }
 
