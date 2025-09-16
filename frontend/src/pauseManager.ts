@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   pauseManager.ts                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
+/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/09/02 00:00:00 by benanredzhe       #+#    #+#             */
-/*   Updated: 2025/09/02 20:48:16 by benanredzhe      ###   ########.fr       */
+/*   Updated: 2025/09/16 14:21:55 by beredzhe         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 

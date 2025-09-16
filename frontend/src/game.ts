@@ -1364,6 +1364,12 @@ export function renderGame(containerId: string = 'app') {
 			socket.emit('player_inactive');
 		}
 	});
+	
+	// Handle browser back/forward navigation
+	window.addEventListener('popstate', () => {
+		console.log('🔄 Browser navigation detected, cleaning up game...');
+		cleanupGame();
+	});
 
 	// Resize observer
 	if (canvas.parentElement) {
@@ -1596,8 +1602,24 @@ export function renderGame(containerId: string = 'app') {
 		if (canvas?.parentElement) handleResize(canvas.parentElement);
 		requestAnimationFrame(() => drawGame(state));
 
-		if (inTournament && currentMatch) {
-			const [alias1, alias2] = currentMatch;
+		if ((inTournament || inLocalTournament) && currentMatch) {
+			let alias1: string | { alias: string };
+			let alias2: string | { alias: string };
+			
+			if (inLocalTournament) {
+				// For local tournaments, currentMatch contains objects with .name property
+				alias1 = typeof currentMatch[0] === 'object' && currentMatch[0] !== null && 'name' in currentMatch[0] 
+					? (currentMatch[0] as any).name 
+					: (currentMatch[0] as string);
+				alias2 = typeof currentMatch[1] === 'object' && currentMatch[1] !== null && 'name' in currentMatch[1] 
+					? (currentMatch[1] as any).name 
+					: (currentMatch[1] as string);
+			} else {
+				// For remote tournaments, currentMatch contains strings or objects with .alias property
+				alias1 = currentMatch[0];
+				alias2 = currentMatch[1];
+			}
+			
 			showMatchInfo(alias1, alias2, state.score.player1, state.score.player2);
 		}
 
