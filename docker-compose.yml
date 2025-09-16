@@ -5,6 +5,10 @@ services:
     build:
       context: .
       dockerfile: ./backend/Dockerfile
+      args:
+        - APP_URL=${APP_URL}
+        - VITE_URL=${VITE_URL}
+        - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
     container_name: transcendence-backend
     env_file:
       - .env
@@ -15,6 +19,7 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - NODE_ENV=${NODE_ENV}
       - JWT_SECRET=${JWT_SECRET}
+      - PORT=8443
     ports:
       - "8443:8443"
     volumes:
