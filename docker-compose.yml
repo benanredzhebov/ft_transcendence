@@ -27,3 +27,29 @@ services:
       - ./backend/https_keys:/workspace/backend/https_keys
       - ./uploads:/workspace/uploads
     command: ["npm", "run", "dev"]
+    networks:
+      - transcendence-network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: ./frontend/Dockerfile
+      args:
+        - VITE_URL=${VITE_URL}
+        - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
+    container_name: transcendence-frontend
+    env_file:
+      - .env
+    environment:
+      - VITE_URL=${VITE_URL}
+      - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - transcendence-network
+
+networks:
+  transcendence-network:
+    driver: bridge

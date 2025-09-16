@@ -1191,12 +1191,11 @@ app.register(fastifyStatic, {
 	decorateReply: false // To avoid conflict if already decorated for other static serving
 });
 
-// Serve frontend static files
-app.register(fastifyStatic, {
-	root: join(__dirname, '../frontend/dist'), // Path to compiled frontend
-	prefix: '/',
+// Enable CORS for frontend communication
+app.register(fastifyCors, {
+	origin: [process.env.VITE_URL || 'http://localhost:3000', 'https://localhost:3000'],
+	credentials: true
 });
-
 
 //--------Routes------------
 developerRoutes(app);
@@ -1205,9 +1204,9 @@ credentialsRoutes(app);
 // noHandlerRoute(app);
 //-------------------------
 
-// Fallback for SPA routing
+// API-only backend - no SPA fallback needed
 app.setNotFoundHandler((req, reply) => {
-	reply.sendFile('index.html'); // Serve index.html from the root specified in fastifyStatic
+	reply.code(404).send({ error: 'API endpoint not found' });
 });
 
 
