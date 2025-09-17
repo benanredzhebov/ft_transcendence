@@ -3,7 +3,13 @@
 FROM node:alpine AS frontend-build
 WORKDIR /workspace/frontend
 COPY ./frontend /workspace/frontend
+COPY .env /workspace/frontend/
 RUN npm install
+# Build with explicit environment variables
+ARG VITE_URL=https://c2r11s10.42wolfsburg.de:8443
+ARG VITE_GOOGLE_CLIENT_ID=692342842395-ln6csq22fihcfdi8snc3onrff9t3hqbf.apps.googleusercontent.com
+ENV VITE_URL=$VITE_URL
+ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
 RUN npm run build
 
 # BACKEND
