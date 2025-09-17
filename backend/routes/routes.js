@@ -12,9 +12,13 @@ import QRCode from 'qrcode';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// IMPORTANT: Store it in an env.
-const JWT_SECRET = process.env.JWT_SECRET || 'hbj2io4@@#!v7946h3&^*2cn9!@09*@B627B^*N39&^847,1';
-
+export function getJWTSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error ('JWT_SECRET environment variable is not set');
+  }
+  return secret;
+}
 
 const developerRoutes = (app) => {
   //2FA --test
@@ -27,7 +31,7 @@ const developerRoutes = (app) => {
     const token = authHeader.substring(7);
     let decodedToken;
     try {
-      decodedToken = jwt.verify(token, JWT_SECRET);
+      decodedToken = jwt.verify(token, getJWTSecret());
     } catch (err) {
       return reply.status(401).send({ error: 'Unauthorized: Invalid token' });
     }
@@ -69,7 +73,7 @@ const developerRoutes = (app) => {
     const jwtToken = authHeader.substring(7);
     let decodedToken;
     try {
-      decodedToken = jwt.verify(jwtToken, JWT_SECRET);
+      decodedToken = jwt.verify(jwtToken, getJWTSecret());
     } catch (err) {
       return reply.status(401).send({ error: 'Unauthorized: Invalid token' });
     }
@@ -148,7 +152,7 @@ const credentialsRoutes = (app) =>{
     const token = authHeader.substring(7); // Remove 'Bearer '
 
     try {
-      const decodedToken = jwt.verify(token, JWT_SECRET);
+      const decodedToken = jwt.verify(token, getJWTSecret());
       const userId = decodedToken.userId;
 
       if (!userId) {
@@ -192,7 +196,7 @@ const credentialsRoutes = (app) =>{
 
     const token = authHeader.substring(7);
     try {
-      const decodedToken = jwt.verify(token, JWT_SECRET);
+      const decodedToken = jwt.verify(token, getJWTSecret());
       const userId = decodedToken.userId;
 
       const matches = await DB('matchHistory')
@@ -219,7 +223,7 @@ const credentialsRoutes = (app) =>{
     const token = authHeader.substring(7);
 
     try {
-      const decodedToken = jwt.verify(token, JWT_SECRET);
+      const decodedToken = jwt.verify(token, getJWTSecret());
       const userId = decodedToken.userId;
 
       if (!userId) {
@@ -302,7 +306,7 @@ const credentialsRoutes = (app) =>{
     const token = authHeader.substring(7);
     let decodedToken;
     try {
-      decodedToken = jwt.verify(token, JWT_SECRET);
+      decodedToken = jwt.verify(token, getJWTSecret());
     } catch (err) {
       return reply.status(401).send({ error: 'Unauthorized: Invalid token' });
     }
@@ -424,7 +428,7 @@ const credentialsRoutes = (app) =>{
         // Step 1 complete: return short-lived temp token
         const tempToken = jwt.sign(
           { userId: user.id, twoFAPending: true },
-          JWT_SECRET,
+          getJWTSecret(),
           { expiresIn: '5m' } // short lifespan
         );
       
@@ -441,7 +445,7 @@ const credentialsRoutes = (app) =>{
         username: user.username
       };
       // Sign the token - expires in 1 hour
-      const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '1h' });
+      const token = jwt.sign(tokenPayload, getJWTSecret(), { expiresIn: '1h' });
       
       reply.send({
         success: true,
@@ -464,7 +468,7 @@ const credentialsRoutes = (app) =>{
     if (!token) return reply.status(401).send({ error: 'Unauthorized' });
 
     try {
-      const decoded = jwt.verify(token, JWT_SECRET);
+      const decoded = jwt.verify(token, getJWTSecret());
       const userId = decoded.userId;
 
       const friends = await DB('friendships')
@@ -491,7 +495,7 @@ const credentialsRoutes = (app) =>{
     if (!token) return reply.status(401).send({ error: 'Unauthorized' });
 
     try {
-      const decoded = jwt.verify(token, JWT_SECRET);
+      const decoded = jwt.verify(token, getJWTSecret());
       const userId = decoded.userId;
 
       if (userId === friendId) {
@@ -528,7 +532,7 @@ const credentialsRoutes = (app) =>{
     if (!token) return reply.status(401).send({ error: 'Unauthorized' });
 
     try {
-      const decoded = jwt.verify(token, JWT_SECRET);
+      const decoded = jwt.verify(token, getJWTSecret());
       const userId = decoded.userId;
 
       // Order IDs to match how they are stored in the database
@@ -556,7 +560,7 @@ const credentialsRoutes = (app) =>{
     if (!token) return reply.status(401).send({ error: 'Unauthorized' });
 
     try {
-      const decoded = jwt.verify(token, JWT_SECRET);
+      const decoded = jwt.verify(token, getJWTSecret());
       const userId = decoded.userId;
 
       const user1_id = Math.min(userId, parseInt(otherUserId));
@@ -589,7 +593,7 @@ const credentialsRoutes = (app) =>{
 
     try {
       // Verify the token to ensure the request is authenticated
-      jwt.verify(token, JWT_SECRET);
+      jwt.verify(token, getJWTSecret());
 
       // Fetch all users from the database
       const allUsers = await DB('credentialsTable').select('id', 'username').orderBy('username', 'asc');
@@ -615,7 +619,7 @@ const credentialsRoutes = (app) =>{
 
     const token = authHeader.substring(7);
     try {
-      const decodedToken = jwt.verify(token, JWT_SECRET);
+      const decodedToken = jwt.verify(token, getJWTSecret());
       const userId = decodedToken.userId;
       const otherUserId = parseInt(req.params.otherUserId, 10);
 
@@ -655,7 +659,7 @@ const credentialsRoutes = (app) =>{
   
     let decoded;
     try {
-      decoded = jwt.verify(tempToken, JWT_SECRET);
+      decoded = jwt.verify(tempToken, getJWTSecret());
     } catch (err) {
       return reply.status(401).send({ error: 'Invalid or expired temporary token' });
     }
@@ -684,7 +688,7 @@ const credentialsRoutes = (app) =>{
     // 2FA passed → issue real token
     const realToken = jwt.sign(
       { userId: user.id, email: user.email, username: user.username },
-      JWT_SECRET,
+      getJWTSecret(),
       { expiresIn: '24h' }
     );
   
@@ -730,7 +734,7 @@ const credentialsRoutes = (app) =>{
         // Generate a temporary token for 2FA verification
         const tempToken = jwt.sign(
           { userId: user.id, twoFAPending: true },
-          JWT_SECRET,
+          getJWTSecret(),
           { expiresIn: '5m' } // Short lifespan
         );
   
@@ -743,7 +747,7 @@ const credentialsRoutes = (app) =>{
         email: user.email,
         username: user.username,
       };
-      const jwtAuthToken = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '1h' });
+      const jwtAuthToken = jwt.sign(tokenPayload, getJWTSecret(), { expiresIn: '1h' });
   
       reply.redirect(`/google-auth-handler?token=${jwtAuthToken}`);
     } catch (e) {

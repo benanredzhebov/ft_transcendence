@@ -1,6 +1,6 @@
 
 # Build the frontend first
-FROM node:alpine as frontend-build
+FROM node:alpine AS frontend-build
 WORKDIR /workspace/frontend
 COPY ./frontend /workspace/frontend
 RUN npm install

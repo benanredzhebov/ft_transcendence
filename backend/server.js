@@ -25,14 +25,10 @@ import { Server } from 'socket.io';
 import GameEngine from './GameLogic/GameEngine.js';
 import Tournament from './GameLogic/Tournament.js';
 import LocalTournamentMode from './GameLogic/LocalTournamentMode.js';
-import GameState from './GameLogic/GameState.js';
-import hashPassword from './crypto/crypto.js';
 import DB from './data_controller/dbConfig.js';
 import {developerRoutes, credentialsRoutes} from './routes/routes.js'; // Import the routes
+import { getJWTSecret } from './routes/routes.js';
 import jwt from 'jsonwebtoken';
-
-
-const JWT_SECRET = process.env.JWT_SECRET || 'hbj2io4@@#!v7946h3&^*2cn9!@09*@B627B^*N39&^847,1';
 
 let countdownInterval = null;
 
@@ -217,7 +213,7 @@ io.on('connection', (socket) => {
 		return;
 		}
 		try {
-			const decoded = jwt.verify(token, JWT_SECRET);
+			const decoded = jwt.verify(token, getJWTSecret());
 
 			// Prevent duplicate user sessions
 			const isAlreadyOnline = [...onlineUsers.values()].some(user => user.userId === decoded.userId);
@@ -365,7 +361,7 @@ io.on('connection', (socket) => {
 		}
 
 		try {
-			const decodedToken = jwt.verify(token, JWT_SECRET);
+			const decodedToken = jwt.verify(token, getJWTSecret());
 			const user = { userId: decodedToken.userId, username: decodedToken.username };
 
 			if (!tournament) tournament = new Tournament();
@@ -521,7 +517,7 @@ socket.on('player_inactive', () => {
 		if (!token) return;
 		
 		try {
-			const decodedToken = jwt.verify(token, JWT_SECRET);
+			const decodedToken = jwt.verify(token, getJWTSecret());
 			// Add admin check here if needed - for now any authenticated user can reset
 			
 			console.log(`Tournament reset requested by user ${decodedToken.username} (${socket.id})`);

@@ -5,7 +5,7 @@ function getGoogleAuth(){
 
     const options = {
         redirect_uri: `${import.meta.env.VITE_URL}/username-google`,
-        client_id : import.meta.env.VITE_GOOGLE_CLIENT_ID || "692342842395-ln6csq22fihcfdi8snc3onrff9t3hqbf.apps.googleusercontent.com",
+        client_id : import.meta.env.VITE_GOOGLE_CLIENT_ID ,
         access_type: 'offline',
         response_type: 'code',
         prompt : 'consent',
