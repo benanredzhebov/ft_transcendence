@@ -10,11 +10,13 @@ ENV VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
 
 WORKDIR /app
 
-COPY package*.json ./
+# Copy package.json and package-lock.json from frontend directory
+COPY frontend/package*.json ./
 
 RUN npm install
 
-COPY . .
+# Copy the entire frontend directory content
+COPY frontend/ .
 
 # Build the frontend
 RUN npm run build

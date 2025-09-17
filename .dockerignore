@@ -7,3 +7,8 @@ frontend/dist
 frontend/.git
 frontend/.vscode
 backend/https_keys
+uploads
+Notes
+scripts
+.git
+.gitignore

@@ -24,7 +24,6 @@ services:
       - "8443:8443"
     volumes:
       - ./backend/data_controller/data:/workspace/backend/data_controller/data
-      - ./backend/https_keys:/workspace/backend/https_keys
       - ./uploads:/workspace/uploads
     command: ["npm", "run", "dev"]
     networks:

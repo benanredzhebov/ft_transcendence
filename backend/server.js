@@ -1172,7 +1172,6 @@ setInterval(() => {
 }, 1000 / 60); // 60 times per second
 
 // --- Middlewares ---
-app.register(fastifyCors, { origin: true, credentials: true });
 
 // Register Multipart plugin
 app.register(multipart, { // Now 'multipart' is defined
