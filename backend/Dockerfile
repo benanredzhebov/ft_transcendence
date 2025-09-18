@@ -6,8 +6,8 @@ COPY ./frontend /workspace/frontend
 COPY .env /workspace/frontend/
 RUN npm install
 # Build with explicit environment variables
-ARG VITE_URL=https://c2r11s10.42wolfsburg.de:8443
-ARG VITE_GOOGLE_CLIENT_ID=692342842395-ln6csq22fihcfdi8snc3onrff9t3hqbf.apps.googleusercontent.com
+ARG VITE_URL
+ARG VITE_GOOGLE_CLIENT_ID
 ENV VITE_URL=$VITE_URL
 ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
 RUN npm run build
@@ -34,6 +34,6 @@ RUN mkdir -p /workspace/backend/https_keys && \
     -days 365 \
     -subj "/C=DE/L=Wolfsburg/O=42School/OU=Unit/CN=localhost"
 
-EXPOSE 3000
+EXPOSE 8443
 
 CMD ["npm", "run", "dev"]
