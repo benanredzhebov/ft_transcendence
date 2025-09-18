@@ -6,7 +6,7 @@
 /*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/09/17 18:00:00 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/09/18 14:13:53 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/09/18 19:30:11 by beredzhe         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -40,15 +40,15 @@ class GameManager {
 	/**
 	 * Create and manage a local match game instance
 	 */
-	createLocalMatch(socketId) {
+	createLocalMatch(socketId, isAIMode = false) {
 		const roomId = this.generateRoomId('local_match', socketId);
-		const gameInstance = new LocalMatchInstance(roomId, this.io);
+		const gameInstance = new LocalMatchInstance(roomId, this.io, isAIMode);
 		
 		this.localMatches.set(roomId, gameInstance);
 		this.socketToRoom.set(socketId, roomId);
 		this.roomToGameType.set(roomId, 'local_match');
 		
-		console.log(`Created local match room: ${roomId} for socket: ${socketId}`);
+		console.log(`Created local match room: ${roomId} for socket: ${socketId} (AI: ${isAIMode})`);
 		return { roomId, gameInstance };
 	}
 
@@ -180,13 +180,19 @@ class GameManager {
  * Manages isolated local match sessions
  */
 class LocalMatchInstance {
-	constructor(roomId, io) {
+	constructor(roomId, io, isAIMode = false) {
 		this.roomId = roomId;
 		this.io = io;
 		this.type = 'local_match';
+		this.isAIMode = isAIMode;
 		this.gameEngine = new GameEngine();
 		this.players = new Set();
-		this.gameEngine.setTournamentMode(false, 'local');
+		
+		// Set the correct tournament mode (AI or local)
+		const mode = isAIMode ? 'ai' : 'local';
+		this.gameEngine.setTournamentMode(false, mode);
+		console.log(`LocalMatchInstance created with mode: ${mode}, AI: ${isAIMode}`);
+		
 		this.gameLoop = null;
 	}
 
@@ -264,7 +270,7 @@ class LocalMatchInstance {
 	}
 
 	handlePlayerMove(direction, playerId) {
-		this.gameEngine.movePlayer(direction, playerId);
+		this.gameEngine.handlePlayerInput(playerId, direction);
 		this.emitToRoom('state_update', this.gameEngine.getState());
 	}
 

@@ -190,7 +190,7 @@ io.on('connection', (socket) => {
 	// Handle different game modes with room isolation
 	if (isLocalMatch || isAIMode) {
 		// Create a new local match room
-		const { roomId: newRoomId, gameInstance: newGameInstance } = gameManager.createLocalMatch(socket.id);
+		const { roomId: newRoomId, gameInstance: newGameInstance } = gameManager.createLocalMatch(socket.id, isAIMode);
 		roomId = newRoomId;
 		gameInstance = newGameInstance;
 		
