@@ -631,19 +631,6 @@ function setupLocalTournamentHandlers() {
 		console.log('Local tournament initialized, showing bracket and match dialog');
 	});
 	
-	socket.on('local_tournament_match_started', (_matchInfo) => {
-		document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
-		removeOverlays();
-		
-		gameEnded = false;
-		matchStarted = true;
-		pauseManager.updateState({ matchStarted: true, gameEnded: false });
-		pauseManager.createPauseButton(); // Create pause button when local tournament match starts
-		if (movePlayersFrame === null) movePlayers();
-		
-		console.log('Local tournament match started, game interface ready');
-	});
-	
 	socket.on('local_tournament_match_started', (matchInfo) => {
 		document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
 		removeOverlays();

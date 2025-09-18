@@ -141,7 +141,6 @@ function startSynchronizedCountdown(io, duration = 5) {
 	}
 	
 	countdownInterval = setInterval(() => {
-		console.log('Emitting countdown_update:', remaining); // del later
 		io.emit('countdown_update', remaining);
 		remaining--;
 	
@@ -941,7 +940,7 @@ socket.on('player_inactive', () => {
 
 				tournament.handleGameInput({ direction, playerId });
 				gameInstance.emitToRoom('state_update', tournament.getGameState());
-				console.log(`🎮 Local tournament move in room ${gameInstance.roomId}: ${direction} by ${playerId}`);
+				//console.log(`🎮 Local tournament move in room ${gameInstance.roomId}: ${direction} by ${playerId}`);
 			} else if (localTournament && localTournament.gameEngine) {
 				// Fallback to legacy system
 				console.log('⚠️ Using legacy tournament player move');
