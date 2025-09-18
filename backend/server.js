@@ -25,6 +25,7 @@ import { Server } from 'socket.io';
 import GameEngine from './GameLogic/GameEngine.js';
 import Tournament from './GameLogic/Tournament.js';
 import LocalTournamentMode from './GameLogic/LocalTournamentMode.js';
+import GameManager from './GameLogic/GameManager.js';
 import DB from './data_controller/dbConfig.js';
 import {developerRoutes, credentialsRoutes} from './routes/routes.js'; // Import the routes
 import { getJWTSecret } from './routes/routes.js';
@@ -87,11 +88,17 @@ let tournament = null;
 let localTournament = null;
 const game = new GameEngine();
 
+// Initialize GameManager for room-based game isolation
+let gameManager = null;
+
 // Map of online users: socketId -> { userId, username, alias, blocked:Set }
 const onlineUsers = new Map();
 
 // Server startup cleanup
 function initializeServer() {
+	// Initialize GameManager
+	gameManager = new GameManager(io);
+	
 	// Reset any existing tournament state on server restart
 	if (tournament) {
 		console.log('Server restart detected - resetting tournament state');
@@ -107,6 +114,7 @@ function initializeServer() {
 	game.resetGame();
 	// Ensure gameOver is false and score is zeroed before any game loop tick
 	console.log('Server initialized - all states reset');
+	console.log('GameManager initialized for room-based game isolation');
 }
 
 // Call initialization on server start
@@ -166,7 +174,7 @@ function startSynchronizedCountdown(io, duration = 5) {
 io.on('connection', (socket) => {
 	console.log('Client connected:', socket.id);
 	
-	// Detect if it's local match
+	// Detect game mode from client
 	const isLocalMatch = 
 		socket.handshake.query.local === 'true' ||
 		socket.handshake.query.local === true;
@@ -175,36 +183,87 @@ io.on('connection', (socket) => {
 	const isAIMode = gameMode === 'ai';
 	const isTournamentMode = gameMode === 'tournament';
 	
-	game.setTournamentMode(isTournamentMode, gameMode);
-	console.log(`Game mode set: ${gameMode}, isLocalMatch: ${isLocalMatch}, isTournament: ${isTournamentMode}, isAI: ${isAIMode}`);
+	console.log(`Setting game mode: ${gameMode}, isTournament: ${isTournamentMode}`);
 	
-	// Check if client might have been in a tournament before server restart
-	if (gameMode === 'tournament') {
-		// If no tournament exists on server but client is connecting in tournament mode,
-		// it likely means server was restarted during a tournament
+	let roomId = null;
+	let gameInstance = null;
+
+	// Handle different game modes with room isolation
+	if (isLocalMatch || isAIMode) {
+		// Create a new local match room
+		const { roomId: newRoomId, gameInstance: newGameInstance } = gameManager.createLocalMatch(socket.id);
+		roomId = newRoomId;
+		gameInstance = newGameInstance;
+		
+		// Join the room
+		socket.join(roomId);
+		gameManager.joinRoom(socket.id, roomId);
+		
+		// Add player to the game instance
+		if (!gameInstance.addPlayer(socket.id)) {
+			socket.emit('error', { message: 'Game is full' });
+			socket.disconnect();
+			return;
+		}
+		
+		console.log(`AI Opponent ${isAIMode ? 'enabled' : 'disabled'}`);
+		console.log(`Game mode set: ${gameMode}, isLocalMatch: ${isLocalMatch}, isTournament: ${isTournamentMode}, isAI: ${isAIMode}`);
+		
+		// Emit initial state to the room with debug info
+		const gameState = gameInstance.gameEngine.getState();
+		console.log(`🎮 Local match initial state - Ball moving: ${!gameState.ball || gameState.ball.vx !== 0 || gameState.ball.vy !== 0}, Paused: ${gameState.paused}, GameOver: ${gameState.gameOver}`);
+		gameInstance.emitToRoom('state_update', gameState);
+		
+	} else if (isLocalTournament) {
+		// Create a new local tournament room but don't start tournament yet
+		// Wait for frontend to send player names via start_local_tournament event
+		const { roomId: newRoomId, gameInstance: newGameInstance } = gameManager.createLocalTournament(socket.id);
+		roomId = newRoomId;
+		gameInstance = newGameInstance;
+		
+		// Join the room
+		socket.join(roomId);
+		gameManager.joinRoom(socket.id, roomId);
+		
+		// Don't add player or initialize tournament yet - wait for start_local_tournament event
+		console.log(`Local tournament room created, waiting for player setup`);
+		console.log(`AI Opponent disabled`);
+		console.log(`Game mode set: ${gameMode}, isLocalMatch: false, isTournament: false, isAI: false`);
+		
+	} else if (isTournamentMode) {
+		// For remote tournaments, we'll handle room creation when tournament starts
+		// Check if client might have been in a tournament before server restart
 		if (!tournament) {
 			socket.emit('tournament_reset', { 
 				reason: 'Server was restarted during tournament. All tournament states have been cleared.' 
 			});
 		}
-	}
-	
-	// Add player with error handling
-	if (isLocalMatch || isAIMode) {
-		if (!game.addPlayer(socket.id)) {
-			socket.emit('error', { message: 'Game is full' });
-			socket.disconnect();
-			return;
+		
+		console.log(`AI Opponent disabled`);
+		console.log(`Game mode set: ${gameMode}, isLocalMatch: false, isTournament: ${isTournamentMode}, isAI: false`);
+		
+	} else {
+		// Default case - use legacy system for backward compatibility
+		game.setTournamentMode(isTournamentMode, gameMode);
+		console.log(`Game mode set: ${gameMode}, isLocalMatch: ${isLocalMatch}, isTournament: ${isTournamentMode}, isAI: ${isAIMode}`);
+		
+		// Add player with error handling
+		if (isLocalMatch || isAIMode) {
+			if (!game.addPlayer(socket.id)) {
+				socket.emit('error', { message: 'Game is full' });
+				socket.disconnect();
+				return;
+			}
+			console.log('Connected players:', Array.from(game.state.connectedPlayers));
 		}
-		console.log('Connected players:', Array.from(game.state.connectedPlayers));
+		
+		console.log('✅ About to emit state_update for single player...');
+		//Emit state_update after both players are present
+		if (!isTournamentMode && game.state.connectedPlayers.size === 1) {
+			io.emit('state_update', game.getState());
+		}
+		console.log('✅ State update emission completed');
 	}
-	
-	console.log('✅ About to emit state_update for single player...');
-	//Emit state_update after both players are present
-	if (!isTournamentMode && game.state.connectedPlayers.size === 1) {
-		io.emit('state_update', game.getState());
-	}
-	console.log('✅ State update emission completed');
 
 	console.log('✅ About to setup authenticate_chat handler...');
 	socket.on('authenticate_chat', (token) => {
@@ -276,27 +335,59 @@ io.on('connection', (socket) => {
 	});
 
 	socket.on('player_move', ({ direction, playerId }) => {
-		game.handlePlayerInput(playerId, direction);
-		io.emit('state_update', game.getState());
+		// Get the socket's room and game instance
+		const gameInstance = gameManager.getGameInstance(socket.id);
+		if (gameInstance) {
+			gameInstance.gameEngine.handlePlayerInput(playerId, direction);
+			gameInstance.emitToRoom('state_update', gameInstance.gameEngine.getState());
+		} else {
+			// Fallback to legacy system
+			game.handlePlayerInput(playerId, direction);
+			io.emit('state_update', game.getState());
+		}
 	});
 	
 	socket.on('restart_game', () => {
-		game.resetGame();
-		game.resume();
-		io.emit('state_update', game.getState());
+		const gameInstance = gameManager.getGameInstance(socket.id);
+		if (gameInstance) {
+			gameInstance.gameEngine.resetGame();
+			gameInstance.gameEngine.resume();
+			gameInstance.emitToRoom('state_update', gameInstance.gameEngine.getState());
+		} else {
+			// Fallback to legacy system
+			game.resetGame();
+			game.resume();
+			io.emit('state_update', game.getState());
+		}
 	});
 
 	// Pause/Resume functionality
 	socket.on('pause_game', () => {
-		game.pause();
-		io.emit('game_paused');
-		console.log('Game paused by player:', socket.id);
+		const gameInstance = gameManager.getGameInstance(socket.id);
+		if (gameInstance) {
+			gameInstance.gameEngine.pause();
+			gameInstance.emitToRoom('game_paused');
+			console.log('Game paused by player:', socket.id, 'in room:', gameInstance.roomId);
+		} else {
+			// Fallback to legacy system
+			game.pause();
+			io.emit('game_paused');
+			console.log('Game paused by player:', socket.id);
+		}
 	});
 
 	socket.on('resume_game', () => {
-		game.resume();
-		io.emit('game_resumed');
-		console.log('Game resumed by player:', socket.id);
+		const gameInstance = gameManager.getGameInstance(socket.id);
+		if (gameInstance) {
+			gameInstance.gameEngine.resume();
+			gameInstance.emitToRoom('game_resumed');
+			console.log('Game resumed by player:', socket.id, 'in room:', gameInstance.roomId);
+		} else {
+			// Fallback to legacy system
+			game.resume();
+			io.emit('game_resumed');
+			console.log('Game resumed by player:', socket.id);
+		}
 	});
 
 	// Remote tournament pause/resume functionality
@@ -319,37 +410,6 @@ io.on('connection', (socket) => {
 			if (player1) io.to(player1.socketId).emit('tournament_resumed');
 			if (player2) io.to(player2.socketId).emit('tournament_resumed');
 			console.log('Tournament game resumed by player:', socket.id);
-		}
-	});
-
-	// Remote tournament pause/resume functionality
-	socket.on('tournament_pause', () => {
-		if (tournament && tournament.currentMatch) {
-			game.pause();
-			// Notify only the players in the current match
-			const currentMatch = tournament.getCurrentMatchPlayers();
-			if (currentMatch.player1) {
-				io.to(currentMatch.player1.socketId).emit('tournament_paused');
-			}
-			if (currentMatch.player2) {
-				io.to(currentMatch.player2.socketId).emit('tournament_paused');
-			}
-			console.log('Tournament match paused by player:', socket.id);
-		}
-	});
-
-	socket.on('tournament_resume', () => {
-		if (tournament && tournament.currentMatch) {
-			game.resume();
-			// Notify only the players in the current match
-			const currentMatch = tournament.getCurrentMatchPlayers();
-			if (currentMatch.player1) {
-				io.to(currentMatch.player1.socketId).emit('tournament_resumed');
-			}
-			if (currentMatch.player2) {
-				io.to(currentMatch.player2.socketId).emit('tournament_resumed');
-			}
-			console.log('Tournament match resumed by player:', socket.id);
 		}
 	});
 
@@ -799,22 +859,69 @@ socket.on('player_inactive', () => {
 		}
 	});
 
+	// New handler for starting tournament with player names (using GameManager)
+	socket.on('start_local_tournament', ({ playerNames }) => {
+		try {
+			const gameInstance = gameManager.getGameInstance(socket.id);
+			if (gameInstance && gameInstance.type === 'local_tournament') {
+				// Add the player to the tournament instance
+				gameInstance.addPlayer(socket.id);
+				// Start the tournament with the provided player names
+				gameInstance.startTournament(socket.id, playerNames);
+				console.log(`✅ Local tournament started with players:`, playerNames);
+			} else {
+				throw new Error('No local tournament instance found for this socket');
+			}
+		} catch (error) {
+			socket.emit('local_tournament_error', { message: error.message });
+		}
+	});
+
 	socket.on('start_local_tournament_match', () => {
 		try {
-			if (!localTournament || !localTournament.currentMatch) {
-				throw new Error('No active local tournament match');
-			}
+			// Use room-based tournament system
+			const gameInstance = gameManager.getGameInstance(socket.id);
+			if (gameInstance && gameInstance.type === 'local_tournament') {
+				const tournament = gameInstance.localTournament;
+				
+				// Check if there's already an active game (match already started)
+				if (tournament && tournament.gameEngine && !tournament.gameEngine.state.gameOver) {
+					console.log('⚠️ Match already started, sending current game state');
+					gameInstance.emitToRoom('state_update', tournament.getGameState());
+					return;
+				}
+				
+				if (!tournament || !tournament.currentMatch) {
+					throw new Error('No active local tournament match in room');
+				}
 
-			const matchInfo = localTournament.startCurrentMatch();
-			
-			if (matchInfo && matchInfo.gameState) {
-				// Real match, not a bye
-				socket.emit('local_tournament_match_started', matchInfo);
-				socket.emit('state_update', matchInfo.gameState);
+				// Start the current match using the new method
+				const matchResult = gameInstance.startCurrentMatch();
+				
+				if (matchResult && matchResult.gameState) {
+					// Real match, not a bye
+					gameInstance.emitToRoom('local_tournament_match_started', matchResult);
+					gameInstance.emitToRoom('state_update', matchResult.gameState);
+					console.log(`✅ Local tournament match started in room: ${gameInstance.roomId}`);
+				} else {
+					// Bye match was handled automatically, get updated status
+					const status = tournament.getTournamentStatus();
+					gameInstance.emitToRoom('local_tournament_status_update', status);
+				}
+			} else if (localTournament && localTournament.currentMatch) {
+				// Fallback to legacy system
+				console.log('⚠️ Using legacy tournament match start');
+				const matchInfo = localTournament.startCurrentMatch();
+				
+				if (matchInfo && matchInfo.gameState) {
+					socket.emit('local_tournament_match_started', matchInfo);
+					socket.emit('state_update', matchInfo.gameState);
+				} else {
+					const status = localTournament.getTournamentStatus();
+					socket.emit('local_tournament_status_update', status);
+				}
 			} else {
-				// Bye match was handled automatically, get updated status
-				const status = localTournament.getTournamentStatus();
-				socket.emit('local_tournament_status_update', status);
+				throw new Error('No active local tournament match');
 			}
 		} catch (error) {
 			socket.emit('local_tournament_error', { message: error.message });
@@ -823,12 +930,24 @@ socket.on('player_inactive', () => {
 
 	socket.on('local_tournament_player_move', ({ direction, playerId }) => {
 		try {
-			if (!localTournament || !localTournament.gameEngine) {
-				return;
-			}
+			// Use room-based tournament system
+			const gameInstance = gameManager.getGameInstance(socket.id);
+			if (gameInstance && gameInstance.type === 'local_tournament') {
+				const tournament = gameInstance.localTournament;
+				if (!tournament || !tournament.gameEngine) {
+					console.log('⚠️ No tournament gameEngine in room-based instance');
+					return;
+				}
 
-			localTournament.handleGameInput({ direction, playerId });
-			socket.emit('state_update', localTournament.getGameState());
+				tournament.handleGameInput({ direction, playerId });
+				gameInstance.emitToRoom('state_update', tournament.getGameState());
+				console.log(`🎮 Local tournament move in room ${gameInstance.roomId}: ${direction} by ${playerId}`);
+			} else if (localTournament && localTournament.gameEngine) {
+				// Fallback to legacy system
+				console.log('⚠️ Using legacy tournament player move');
+				localTournament.handleGameInput({ direction, playerId });
+				socket.emit('state_update', localTournament.getGameState());
+			}
 		} catch (error) {
 			console.error('Local tournament player move error:', error.message);
 			socket.emit('local_tournament_error', { message: error.message });
@@ -838,10 +957,28 @@ socket.on('player_inactive', () => {
 	// Local tournament pause/resume functionality
 	socket.on('local_tournament_pause', () => {
 		try {
-			if (localTournament && localTournament.gameEngine) {
+			const gameInstance = gameManager.getGameInstance(socket.id);
+			console.log(`🔍 Local tournament pause - gameInstance found:`, !!gameInstance);
+			console.log(`🔍 gameInstance type:`, gameInstance?.type);
+			console.log(`🔍 gameEngine exists:`, !!gameInstance?.gameEngine);
+			
+			if (gameInstance && gameInstance.type === 'local_tournament') {
+				if (gameInstance.gameEngine) {
+					gameInstance.gameEngine.pause();
+					gameInstance.emitToRoom('local_tournament_paused');
+					console.log('✅ Local tournament game paused by player:', socket.id, 'in room:', gameInstance.roomId);
+				} else {
+					console.log('⚠️ No gameEngine available in tournament instance');
+					gameInstance.emitToRoom('local_tournament_paused');
+				}
+			} else if (localTournament && localTournament.gameEngine) {
+				// Fallback to legacy system
+				console.log('⚠️ Falling back to legacy tournament system');
 				localTournament.gameEngine.pause();
 				socket.emit('local_tournament_paused');
 				console.log('Local tournament game paused by player:', socket.id);
+			} else {
+				console.log('❌ No tournament instance found - neither room-based nor legacy');
 			}
 		} catch (error) {
 			console.error('Local tournament pause error:', error.message);
@@ -850,7 +987,13 @@ socket.on('player_inactive', () => {
 
 	socket.on('local_tournament_resume', () => {
 		try {
-			if (localTournament && localTournament.gameEngine) {
+			const gameInstance = gameManager.getGameInstance(socket.id);
+			if (gameInstance && gameInstance.type === 'local_tournament' && gameInstance.gameEngine) {
+				gameInstance.gameEngine.resume();
+				gameInstance.emitToRoom('local_tournament_resumed');
+				console.log('Local tournament game resumed by player:', socket.id, 'in room:', gameInstance.roomId);
+			} else if (localTournament && localTournament.gameEngine) {
+				// Fallback to legacy system
 				localTournament.gameEngine.resume();
 				socket.emit('local_tournament_resumed');
 				console.log('Local tournament game resumed by player:', socket.id);
@@ -862,26 +1005,46 @@ socket.on('player_inactive', () => {
 
 	socket.on('local_tournament_match_ended', ({ winnerId, scores }) => {
 		try {
-			if (!localTournament) {
-				throw new Error('No active local tournament');
-			}
+			const gameInstance = gameManager.getGameInstance(socket.id);
+			if (gameInstance && gameInstance.type === 'local_tournament') {
+				const nextMatch = gameInstance.tournamentMode.recordWinner(winnerId, scores);
+				const status = gameInstance.tournamentMode.getTournamentStatus();
 
-			const nextMatch = localTournament.recordWinner(winnerId, scores);
-			const status = localTournament.getTournamentStatus();
+				if (gameInstance.tournamentMode.isFinished) {
+					gameInstance.emitToRoom('local_tournament_finished', {
+						winner: status.winner,
+						allMatches: status.matchHistory,
+						bracket: status.bracket
+					});
+				} else if (nextMatch) {
+					gameInstance.emitToRoom('local_tournament_next_match', {
+						match: gameInstance.tournamentMode.getCurrentMatchPlayers(),
+						status: status
+					});
+				} else {
+					gameInstance.emitToRoom('local_tournament_error', { message: 'No next match available' });
+				}
+			} else if (localTournament) {
+				// Fallback to legacy system
+				const nextMatch = localTournament.recordWinner(winnerId, scores);
+				const status = localTournament.getTournamentStatus();
 
-			if (localTournament.isFinished) {
-				socket.emit('local_tournament_finished', {
-					winner: status.winner,
-					allMatches: status.matchHistory,
-					bracket: status.bracket
-				});
-			} else if (nextMatch) {
-				socket.emit('local_tournament_next_match', {
-					match: localTournament.getCurrentMatchPlayers(),
-					status: status
-				});
+				if (localTournament.isFinished) {
+					socket.emit('local_tournament_finished', {
+						winner: status.winner,
+						allMatches: status.matchHistory,
+						bracket: status.bracket
+					});
+				} else if (nextMatch) {
+					socket.emit('local_tournament_next_match', {
+						match: localTournament.getCurrentMatchPlayers(),
+						status: status
+					});
+				} else {
+					socket.emit('local_tournament_error', { message: 'No next match available' });
+				}
 			} else {
-				socket.emit('local_tournament_error', { message: 'No next match available' });
+				throw new Error('No active local tournament');
 			}
 		} catch (error) {
 			socket.emit('local_tournament_error', { message: error.message });
@@ -889,7 +1052,12 @@ socket.on('player_inactive', () => {
 	});
 
 	socket.on('get_local_tournament_status', () => {
-		if (localTournament) {
+		const gameInstance = gameManager.getGameInstance(socket.id);
+		if (gameInstance && gameInstance.type === 'local_tournament') {
+			const status = gameInstance.tournamentMode.getTournamentStatus();
+			gameInstance.emitToRoom('local_tournament_status_update', status);
+		} else if (localTournament) {
+			// Fallback to legacy system
 			const status = localTournament.getTournamentStatus();
 			socket.emit('local_tournament_status_update', status);
 		} else {
@@ -906,27 +1074,18 @@ socket.on('player_inactive', () => {
 		}
 	});
 
-	socket.on('start_local_tournament', () => {
-		console.log('Starting new local tournament for socket:', socket.id);
-	
-		// Reset any existing local tournament state
-		if (localTournament) {
-			localTournament.reset();
-			localTournament = null;
-		}
-	
-		// Create new local tournament
-		localTournament = new LocalTournamentMode();
-	
-		// Send the initial setup screen
-		socket.emit('local_tournament_setup');
-	});
+
 
 	// ===== END LOCAL TOURNAMENT HANDLERS =====
 
 	socket.on('disconnect', () => {
 		console.log('Client disconnected:', socket.id);
-		game.removePlayer(socket.id)
+		
+		// Clean up room-based games first
+		gameManager.handleDisconnect(socket.id);
+		
+		// Legacy cleanup
+		game.removePlayer(socket.id);
 		onlineUsers.delete(socket.id);
 		const onlineList = Array.from(onlineUsers.entries()).map(([id, u]) => ({ socketId: id, alias: u.alias, userId: u.userId, username: u.username }));
 		io.emit('online_users', onlineList);

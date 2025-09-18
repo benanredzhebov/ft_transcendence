@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GameManager Socket Test</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      .section {
+        margin: 20px 0;
+        padding: 15px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+      }
+      button {
+        margin: 5px;
+        padding: 10px 15px;
+        cursor: pointer;
+      }
+      .log {
+        background: #f5f5f5;
+        padding: 10px;
+        height: 300px;
+        overflow-y: scroll;
+        margin: 10px 0;
+      }
+      .status {
+        margin: 10px 0;
+      }
+      .connected {
+        color: green;
+      }
+      .disconnected {
+        color: red;
+      }
+      .room-info {
+        background: #e7f3ff;
+        padding: 10px;
+        margin: 10px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🎮 GameManager Socket Test Client</h1>
+
+      <div class="section">
+        <h3>Connection Status</h3>
+        <div id="status" class="status disconnected">❌ Disconnected</div>
+        <button onclick="connect()">Connect</button>
+        <button onclick="disconnect()">Disconnect</button>
+      </div>
+
+      <div class="section">
+        <h3>Game Creation</h3>
+        <button onclick="createLocalMatch()">🎯 Create Local Match</button>
+        <button onclick="createLocalTournament()">
+          🏆 Create Local Tournament
+        </button>
+        <button onclick="getRoomInfo()">📋 Get Room Info</button>
+      </div>
+
+      <div class="section">
+        <h3>Game Actions</h3>
+        <button onclick="testPlayerMove('up')">⬆️ Move Up</button>
+        <button onclick="testPlayerMove('down')">⬇️ Move Down</button>
+        <button onclick="testPlayerMove('left')">⬅️ Move Left</button>
+        <button onclick="testPlayerMove('right')">➡️ Move Right</button>
+      </div>
+
+      <div class="section">
+        <h3>Current Room Info</h3>
+        <div id="roomInfo" class="room-info">No room information available</div>
+      </div>
+
+      <div class="section">
+        <h3>Event Log</h3>
+        <button onclick="clearLog()">Clear Log</button>
+        <div id="log" class="log"></div>
+      </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <script>
+      let socket = null;
+
+      function log(message) {
+        const logDiv = document.getElementById("log");
+        const timestamp = new Date().toLocaleTimeString();
+        logDiv.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+        logDiv.scrollTop = logDiv.scrollHeight;
+      }
+
+      function updateStatus(connected) {
+        const statusDiv = document.getElementById("status");
+        if (connected) {
+          statusDiv.textContent = "✅ Connected";
+          statusDiv.className = "status connected";
+        } else {
+          statusDiv.textContent = "❌ Disconnected";
+          statusDiv.className = "status disconnected";
+        }
+      }
+
+      function updateRoomInfo(info) {
+        const roomInfoDiv = document.getElementById("roomInfo");
+        if (info.error) {
+          roomInfoDiv.innerHTML = `<strong>❌ ${info.error}</strong>`;
+        } else {
+          roomInfoDiv.innerHTML = `
+                    <strong>Room ID:</strong> ${info.roomId}<br>
+                    <strong>Game Type:</strong> ${info.gameType}<br>
+                    <strong>Players:</strong> ${info.players.join(", ")}<br>
+                    <strong>Timestamp:</strong> ${info.timestamp}
+                `;
+        }
+      }
+
+      function connect() {
+        if (socket) {
+          socket.disconnect();
+        }
+
+        socket = io("http://localhost:3001");
+
+        socket.on("connect", () => {
+          log(`🔌 Connected with ID: ${socket.id}`);
+          updateStatus(true);
+        });
+
+        socket.on("disconnect", () => {
+          log("❌ Disconnected from server");
+          updateStatus(false);
+        });
+
+        socket.on("test_message", (data) => {
+          log(`📨 Test Message: ${data.message} (Room: ${data.roomId})`);
+        });
+
+        socket.on("move_processed", (data) => {
+          log(
+            `🎮 Move Processed: Player ${data.playerId} moved ${data.direction} in room ${data.roomId}`
+          );
+        });
+
+        socket.on("room_info", (data) => {
+          log(`📋 Room Info Received: ${JSON.stringify(data)}`);
+          updateRoomInfo(data);
+        });
+
+        socket.on("error", (error) => {
+          log(`❌ Error: ${error.message || error}`);
+        });
+      }
+
+      function disconnect() {
+        if (socket) {
+          socket.disconnect();
+          socket = null;
+          updateStatus(false);
+          log("🔌 Manually disconnected");
+        }
+      }
+
+      function createLocalMatch() {
+        if (!socket) {
+          log("❌ Not connected to server");
+          return;
+        }
+        log("🎯 Creating local match...");
+        socket.emit("test_local_match");
+      }
+
+      function createLocalTournament() {
+        if (!socket) {
+          log("❌ Not connected to server");
+          return;
+        }
+        log("🏆 Creating local tournament...");
+        socket.emit("test_local_tournament");
+      }
+
+      function testPlayerMove(direction) {
+        if (!socket) {
+          log("❌ Not connected to server");
+          return;
+        }
+        log(`🎮 Sending player move: ${direction}`);
+        socket.emit("test_player_move", { direction, playerId: "player1" });
+      }
+
+      function getRoomInfo() {
+        if (!socket) {
+          log("❌ Not connected to server");
+          return;
+        }
+        log("📋 Requesting room info...");
+        socket.emit("get_room_info");
+      }
+
+      function clearLog() {
+        document.getElementById("log").innerHTML = "";
+      }
+
+      // Auto-connect on page load
+      window.onload = () => {
+        log("🌐 Page loaded - Click Connect to start testing");
+      };
+    </script>
+  </body>
+</html>

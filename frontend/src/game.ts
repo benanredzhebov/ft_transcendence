@@ -615,7 +615,8 @@ function initializeLocalTournament(playerNames: string[]) {
 	
 	showTournamentDialog('Setting up local tournament...');
 	
-	socket.emit('init_local_tournament', { playerNames });
+	// Use the new event for GameManager-based tournaments
+	socket.emit('start_local_tournament', { playerNames });
 }
 
 function setupLocalTournamentHandlers() {
@@ -623,8 +624,24 @@ function setupLocalTournamentHandlers() {
 	
 	socket.on('local_tournament_initialized', (status) => {
 		document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
+		document.querySelector('.game-loading')?.remove(); // Remove loading screen
 		showLocalTournamentBracket(status);
-		showLocalTournamentMatchDialog(status);
+		showLocalTournamentMatchDialog(status); // Show "Start Match" button dialog
+		
+		console.log('Local tournament initialized, showing bracket and match dialog');
+	});
+	
+	socket.on('local_tournament_match_started', (_matchInfo) => {
+		document.querySelectorAll('.tournament-dialog').forEach(el => el.remove());
+		removeOverlays();
+		
+		gameEnded = false;
+		matchStarted = true;
+		pauseManager.updateState({ matchStarted: true, gameEnded: false });
+		pauseManager.createPauseButton(); // Create pause button when local tournament match starts
+		if (movePlayersFrame === null) movePlayers();
+		
+		console.log('Local tournament match started, game interface ready');
 	});
 	
 	socket.on('local_tournament_match_started', (matchInfo) => {
@@ -704,6 +721,7 @@ function setupLocalTournamentHandlers() {
 }
 
 function showLocalTournamentBracket(status: any) {
+	console.log('Tournament status received:', status);
 	let bracketDiv = document.getElementById('local-tournament-bracket') as HTMLDivElement;
 	
 	if (!bracketDiv) {
@@ -758,29 +776,27 @@ function updateLocalTournamentBracket(status: any) {
 	const contentDiv = bracketDiv.querySelector('.bracket-content') as HTMLDivElement;
 	contentDiv.innerHTML = '';
 	
-	if (status.bracket && status.bracket.rounds) {
-		status.bracket.rounds.forEach((round: any[], roundIdx: number) => {
+	// The backend sends bracket as an array of rounds directly
+	if (status.bracket && Array.isArray(status.bracket)) {
+		status.bracket.forEach((round: any[], roundIdx: number) => {
 			const roundDiv = document.createElement('div');
 			roundDiv.className = 'tournament-round';
 			
-			const isCurrentRound = roundIdx === status.currentRound - 1;
-			const roundStatus = isCurrentRound ? ' (Current)' : '';
+			const roundStatus = '';
 			roundDiv.innerHTML = `<strong>Round ${roundIdx + 1}${roundStatus}</strong>`;
 			
 			round.forEach((match: any) => {
 				const matchDiv = document.createElement('div');
-				matchDiv.className = `tournament-match ${match.isCurrentMatch ? 'current-match' : ''} ${match.isCompleted ? 'completed-match' : ''}`;
+				matchDiv.className = `tournament-match`;
 				
-				const p1Name = match.player1 ? match.player1.name : 'BYE';
-				const p2Name = match.player2 ? match.player2.name : 'BYE';
+				// Handle the match format from LocalTournamentMode: [playerData, playerData]
+				const p1Data = match[0];
+				const p2Data = match[1];
+				
+				const p1Name = p1Data ? p1Data[1].name : 'BYE';
+				const p2Name = p2Data ? p2Data[1].name : 'BYE';
 				
 				let matchText = `${p1Name} vs ${p2Name}`;
-				
-				if (match.winner) {
-					matchText += ` → Winner: ${match.winner.name}`;
-				} else if (match.isCurrentMatch) {
-					matchText += ' ← Playing Now';
-				}
 				
 				matchDiv.textContent = matchText;
 				roundDiv.appendChild(matchDiv);
