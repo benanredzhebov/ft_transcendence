@@ -23,7 +23,7 @@ let pressedKeys = new Set<string>();
 let inTournament = false;
 let inLocalTournament = false;
 let aiMode = false;
-// let currentMatch: [string, string] | null = null;
+
 let currentMatch: [string | { alias: string }, string | { alias: string }] | null = null;
 let aliasMap: Record<string, string> = {};
 let assignedPlayerId: 'player1' | 'player2' | null = null;
@@ -59,7 +59,7 @@ interface GameState {
 const SERVER_WIDTH = 900;
 const SERVER_HEIGHT = 600;
 
-// DOM Elements
+// DOM(Document Object Model) Elements
 let socket: Socket | null = null;
 let canvas: HTMLCanvasElement | null = null;
 let ctx: CanvasRenderingContext2D | null = null;
@@ -709,6 +709,7 @@ function setupLocalTournamentHandlers() {
 
 function showLocalTournamentBracket(status: any) {
 	console.log('Tournament status received:', status);
+	console.log('Full status object:', JSON.stringify(status, null, 2));
 	let bracketDiv = document.getElementById('local-tournament-bracket') as HTMLDivElement;
 	
 	if (!bracketDiv) {
@@ -763,27 +764,41 @@ function updateLocalTournamentBracket(status: any) {
 	const contentDiv = bracketDiv.querySelector('.bracket-content') as HTMLDivElement;
 	contentDiv.innerHTML = '';
 	
-	// The backend sends bracket as an array of rounds directly
-	if (status.bracket && Array.isArray(status.bracket)) {
-		status.bracket.forEach((round: any[], roundIdx: number) => {
+	// The backend sends bracket as an object with rounds property
+	if (status.bracket && status.bracket.rounds && Array.isArray(status.bracket.rounds)) {
+		status.bracket.rounds.forEach((round: any[], roundIdx: number) => {
 			const roundDiv = document.createElement('div');
 			roundDiv.className = 'tournament-round';
 			
-			const roundStatus = '';
-			roundDiv.innerHTML = `<strong>Round ${roundIdx + 1}${roundStatus}</strong>`;
+			// Add round header
+			const roundHeader = document.createElement('strong');
+			roundHeader.textContent = `Round ${roundIdx + 1}`;
+			if (roundIdx === status.bracket.currentRound) roundHeader.textContent += ' (Current)';
+			roundDiv.appendChild(roundHeader);
 			
 			round.forEach((match: any) => {
 				const matchDiv = document.createElement('div');
-				matchDiv.className = `tournament-match`;
+				matchDiv.className = 'tournament-match';
 				
-				// Handle the match format from LocalTournamentMode: [playerData, playerData]
-				const p1Data = match[0];
-				const p2Data = match[1];
+				// Handle the new match format with player objects
+				const p1 = match.player1;
+				const p2 = match.player2;
 				
-				const p1Name = p1Data ? p1Data[1].name : 'BYE';
-				const p2Name = p2Data ? p2Data[1].name : 'BYE';
+				const p1Name = p1 ? p1.name : 'BYE';
+				const p2Name = p2 ? p2.name : 'BYE';
 				
-				let matchText = `${p1Name} vs ${p2Name}`;
+				// Check match status and style accordingly
+				let matchText = '';
+				if (match.isCompleted) {
+					const winnerName = match.winner ? match.winner.name : 'Unknown';
+					matchText = `${p1Name} vs ${p2Name} → Winner: ${winnerName}`;
+					matchDiv.style.color = 'white';
+				} else if (match.isCurrentMatch) {
+					matchText = `${p1Name} vs ${p2Name} ← Playing Now`;
+					matchDiv.style.color = 'white';
+				} else {
+					matchText = `${p1Name} vs ${p2Name}`;
+				}
 				
 				matchDiv.textContent = matchText;
 				roundDiv.appendChild(matchDiv);
@@ -791,24 +806,38 @@ function updateLocalTournamentBracket(status: any) {
 			
 			contentDiv.appendChild(roundDiv);
 		});
+	} else {
+		// Fallback: show basic tournament info
+		const infoDiv = document.createElement('div');
+		infoDiv.innerHTML = '<p>Tournament bracket data not available</p>';
+		contentDiv.appendChild(infoDiv);
 	}
 	
 	// Show tournament winner if finished
-	if (status.isFinished && status.winner) {
+	if (status.bracket && status.bracket.isFinished && status.bracket.tournamentWinner) {
 		const championDiv = document.createElement('div');
 		championDiv.className = 'tournament-champion';
-		championDiv.innerHTML = `<strong>🏆 CHAMPION: ${status.winner}</strong>`;
+		championDiv.innerHTML = `<strong>🏆 CHAMPION: ${status.bracket.tournamentWinner}</strong>`;
 		contentDiv.appendChild(championDiv);
 	}
 }
 
 function showLocalTournamentMatchDialog(status: any) {
-	if (!status.currentMatch || !status.currentMatch.player1) return;
+	console.log('showLocalTournamentMatchDialog called with:', status);
+	console.log('status.currentMatch:', status.currentMatch);
+	
+	if (!status.currentMatch || !status.currentMatch.player1) {
+		console.log('No current match or player1, returning early');
+		return;
+	}
 	
 	const { player1, player2 } = status.currentMatch;
 	const isBye = !player2;
 	
+	console.log('Match details:', { player1, player2, isBye });
+	
 	if (isBye) {
+		console.log('Bye match detected, auto-advancing');
 		showTournamentDialog(
 			`${player1.name} gets a bye to the next round!`,
 			{ confirmText: 'Continue', timer: 3 }
@@ -816,6 +845,7 @@ function showLocalTournamentMatchDialog(status: any) {
 		
 		setTimeout(() => {
 			if (socket) {
+				console.log('Emitting local_tournament_match_ended for bye');
 				socket.emit('local_tournament_match_ended', {
 					winnerId: player1.id,
 					scores: { player1: 0, player2: 0, isBye: true }
@@ -823,6 +853,7 @@ function showLocalTournamentMatchDialog(status: any) {
 			}
 		}, 3000);
 	} else {
+		console.log('Normal match, showing Start Match dialog');
 		const dialog = showTournamentDialog(
 			`Next Match: <strong>${player1.name}</strong> vs <strong>${player2.name}</strong><br><br>
 			Controls:<br>
@@ -833,6 +864,7 @@ function showLocalTournamentMatchDialog(status: any) {
 		);
 		
 		dialog.querySelector('button')!.onclick = () => {
+			console.log('Start Match button clicked, emitting start_local_tournament_match');
 			dialog.remove();
 			if (socket) {
 				socket.emit('start_local_tournament_match');
