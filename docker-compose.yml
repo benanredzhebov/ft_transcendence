@@ -5,6 +5,9 @@ services:
     build:
       context: .
       dockerfile: ./backend/Dockerfile
+      args:
+      - VITE_URL=${VITE_URL}
+      - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
     container_name: transcendence-backend
     env_file:
       - .env
