@@ -58,21 +58,14 @@ export async function openAvatarSelectionModal(
       avatarStatusElement.textContent = 'Processing...';
       modalContent.style.pointerEvents = 'none'; // Disable further clicks during processing
       try {
-        const imageResponse = await fetch(avatarSrc);
-        if (!imageResponse.ok) {
-          throw new Error(`Failed to fetch avatar: ${imageResponse.statusText}`);
-        }
-        const imageBlob = await imageResponse.blob();
-        const fileName = avatarSrc.split('/').pop() || 'avatar.png';
-        const imageFile = new File([imageBlob], fileName, { type: imageBlob.type });
-
-        const formData = new FormData();
-        formData.append('avatar', imageFile);
-
-        const uploadResponse = await fetch('/api/profile/avatar', {
+        // For predefined avatars, just send the path directly
+        const uploadResponse = await fetch('/api/profile/avatar/predefined', {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: formData,
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ avatarPath: avatarSrc }),
         });
 
         const result = await uploadResponse.json();
@@ -87,7 +80,7 @@ export async function openAvatarSelectionModal(
           console.error('Avatar update error:', result);
         }
       } catch (error) {
-        console.error('Error selecting/uploading predefined avatar:', error);
+        console.error('Error selecting predefined avatar:', error);
         avatarStatusElement.textContent = 'Error updating avatar. See console.';
       } finally {
         closeModal();

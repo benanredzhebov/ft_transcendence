@@ -297,7 +297,8 @@ const credentialsRoutes = (app) =>{
   });
 
 
-  app.post('/api/profile/avatar', async (req, reply) => {
+  // Route for predefined avatar selection
+  app.post('/api/profile/avatar/predefined', async (req, reply) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return reply.status(401).send({ error: 'Unauthorized: No token provided' });
@@ -315,38 +316,48 @@ const credentialsRoutes = (app) =>{
       return reply.status(401).send({ error: 'Unauthorized: Invalid token payload' });
     }
 
-    const data = await req.file();
+    const { avatarPath } = req.body;
 
-    if (!data || !data.file) {
-      return reply.status(400).send({ error: 'No file uploaded or invalid format.' });
+    if (!avatarPath) {
+      return reply.status(400).send({ error: 'Avatar path is required.' });
     }
 
-    if (!['image/jpeg', 'image/png', 'image/gif'].includes(data.mimetype)) {
-      return reply.status(400).send({ error: 'Invalid file type. Only JPG, PNG, GIF allowed.' });
+    // List of valid predefined avatars
+    const validPredefinedAvatars = [
+      '/avatars/girl.png',
+      '/avatars/boy.png',
+      '/avatars/gojo.png',
+      '/avatars/luffy.png',
+      '/avatars/squirtle.png',
+      '/avatars/charizard.png',
+      '/avatars/pikachu.png',
+      '/avatars/bulbasaur.png',
+      '/avatars/chain.png',
+      '/avatars/chainsaw.png',
+      '/avatars/halo.png',
+      '/avatars/halo2.png',
+      '/avatars/law.png',
+      '/avatars/nami.png',
+      '/avatars/nezuko.png',
+      '/avatars/sanji.png',
+      '/avatars/zoro.png'
+    ];
+
+    if (!validPredefinedAvatars.includes(avatarPath)) {
+      return reply.status(400).send({ error: 'Invalid predefined avatar path.' });
     }
 
     try {
-      const buffer = await data.toBuffer();
-      const fileExtension = path.extname(data.filename) || `.${data.mimetype.split('/')[1]}`;
-      const uniqueFilename = `${userId}_${crypto.randomBytes(8).toString('hex')}${fileExtension}`;
-      const avatarFilePath = path.join(__dirname, '..', '..', 'uploads', 'avatars', uniqueFilename); // Adjusted path
-      const avatarUrlPath = `/uploads/avatars/${uniqueFilename}`; // Path to be stored in DB and used by frontend
-
-      await fs.writeFile(avatarFilePath, buffer);
-
       await DB('credentialsTable')
         .where({ id: userId })
-        .update({ avatar_path: avatarUrlPath }); // Store the URL path
+        .update({ avatar_path: avatarPath }); // Store the original path directly
 
-      console.log('Avatar path updated in DB for userId:', userId, 'to', avatarUrlPath);
+      console.log('Predefined avatar path updated in DB for userId:', userId, 'to', avatarPath);
 
-      reply.send({ success: true, message: 'Avatar uploaded successfully.', avatarPath: avatarUrlPath }); // Send the path back
+      reply.send({ success: true, message: 'Predefined avatar selected successfully.', avatarPath: avatarPath });
     } catch (error) {
-      console.error('Error uploading avatar:', error);
-      if (error.code === 'FST_REQ_FILE_TOO_LARGE') {
-        return reply.status(413).send({ error: 'File too large. Maximum size is 5MB.' });
-      }
-      reply.status(500).send({ error: 'Failed to upload avatar.' });
+      console.error('Error selecting predefined avatar:', error);
+      reply.status(500).send({ error: 'Failed to select avatar.' });
     }
   });
 
