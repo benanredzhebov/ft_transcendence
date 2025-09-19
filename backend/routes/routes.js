@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'url';
 import path from 'path';
 import DB from '../data_controller/dbConfig.js';
-import hashPassword from '../crypto/crypto.js';
+import hashPassword, { comparePassword } from '../crypto/crypto.js';
 import { exchangeCodeForToken, fetchUserInfo } from '../token_google/exchangeToken.js';
 import jwt from 'jsonwebtoken';
 import { promises as fs } from 'node:fs'; // For async file operations
@@ -275,7 +275,7 @@ const credentialsRoutes = (app) =>{
           if (newPassword.length < 8) {
             return reply.status(400).send({ error: 'New password must be at least 8 characters long.' });
           }
-          updates.password = hashPassword(newPassword);
+          updates.password = await hashPassword(newPassword);
         }
       }
 
@@ -398,7 +398,7 @@ const credentialsRoutes = (app) =>{
         return;
       }
 
-      const password = hashPassword(rawPassword);
+      const password = await hashPassword(rawPassword);
       const [id] = await DB('credentialsTable').insert({ username, email, password });
       reply.status(201).send({ success: true, id: id });
     } catch (e) {
@@ -416,10 +416,19 @@ const credentialsRoutes = (app) =>{
    
     try {
       const user = await DB('credentialsTable').where({ email }).first();
-      if (!user || user.password !== hashPassword(rawPassword)) {
+      if (!user || !(await comparePassword(rawPassword, user.password))) {
         reply.status(401).send({ error: 'Invalid email or password' });
         return;
       }
+
+      // Migrate legacy SHA-256 password to bcrypt on successful login
+      if (!user.password.startsWith('$2b$')) {
+        console.log(`Migrating password for user ${user.username} from SHA-256 to bcrypt`);
+        const newBcryptPassword = await hashPassword(rawPassword);
+        await DB('credentialsTable').where({ id: user.id }).update({ password: newBcryptPassword });
+        console.log(`Password migration completed for user ${user.username}`);
+      }
+
 	  // *** DEBUG ****
       console.log('--- User Login Data ---');
       console.log(user);
@@ -719,7 +728,7 @@ const credentialsRoutes = (app) =>{
   
       if (!user) {
         const username = name || `user_${Date.now()}`;
-        const placeholderPassword = hashPassword(`google_auth_${email}_${Date.now()}`);
+        const placeholderPassword = await hashPassword(`google_auth_${email}_${Date.now()}`);
         const [id] = await DB('credentialsTable').insert({
           email,
           username,
