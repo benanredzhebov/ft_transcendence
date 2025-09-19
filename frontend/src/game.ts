@@ -958,6 +958,11 @@ function showMatchInfo(
 			<div style="text-align: center; margin-top: 4px; font-size: 20px;">
 			${score1} : ${score2}
 			</div>
+			<div style="text-align: center; margin-top: 8px; font-size: 12px; color: #ccc;">
+				P1: W/S keys<br>
+				P2: ↑/↓ keys<br>
+				Pause: P or Space
+			</div>
 		`;
 		return;
 	}
@@ -966,13 +971,32 @@ function showMatchInfo(
 	box.id = 'match-info-box';
 	box.className = 'match-info-box';
 
+	 box.style.cssText = `
+        position: absolute;
+        top: 15px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.0);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 6px;
+        text-align: center;
+        font-family: Arial, sans-serif;
+        z-index: 1000;
+        font-size: 14px;
+        min-width: 180px;
+		border: 1px solid rgba(255, 255, 255, 0.01)
+    `;
+
 	box.innerHTML = `
 	<div><strong>${p1}</strong> vs <strong>${p2}</strong></div>
 	<div style="text-align: center; margin-top: 4px; font-size: 20px;">
 		${score1} : ${score2}
 	</div>
 	<div style="text-align: center; margin-top: 8px; font-size: 12px; color: #ccc;">
-		Press P or Space to pause
+		P1: W/S keys<br>
+		P2: ↑/↓ keys<br>	
+		Pause: P or Space
 	</div>
 	`;
 
@@ -1651,8 +1675,12 @@ export function renderGame(containerId: string = 'app') {
 				alias1 = currentMatch[0];
 				alias2 = currentMatch[1];
 			}
-			
 			showMatchInfo(alias1, alias2, state.score.player1, state.score.player2);
+		} else if (!inTournament && !inLocalTournament && matchStarted) {
+			// Local Match and AI Mode
+			const player1Name = aiMode ? 'You' : 'P1';
+			const player2Name = aiMode ? 'AI' : 'P2';
+			showMatchInfo(player1Name, player2Name, state.score.player1, state.score.player2);
 		}
 
 		if (!gameEnded && state.gameOver) {
