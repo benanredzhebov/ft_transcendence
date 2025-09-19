@@ -1,0 +1,65 @@
+/* Avatar Modal Styles */
+.avatar-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000; /* Ensure it's on top */
+}
+
+.avatar-modal-content {
+  background-color: transparent;
+  backdrop-filter: blur(10px);
+  padding: 25px;
+  border-radius: 8px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+  width: auto;
+  max-width: 500px;
+  color: #e0e0e0; /* Light text for dark background */
+}
+
+.avatar-modal-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.avatar-modal-option img:hover {
+  outline: 3px solid #06b6d4; /* Highlight on hover */
+  opacity: 0.8;
+}
+
+.avatar-modal-close-button {
+  display: block;
+  margin: 10px auto 0;
+  padding: 10px 20px;
+  background-color: #7289da;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.avatar-modal-close-button:hover {
+  background-color: #5f73bc;
+}
+
+/* --- Responsive Design for Avatar Modal --- */
+@media (min-width: 768px) {
+  .avatar-modal-content {
+    max-width: 600px; /* Increase max-width on larger screens */
+    padding: 30px;
+  }
+
+  .avatar-modal-grid {
+    gap: 20px; /* Increase gap between avatars */
+  }
+}

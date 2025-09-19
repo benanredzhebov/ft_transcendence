@@ -37,7 +37,8 @@ function handleGoogleAuthToken(): (() => void) | void {
   if (token) {
     sessionStorage.setItem('authToken', token);
     console.log('Google Auth Token stored successfully.');
-    navigateTo('/dashboard');
+    // Add small delay to ensure token is properly stored before navigation
+    setTimeout(() => navigateTo('/dashboard'), 50);
   } else if (error) {
     console.error('Google authentication failed:', error);
     alert(`Google authentication failed: ${error}. Please try again.`);
