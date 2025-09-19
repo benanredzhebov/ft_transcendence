@@ -230,7 +230,6 @@ io.on('connection', (socket) => {
 		console.log(`Game mode set: ${gameMode}, isLocalMatch: false, isTournament: false, isAI: false`);
 		
 	} else if (isTournamentMode) {
-		// For remote tournaments, we'll handle room creation when tournament starts
 		// Check if client might have been in a tournament before server restart
 		if (!tournament) {
 			socket.emit('tournament_reset', { 
@@ -621,26 +620,21 @@ socket.on('player_inactive', () => {
 			return;
 		}
 
-        const payload = {
-            senderAlias: sender.alias,
+		const payload = {
+			senderAlias: sender.alias,
 			senderSocketId: socket.id
-        };
+		};
 
-        // Send the special invite message to both users' chat windows
-        io.to(socket.id).emit('receive_public_tournament_invite', payload);
-        io.to(targetSocketId).emit('receive_public_tournament_invite', payload);
-    });
-
-	// socket.on('start_match_navigation', (data) => {
-	// 	console.log('Opponent accepted! Starting match.', data);
-	// 	navigateTo('/game?tournament=true');
-	// });
+		// Send the special invite message to both users' chat windows
+		io.to(socket.id).emit('receive_public_tournament_invite', payload);
+		io.to(targetSocketId).emit('receive_public_tournament_invite', payload);
+	});
 
 	socket.on('dismiss_lobby_invite', ({ senderSocketId }) => {
-    	const sender = onlineUsers.get(senderSocketId);
-    	if (sender) {
-    	    io.to(senderSocketId).emit('lobby_invite_dismissed', { message: 'Your match invite was dismissed.' });
-    	}
+		const sender = onlineUsers.get(senderSocketId);
+		if (sender) {
+			io.to(senderSocketId).emit('lobby_invite_dismissed', { message: 'Your match invite was dismissed.' });
+		}
 	});
 
 	socket.on('accept_lobby_invite', ({ senderSocketId }) => {

@@ -3,15 +3,14 @@
 /*                                                        :::      ::::::::   */
 /*   GameManager.js                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: beredzhe <beredzhe@student.42.fr>          +#+  +:+       +#+        */
+/*   By: benanredzhebov <benanredzhebov@student.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/09/17 18:00:00 by beredzhe          #+#    #+#             */
-/*   Updated: 2025/09/18 19:30:11 by beredzhe         ###   ########.fr       */
+/*   Updated: 2025/09/19 14:27:49 by benanredzhe      ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import GameEngine from './GameEngine.js';
-import Tournament from './Tournament.js';
 import LocalTournamentMode from './LocalTournamentMode.js';
 
 /**
@@ -23,7 +22,6 @@ class GameManager {
 		this.io = io;
 		this.localMatches = new Map(); // roomId -> LocalMatchInstance
 		this.localTournaments = new Map(); // roomId -> LocalTournamentInstance  
-		this.remoteTournaments = new Map(); // roomId -> RemoteTournamentInstance
 		this.socketToRoom = new Map(); // socketId -> roomId
 		this.roomToGameType = new Map(); // roomId -> gameType
 	}
@@ -106,8 +104,6 @@ class GameManager {
 				return this.localMatches.get(roomId);
 			case 'local_tournament':
 				return this.localTournaments.get(roomId);
-			case 'remote_tournament':
-				return this.remoteTournaments.get(roomId);
 			default:
 				return null;
 		}
@@ -468,55 +464,6 @@ class LocalTournamentInstance {
 			this.gameLoop = null;
 			console.log(`⏹️ Tournament game loop stopped for room ${this.roomId}`);
 		}
-	}
-}
-
-/**
- * Remote Tournament Game Instance
- * Manages isolated remote tournament sessions
- */
-class RemoteTournamentInstance {
-	constructor(roomId, io) {
-		this.roomId = roomId;
-		this.io = io;
-		this.tournament = new Tournament();
-		this.players = new Map(); // socketId -> playerData
-		this.isActive = false;
-	}
-
-	addPlayer(socketId, playerData) {
-		this.players.set(socketId, playerData);
-		console.log(`Remote tournament ${this.roomId}: Player ${socketId} added`);
-	}
-
-	removePlayer(socketId) {
-		this.players.delete(socketId);
-		console.log(`Remote tournament ${this.roomId}: Player ${socketId} removed`);
-	}
-
-	handlePlayerDisconnect(socketId) {
-		if (this.players.has(socketId)) {
-			const playerData = this.players.get(socketId);
-			this.tournament.handlePlayerDisconnect(socketId, playerData);
-			this.removePlayer(socketId);
-		}
-	}
-
-	isEmpty() {
-		return this.players.size === 0;
-	}
-
-	emitToRoom(event, data) {
-		this.io.to(this.roomId).emit(event, data);
-	}
-
-	joinTournament(socketId, alias) {
-		const result = this.tournament.addPlayer(socketId, alias);
-		if (result.success) {
-			this.addPlayer(socketId, { alias });
-			this.emitToRoom('tournament_joined', result);
-		}
-		return result;
 	}
 }
 

@@ -1241,13 +1241,12 @@ function movePlayers() {
 	
 	// Only process movement if game is active and not paused
 	if (socket && !gameEnded && !pauseManager.getState().gamePaused && (!inTournament || matchStarted)) {
+		// Remote player movement
 		if (inTournament) {
 			if (assignedPlayerId === 'player1') {
-				// console.log('1assignedPlayerId', assignedPlayerId);
 				if (pressedKeys.has('w')) socket.emit('player_move', { playerId: 'player1', direction: 'up' });
 				if (pressedKeys.has('s')) socket.emit('player_move', { playerId: 'player1', direction: 'down' });
 			} else if (assignedPlayerId === 'player2') {
-				// console.log('2assignedPlayerId', assignedPlayerId);
 				if (pressedKeys.has('arrowup')) socket.emit('player_move', { playerId: 'player2', direction: 'up' });
 				if (pressedKeys.has('arrowdown')) socket.emit('player_move', { playerId: 'player2', direction: 'down' });
 			}
@@ -1419,6 +1418,7 @@ export function renderGame(containerId: string = 'app') {
 	const urlParams = new URLSearchParams(window.location.search);
 	const tournamentMode = urlParams.get('tournament') === 'true';
 	const localTournamentMode = urlParams.get('tournament') === 'local';
+	aiMode = urlParams.get('mode') === 'ai';
 
 	if (urlParams.get('tournament') === 'true') {
 		// Clear any existing reset dialogs immediately
@@ -1427,12 +1427,9 @@ export function renderGame(containerId: string = 'app') {
 		// Reset tournament state
 		aliasRegistered = false;
 		inTournament = false;
-
-		// DON'T call promptAliasRegistration() here - let the connect handler do it
 	}
-	aiMode = urlParams.get('mode') === 'ai';
 
-	// Socket connection to connect with Remote players
+	// Remote connection settup
 	const backendUrl = `https://${window.location.hostname}:8443`;
 	socket = io(backendUrl, {
 		// transports: ['websocket'],

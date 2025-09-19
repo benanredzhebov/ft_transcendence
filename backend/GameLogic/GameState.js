@@ -106,16 +106,11 @@ class GameState {
 		}
 	}
 
-	movePaddle(playerId, direction) {
-		// console.log('movePaddle: gameOver=', this.gameOver, 'paused=', this.paused);
-		// console.log(`movePaddle called for ${playerId} ${direction}`);
-		// console.log(`player1 Y: ${this.paddles.player1.y}`);
-		
+	movePaddle(playerId, direction) {		
 		if (this.gameOver || this.paused) {
 			console.log('❌ movePaddle blocked: game is paused or over');
 			return;
 		}
-		// console.log('movePaddle called for', playerId, direction, '| paddles:', Object.keys(this.paddles));
 		const paddle = this.paddles[playerId];
 		if (!paddle) {
 			console.log('❌ No paddle found');
@@ -124,13 +119,11 @@ class GameState {
 		
 		const moveBy = this.paddleSpeed;
 		
-		// console.log('Before:', paddle.y, 'moveBy:', moveBy);
 		if (direction === 'up') {
 			paddle.y = Math.max(0, paddle.y - moveBy);
 		} else if (direction === 'down') {
 			paddle.y = Math.min(this.height - paddle.height, paddle.y + moveBy);
 		}
-		// console.log('After:', paddle.y);
 	}
 
 	checkCollisions() {
@@ -179,7 +172,6 @@ class GameState {
 	}
 
 	resetGame() {
-		//console.log('resetGame called', 'gameOver:', this.gameOver, 'paused:', this.paused);
 		this.score = { player1: 0, player2: 0 };
 		this.paddles.player1.y = 250;
 		this.paddles.player2.y = 250;
@@ -207,11 +199,9 @@ class GameState {
 			this.ball.vx = this.ball.speed * serveDirection * Math.cos(randomAngle);
 			this.ball.vy = this.ball.speed * Math.sin(randomAngle);
 		}
-		// console.log('resume called, paused:', this.paused);
 	}
 
 	getState() {
-		// console.log('getState called, paddle1.y:', this.paddles.player1.y, 'paddle2.y:', this.paddles.player2.y);
 		return {
 			width: this.width,
 			height: this.height,
